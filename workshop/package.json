@@ -1,0 +1,19 @@
+{
+  "name": "libra-workshop",
+  "version": "0.1.0",
+  "description": "A canvas for HTML prototypes: fork environments, iterate, share and present them, and let coding agents work on the same files.",
+  "type": "module",
+  "private": true,
+  "license": "MIT OR Apache-2.0",
+  "bin": {
+    "workshop": "bin/workshop.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node bin/workshop.js serve",
+    "mcp": "node bin/workshop.js mcp",
+    "test": "node --test test/*.test.js"
+  }
+}

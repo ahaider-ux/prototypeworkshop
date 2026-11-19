@@ -1,0 +1,6 @@
+# Local Workshop state: versions, trash, tasks, comments, share links, selection, heartbeats.
+# It belongs to one computer; the prototypes themselves (workspace/envs/) are committed.
+workspace/.workshop/
+node_modules/
+*.png
+!ui/**/*.png

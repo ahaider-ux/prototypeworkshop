@@ -1,0 +1,12 @@
+{
+  "name": "Prototype workshop",
+  "canvas": {
+    "boards": {
+      "libra-fourth-age": {
+        "x": 0,
+        "y": 0
+      }
+    }
+  },
+  "agent": null
+}

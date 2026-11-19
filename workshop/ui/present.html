@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Present · Libra Workshop</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/ui/app.css">
+<style>
+  html,body{background:var(--bg-shell)}
+  #app{position:fixed;inset:0;border:0;width:100%;height:100%;background:#fff}
+  .pbar{position:fixed;left:50%;top:12px;transform:translate(-50%,-8px);z-index:10;display:flex;align-items:center;gap:6px;padding:4px;background:var(--bg-layer);border:.5px solid var(--border-subtle);border-radius:12px;box-shadow:var(--sh-md);opacity:0;pointer-events:none;transition:opacity 160ms ease,transform 300ms var(--ease-out)}
+  .pbar.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+  .pbar .nm{padding:0 8px 0 12px;font-weight:500;white-space:nowrap;max-width:320px;overflow:hidden;text-overflow:ellipsis}
+  .pbar .vsep{width:1px;height:20px;background:var(--border-subtle);margin:0 2px}
+  .pbar .note{font-size:12px;color:var(--text-secondary);padding:0 8px;white-space:nowrap}
+  @media(prefers-reduced-motion:reduce){.pbar{transform:translate(-50%,0)}}
+</style>
+</head>
+<body>
+<iframe id="app" title="Prototype"></iframe>
+<div class="pbar" id="bar" role="toolbar" aria-label="Presenting"><span class="nm" id="nm">Prototype</span><span class="tagro" id="dev"></span><span class="vsep"></span><span class="note" id="note"></span><a class="ghbtn sm" id="back" href="/canvas">Back to canvas</a></div>
+<script type="module">
+  // The prototype fills the window and runs as the app; a small bar shows when the pointer nears the top.
+  const id = location.pathname.split("/").filter(Boolean)[1] || "";
+  const shared = new URLSearchParams(location.search).has("shared");
+  const bar = document.getElementById("bar");
+  document.getElementById("app").src = `/env/${encodeURIComponent(id)}/`;
+  if (shared) {
+    document.getElementById("back").remove();
+    document.getElementById("note").textContent = "Shared from Libra Workshop · view only";
+  }
+  try {
+    const r = await fetch(`/api/envs/${encodeURIComponent(id)}`);
+    if (r.ok) {
+      const e = await r.json();
+      document.getElementById("nm").textContent = e.name;
+      document.title = `${e.name} · Libra Workshop`;
+      document.getElementById("dev").textContent = `${e.device.w} × ${e.device.h}`;
+    }
+  } catch {}
+  let t = 0;
+  const show = () => { bar.classList.add("on"); clearTimeout(t); t = setTimeout(() => bar.classList.remove("on"), 2200); };
+  show();
+  addEventListener("pointermove", (e) => { if (e.clientY < 64) show(); });
+  const frame = document.getElementById("app");
+  frame.addEventListener("load", () => { try { frame.contentDocument.addEventListener("pointermove", (e) => { if (e.clientY < 64) show(); }); } catch {} });
+</script>
+</body>
+</html>
