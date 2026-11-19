@@ -41,4 +41,4 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
 ## Libra assets
 
 The Libra logo, icons, tokens and the Fourth Age prototype belong to Libra. They are not covered
-by this repository's open-source licence and must not be published: keep the repository private.
+by this repository's open-source licence: don't copy them into other projects or packages.

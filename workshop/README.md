@@ -150,4 +150,4 @@ npm test
 ## Libra assets
 
 The Libra logo, icons, design tokens and the Fourth Age prototype belong to Libra. They are not
-covered by this repository's open-source licence; keep the repository private.
+covered by this repository's open-source licence and are not for reuse outside this project.
