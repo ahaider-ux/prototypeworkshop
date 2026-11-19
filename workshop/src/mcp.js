@@ -209,7 +209,7 @@ export async function runMcp({ workspace, input = process.stdin, output = proces
           return reply(await callTool(store, name, params?.arguments || {}, ctx));
         } catch (e) {
           // Tool failures go back to the model as a result it can read and act on, not as a protocol error.
-          return reply({ isError: true, content: [{ type: "text", text: e instanceof StoreError ? e.message : `Failed: ${e.message}` }] });
+          return reply({ isError: true, content: [{ type: "text", text: e instanceof StoreError || (e && e.code && e.status) ? e.message : `Failed: ${e.message}` }] });
         }
       }
       if (method === "resources/list") return reply({ resources: [] });

@@ -12,6 +12,9 @@ import { Store, StoreError, assertId } from "./store.js";
 import { AgentRunner } from "./agent.js";
 import { screenshot, screenshotAvailable } from "./screenshot.js";
 import { watchTree } from "./watch.js";
+import { injectHtml } from "./inject.js";
+
+export { injectHtml } from "./inject.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const UI_DIR = path.resolve(HERE, "..", "ui");
@@ -25,27 +28,6 @@ const TYPES = {
   ".ttf": "font/ttf", ".otf": "font/otf", ".mp4": "video/mp4", ".webm": "video/webm", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".txt": "text/plain; charset=utf-8",
   ".md": "text/markdown; charset=utf-8", ".map": "application/json", ".wasm": "application/wasm", ".glb": "model/gltf-binary", ".gltf": "model/gltf+json",
 };
-
-const escAttr = (s) => String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-
-// Puts the runtime first (so storage is namespaced before any app script runs) and the
-// overrides stylesheet last (so design tweaks win over the prototype's own styles).
-export function injectHtml(html, env, settings) {
-  const tag = `<script src="/_workshop/runtime.js" data-env="${escAttr(env)}" data-settings="${escAttr(JSON.stringify(settings || {}))}"></script>`;
-  const link = `<link rel="stylesheet" href="/env/${escAttr(env)}/__overrides.css" data-workshop-overrides>`;
-  let out = html;
-  const head = /<head(\s[^>]*)?>/i.exec(out);
-  if (head) out = out.slice(0, head.index + head[0].length) + tag + out.slice(head.index + head[0].length);
-  else {
-    const h = /<html(\s[^>]*)?>/i.exec(out);
-    if (h) out = out.slice(0, h.index + h[0].length) + tag + out.slice(h.index + h[0].length);
-    else out = tag + out;
-  }
-  const lower = out.toLowerCase();
-  const end = lower.lastIndexOf("</body>");
-  out = end >= 0 ? out.slice(0, end) + link + out.slice(end) : out + link;
-  return out;
-}
 
 function lanAddress() {
   for (const list of Object.values(os.networkInterfaces())) for (const a of list || []) if (a.family === "IPv4" && !a.internal) return a.address;
@@ -75,7 +57,7 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
   const json = (res, status, body) => send(res, status, body, { "content-type": "application/json; charset=utf-8" });
   const fail = (res, e) => {
     if (e instanceof StoreError) return json(res, e.status || 400, { error: e.code, message: e.message });
-    if (e && e.code === "no_playwright") return json(res, 501, { error: e.code, message: e.message });
+    if (e && e.code && Number.isInteger(e.status)) return json(res, e.status, { error: e.code, message: e.message });
     if (!quiet) console.error(e);
     return json(res, 500, { error: "internal", message: "Something went wrong on the server" });
   };
