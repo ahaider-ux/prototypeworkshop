@@ -6,7 +6,12 @@
 //     envs/<id>/index.html     the prototype itself
 //     envs/<id>/env.json       name, lineage, device, theme, opening screen, variants, text edits
 //     envs/<id>/overrides.css  design tweaks from the inspector and agents (wins over the prototype)
+//     canvas/<id>.json         what sits on the canvas: boards (a prototype at a screen), notes, boxes, arrows
 //     .workshop/               versions, trash, tasks, comments, shares, selection, harness heartbeats
+//
+// A branch is an environment whose env.json names a `base`: files it doesn't have yet come from the
+// base, so creating one is instant. It remembers what its parent looked like when it was made, so
+// Review and merge can show both sides' changes and the conflicts.
 //
 // Shared state that two processes write (the server and an MCP harness) is kept one file per
 // record, so they never overwrite each other's work.
@@ -125,16 +130,35 @@ export class Store {
     this.root = path.resolve(root);
     this.envsDir = path.join(this.root, "envs");
     this.metaDir = path.join(this.root, ".workshop");
+    this.canvasDir = path.join(this.root, "canvas");
   }
 
   static async open(root) {
     const s = new Store(root);
     await fsp.mkdir(s.envsDir, { recursive: true });
     for (const d of ["versions", "trash", "tasks", "comments", "shares", "harness"]) await fsp.mkdir(path.join(s.metaDir, d), { recursive: true });
+    await fsp.mkdir(s.canvasDir, { recursive: true });
     if (!(await exists(s.file("workshop.json")))) {
-      await writeJson(s.file("workshop.json"), { name: path.basename(s.root) === "workspace" ? "Prototype workshop" : path.basename(s.root), canvas: { boards: {} }, agent: null });
+      await writeJson(s.file("workshop.json"), { name: path.basename(s.root) === "workspace" ? "Prototype workshop" : path.basename(s.root), agent: null });
     }
+    await s.migrateBoards();
     return s;
+  }
+
+  // Workspaces from before canvas items kept one spot per environment in workshop.json.
+  async migrateBoards() {
+    const w = await readJson(this.file("workshop.json"), {});
+    const old = w.canvas?.boards;
+    if (!old) return;
+    const have = new Set((await this.items()).filter((i) => i.type === "board").map((i) => i.env));
+    for (const [env, pos] of Object.entries(old)) {
+      if (have.has(env) || !ID_RE.test(env) || !(await exists(this.envDir(env)))) continue;
+      const m = await readJson(path.join(this.envDir(env), "env.json"), {});
+      const d = m.device || { w: 1728, h: 1117 };
+      await this.putItem({ id: newId("b"), type: "board", env, screen: null, state: null, x: Math.round(pos.x || 0), y: Math.round(pos.y || 0), w: d.w, h: d.h, createdAt: now() });
+    }
+    delete w.canvas;
+    await writeJson(this.file("workshop.json"), w);
   }
 
   file(...rel) {
@@ -159,7 +183,7 @@ export class Store {
 
   async workspace() {
     const w = await readJson(this.file("workshop.json"), {});
-    return { name: w.name || "Prototype workshop", canvas: w.canvas || { boards: {} }, agent: w.agent || null, root: this.root };
+    return { name: w.name || "Prototype workshop", agent: w.agent || null, root: this.root };
   }
 
   async updateWorkspace(patch) {
@@ -176,17 +200,120 @@ export class Store {
     return this.workspace();
   }
 
-  async moveBoard(id, x, y) {
-    assertId(id);
-    const w = await readJson(this.file("workshop.json"), {});
-    w.canvas = w.canvas || { boards: {} };
-    w.canvas.boards = w.canvas.boards || {};
-    const fx = Number(x),
-      fy = Number(y);
-    if (!Number.isFinite(fx) || !Number.isFinite(fy) || Math.abs(fx) > 1e6 || Math.abs(fy) > 1e6) throw new StoreError("bad_position", "That position is off the canvas");
-    w.canvas.boards[id] = { x: Math.round(fx), y: Math.round(fy) };
-    await writeJson(this.file("workshop.json"), w);
-    return w.canvas.boards[id];
+  // ----- canvas items: boards, notes, boxes, arrows (one file each, so writers never collide) -----
+
+  async items() {
+    const out = [];
+    for (const f of await fsp.readdir(this.canvasDir).catch(() => [])) {
+      if (!f.endsWith(".json")) continue;
+      const it = await readJson(path.join(this.canvasDir, f), null);
+      if (it && it.id && it.type) out.push(it);
+    }
+    return out.sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")) || a.id.localeCompare(b.id));
+  }
+
+  async item(id) {
+    const it = await readJson(path.join(this.canvasDir, `${assertRecord(id)}.json`), null);
+    if (!it) throw new StoreError("not_found", "That's no longer on the canvas", 404);
+    return it;
+  }
+
+  async putItem(it) {
+    await writeJson(path.join(this.canvasDir, `${assertRecord(it.id)}.json`), it);
+    return it;
+  }
+
+  // Guard: canvas items come from the page and from agents; every field is checked and bounded.
+  async cleanItem(type, p, prev = {}) {
+    const num = (v, lo, hi, d) => {
+      if (v === undefined) return d;
+      const n = Math.round(Number(v));
+      if (!Number.isFinite(n) || n < lo || n > hi) throw new StoreError("bad_item", "That size or position is off the canvas");
+      return n;
+    };
+    const str = (v, max, d = "") => (v === undefined ? d : v === null ? null : String(v).slice(0, max));
+    const at = { x: num(p.x, -1e6, 1e6, prev.x ?? 0), y: num(p.y, -1e6, 1e6, prev.y ?? 0) };
+    if (type === "board") {
+      const env = p.env ?? prev.env;
+      const e = await this.getEnv(env);
+      return { ...at, env: e.id, screen: str(p.screen, 120, prev.screen ?? null), state: str(p.state, 60, prev.state ?? null), w: num(p.w, 240, 4096, prev.w ?? e.device.w), h: num(p.h, 240, 4096, prev.h ?? e.device.h) };
+    }
+    if (type === "note") {
+      const tone = p.tone ?? prev.tone ?? "warm";
+      if (!["warm", "info", "plain"].includes(tone)) throw new StoreError("bad_item", "A note is warm, info or plain");
+      return { ...at, w: num(p.w, 120, 800, prev.w ?? 240), text: str(p.text, LIMITS.commentChars, prev.text ?? ""), tone };
+    }
+    if (type === "box") return { ...at, w: num(p.w, 8, 20000, prev.w ?? 320), h: num(p.h, 8, 20000, prev.h ?? 200), label: str(p.label, 200, prev.label ?? "") };
+    if (type === "arrow") {
+      const end = (e, d) => {
+        if (e === undefined) return d;
+        if (e && typeof e === "object" && typeof e.item === "string") return { item: assertRecord(e.item) };
+        if (e && typeof e === "object") return { x: num(e.x, -1e6, 1e6, 0), y: num(e.y, -1e6, 1e6, 0) };
+        throw new StoreError("bad_item", "An arrow end is a point or an item");
+      };
+      return { from: end(p.from, prev.from ?? { x: 0, y: 0 }), to: end(p.to, prev.to ?? { x: 100, y: 0 }), label: str(p.label, 200, prev.label ?? "") };
+    }
+    throw new StoreError("bad_item", "Boards, notes, boxes and arrows go on the canvas");
+  }
+
+  async addItem(p, author = null) {
+    const type = String(p?.type || "");
+    if ((await this.items()).length >= 2000) throw new StoreError("too_many", "This canvas holds as much as it can");
+    const prefix = { board: "b", note: "n", box: "x", arrow: "a" }[type] || "i";
+    const it = { id: newId(prefix), type, ...(await this.cleanItem(type, p)), author, createdAt: now() };
+    return this.putItem(it);
+  }
+
+  async updateItem(id, patch) {
+    const it = await this.item(id);
+    const next = { ...it, ...(await this.cleanItem(it.type, patch || {}, it)), updatedAt: now() };
+    return this.putItem(next);
+  }
+
+  async deleteItem(id) {
+    const it = await this.item(id);
+    await fsp.rm(path.join(this.canvasDir, `${it.id}.json`), { force: true });
+    // arrows pinned to it would point at nothing
+    for (const a of await this.items()) if (a.type === "arrow" && (a.from?.item === it.id || a.to?.item === it.id)) await fsp.rm(path.join(this.canvasDir, `${a.id}.json`), { force: true });
+    return it;
+  }
+
+  // Where things sit: an environment's boards form a row; branches go in a row of their own below.
+  static LANE_GAP = 520; // room for a section's header band between rows (the canvas pads sections 200 above, 64 below)
+  static BOARD_GAP = 120;
+
+  async boundsOf(env, items) {
+    const bs = (items || (await this.items())).filter((i) => i.type === "board" && (!env || i.env === env));
+    if (!bs.length) return null;
+    return { x0: Math.min(...bs.map((b) => b.x)), y0: Math.min(...bs.map((b) => b.y)), x1: Math.max(...bs.map((b) => b.x + b.w)), y1: Math.max(...bs.map((b) => b.y + b.h)), boards: bs };
+  }
+
+  async freeRowBelow(y, x0, x1, items) {
+    let top = y + Store.LANE_GAP;
+    for (let guard = 0; guard < 200; guard++) {
+      const hit = items.find((i) => i.type === "board" && i.y + i.h + Store.LANE_GAP > top && i.y < top + 200 && i.x < x1 && i.x + i.w > x0);
+      if (!hit) return top;
+      top = hit.y + hit.h + Store.LANE_GAP;
+    }
+    return top;
+  }
+
+  async addBoard(env, { screen = null, state = null, below = null, author = null, x, y } = {}) {
+    const e = await this.getEnv(env);
+    const items = await this.items();
+    const mine = await this.boundsOf(env, items);
+    let px, py;
+    if (x !== undefined && y !== undefined) (px = x), (py = y);
+    else if (mine) {
+      const last = mine.boards.reduce((a, b) => (b.x + b.w > a.x + a.w ? b : a));
+      px = last.x + last.w + Store.BOARD_GAP;
+      py = last.y;
+    } else {
+      const ref = (below && (await this.boundsOf(below, items))) || (await this.boundsOf(null, items));
+      px = ref ? ref.x0 : 0;
+      py = ref ? await this.freeRowBelow(ref.y1, ref.x0, ref.x0 + e.device.w, items) : 0;
+    }
+    return this.addItem({ type: "board", env, screen, state, x: px, y: py, w: e.device.w, h: e.device.h }, author);
   }
 
   // ----- environments -----
@@ -194,20 +321,21 @@ export class Store {
   async ids() {
     const out = [];
     for (const e of await fsp.readdir(this.envsDir, { withFileTypes: true })) {
-      if (e.isDirectory() && ID_RE.test(e.name) && (await exists(path.join(this.envsDir, e.name, "index.html")))) out.push(e.name);
+      if (e.isDirectory() && ID_RE.test(e.name) && ((await exists(path.join(this.envsDir, e.name, "index.html"))) || (await exists(path.join(this.envsDir, e.name, "env.json"))))) out.push(e.name);
     }
     return out.sort();
   }
 
   defaults(id) {
-    return { id, name: id, description: "", parent: null, forkedFrom: null, source: null, created: null, author: null, device: { w: 1728, h: 1117 }, theme: "light", screen: null, state: null, variants: {}, patches: [] };
+    return { id, name: id, description: "", parent: null, base: null, branch: null, forkedFrom: null, archived: false, mergedAt: null, source: null, created: null, author: null, device: { w: 1728, h: 1117 }, theme: "light", screen: null, state: null, variants: {}, patches: [], catalog: null };
   }
 
   async getEnv(id) {
     const dir = this.envDir(id);
-    if (!(await exists(path.join(dir, "index.html")))) throw new StoreError("not_found", `No environment called ${id}`, 404);
+    const index = await this.resolveFile(id, "index.html");
+    if (!index) throw new StoreError("not_found", `No environment called ${id}`, 404);
     const meta = { ...this.defaults(id), ...(await readJson(path.join(dir, "env.json"), {})), id };
-    const st = await fsp.stat(path.join(dir, "index.html"));
+    const st = await fsp.stat(index);
     let updated = st.mtimeMs;
     for (const f of ["env.json", "overrides.css"]) {
       try {
@@ -215,7 +343,7 @@ export class Store {
       } catch {}
     }
     const overrides = await this.getOverrides(id);
-    return { ...meta, updatedAt: new Date(updated).toISOString(), bytes: st.size, versions: (await this.listVersions(id)).length, overrides: rulesOf(overrides).length };
+    return { ...meta, updatedAt: new Date(updated).toISOString(), bytes: st.size, versions: (await this.listVersions(id)).length, overrides: rulesOf(overrides).length, ownIndex: index === path.join(dir, "index.html") };
   }
 
   async listEnvs() {
@@ -238,7 +366,7 @@ export class Store {
   }
 
   async writeMeta(id, meta) {
-    const { versions, overrides, updatedAt, bytes, ...keep } = meta;
+    const { versions, overrides, updatedAt, bytes, ownIndex, ...keep } = meta;
     await writeJson(path.join(this.envDir(id), "env.json"), { ...keep, id });
   }
 
@@ -256,7 +384,7 @@ export class Store {
       await writeAtomic(p, content);
     }
     await this.writeMeta(id, { ...this.defaults(id), name: title, description: String(description).slice(0, 400), source, author, created: now() });
-    await this.placeBoard(id);
+    await this.addBoard(id, { author });
     return this.getEnv(id);
   }
 
@@ -276,7 +404,7 @@ export class Store {
     await fsp.cp(abs, dir, { recursive: true, filter: (p) => !path.basename(p).startsWith(".") || p === abs });
     const prev = await readJson(path.join(dir, "env.json"), {});
     await this.writeMeta(id, { ...this.defaults(id), ...prev, id, name: String(title).slice(0, 120), author: author || prev.author || null, created: now(), source: prev.source || { kind: "folder", path: path.basename(abs) } });
-    await this.placeBoard(id);
+    await this.addBoard(id, { author });
     return this.getEnv(id);
   }
 
@@ -307,6 +435,18 @@ export class Store {
       }
       env.variants = v;
     }
+    if ("archived" in p) env.archived = !!p.archived;
+    if (p.catalog && typeof p.catalog === "object") {
+      // what the prototype offers (screens, states, variants), remembered so the Screens panel and agents can list them
+      const c = p.catalog;
+      const s = (v, n) => String(v ?? "").slice(0, n);
+      env.catalog = {
+        adapter: s(c.adapter, 60),
+        screens: (Array.isArray(c.screens) ? c.screens : []).slice(0, 200).map((x) => ({ group: s(x?.group, 60), name: s(x?.name, 120) })).filter((x) => x.name),
+        states: (Array.isArray(c.states) ? c.states : []).slice(0, 20).map((x) => s(x, 60)),
+        variants: (Array.isArray(c.variants) ? c.variants : []).slice(0, 60).map((x) => ({ label: s(x?.label, 120), options: (Array.isArray(x?.options) ? x.options : []).slice(0, 20).map((o) => s(o, 120)) })),
+      };
+    }
     await this.writeMeta(id, env);
     return this.getEnv(id);
   }
@@ -324,59 +464,171 @@ export class Store {
     const nid = await this.uniqueId(title);
     await fsp.cp(from, this.envDir(nid), { recursive: true });
     const meta = { ...this.defaults(nid), ...(await readJson(path.join(this.envDir(nid), "env.json"), {})) };
-    await this.writeMeta(nid, { ...meta, id: nid, name: title, description: "", parent: id, forkedFrom: { env: id, version: version ?? null, at: now() }, created: now(), author });
-    const pos = (await this.workspace()).canvas.boards[id];
-    if (pos) await this.placeBoard(nid, { near: { ...pos, w: src.device.w, h: src.device.h } });
-    else await this.placeBoard(nid);
+    await this.writeMeta(nid, { ...meta, id: nid, name: title, description: "", parent: id, branch: null, archived: false, forkedFrom: { env: id, version: version ?? null, at: now() }, created: now(), author });
+    await this.copyBoards(id, nid, author);
     return this.getEnv(nid);
   }
 
-  // Finds a free spot: to the right of `near`, else after the right-most board.
-  async placeBoard(id, { near } = {}) {
-    const w = await readJson(this.file("workshop.json"), {});
-    w.canvas = w.canvas || { boards: {} };
-    const boards = (w.canvas.boards = w.canvas.boards || {});
-    if (boards[id] && !near) return boards[id];
-    const gap = 160;
-    const rects = [];
-    for (const [bid, b] of Object.entries(boards)) {
-      if (bid === id) continue;
-      const m = await readJson(path.join(this.envsDir, bid, "env.json"), {});
-      const d = m.device || { w: 1728, h: 1117 };
-      rects.push({ x: b.x, y: b.y, w: d.w, h: d.h });
+  // A new row for `to` below `from`'s boards, with the same screens.
+  async copyBoards(from, to, author = null) {
+    const items = await this.items();
+    const src = await this.boundsOf(from, items);
+    if (!src) return [await this.addBoard(to, { below: from, author })];
+    const top = await this.freeRowBelow(src.y1, src.x0, src.x1, items);
+    const out = [];
+    for (const b of src.boards) out.push(await this.addItem({ type: "board", env: to, screen: b.screen, state: b.state, x: b.x, y: top + (b.y - src.y0), w: b.w, h: b.h }, author));
+    return out;
+  }
+
+  // ----- branches -----
+
+  async fileHashes(id) {
+    const out = {};
+    for (const f of await this.listFiles(id)) {
+      if (f.path === "env.json" || f.path === "overrides.css") continue;
+      out[f.path] = crypto.createHash("sha1").update(await this.readFile(id, f.path)).digest("hex");
     }
-    const me = await readJson(path.join(this.envDir(id), "env.json"), {});
-    const md = me.device || { w: 1728, h: 1117 };
-    const hit = (x, y) => rects.some((r) => x < r.x + r.w + gap && x + md.w + gap > r.x && y < r.y + r.h + gap && y + md.h + gap > r.y);
-    let x, y;
-    if (near) {
-      x = near.x + near.w + gap;
-      y = near.y;
-      let guard = 0;
-      while (hit(x, y) && guard++ < 200) y += md.h + gap + 80;
-    } else if (rects.length) {
-      x = Math.max(...rects.map((r) => r.x + r.w)) + gap;
-      y = Math.min(...rects.map((r) => r.y));
-    } else {
-      x = 0;
-      y = 0;
+    return out;
+  }
+
+  async snapshotOf(id) {
+    const env = await this.getEnv(id);
+    return { settings: flatSettings(env), styles: cssMap(await this.getOverrides(id)), files: await this.fileHashes(id), at: now() };
+  }
+
+  async branchEnv(id, { name, author = null } = {}) {
+    const src = await this.getEnv(id);
+    let title = String(name || `${src.name} branch`).trim().slice(0, 120);
+    const names = new Set((await this.listEnvs()).map((e) => e.name));
+    for (let i = 2; names.has(title) && i < 1000; i++) title = `${String(name || `${src.name} branch`).trim().slice(0, 110)} ${i}`;
+    const nid = await this.uniqueId(title);
+    await fsp.mkdir(this.envDir(nid), { recursive: true });
+    const css = await this.getOverrides(id);
+    if (css) await writeAtomic(path.join(this.envDir(nid), "overrides.css"), css);
+    const keep = ["theme", "screen", "state", "variants", "patches", "device", "catalog", "source"];
+    const meta = { ...this.defaults(nid) };
+    for (const k of keep) meta[k] = src[k];
+    Object.assign(meta, { name: title, description: "", parent: id, base: id, branch: { from: id, at: now(), snapshot: await this.snapshotOf(id) }, created: now(), author });
+    await this.writeMeta(nid, meta);
+    await this.copyBoards(id, nid, author);
+    return this.getEnv(nid);
+  }
+
+  // Gives a branch its own copy of every file, so an editor or agent can open them in its folder.
+  async checkout(id) {
+    const env = await this.getEnv(id);
+    let n = 0;
+    for (const f of await this.listFiles(id)) {
+      if (!f.inherited) continue;
+      await writeAtomic(path.join(this.envDir(id), ...f.path.split("/")), await this.readFile(id, f.path));
+      n++;
     }
-    boards[id] = { x: Math.round(x), y: Math.round(y) };
-    await writeJson(this.file("workshop.json"), w);
-    return boards[id];
+    if (env.base) {
+      env.base = null;
+      await this.writeMeta(id, env);
+    }
+    return { copied: n };
+  }
+
+  async diffEnv(id) {
+    const env = await this.getEnv(id);
+    if (!env.parent || !env.branch) throw new StoreError("not_branch", `${env.name} isn't a branch`);
+    const parent = await this.getEnv(env.parent);
+    const snap = env.branch.snapshot || { settings: {}, styles: {}, files: {} };
+    const changes = [];
+    let behind = 0;
+    const cmp = (kind, B, P, S, label) => {
+      for (const k of new Set([...Object.keys(B), ...Object.keys(S), ...Object.keys(P)])) {
+        const b = B[k] ?? null,
+          p = P[k] ?? null,
+          s0 = S[k] ?? null;
+        if (b !== s0) changes.push({ kind, key: k, label: label(k), base: s0, main: p, branch: b, conflict: p !== s0 && p !== b });
+        else if (p !== s0) behind++;
+      }
+    };
+    cmp("setting", flatSettings(env), flatSettings(parent), snap.settings || {}, settingLabel);
+    cmp("style", cssMap(await this.getOverrides(id)), cssMap(await this.getOverrides(parent.id)), snap.styles || {}, (k) => k.replace("|", " · "));
+    const own = (await this.listFiles(id)).filter((f) => !f.inherited && f.path !== "env.json" && f.path !== "overrides.css");
+    const mainFiles = await this.fileHashes(parent.id);
+    for (const f of own) {
+      const hb = crypto.createHash("sha1").update(await this.readFile(id, f.path)).digest("hex");
+      const hs = snap.files?.[f.path] ?? null;
+      const hp = mainFiles[f.path] ?? null;
+      if (hb !== hs) changes.push({ kind: "file", key: f.path, label: f.path, conflict: hp !== hs && hp !== hb });
+    }
+    for (const [f, hp] of Object.entries(mainFiles)) if ((snap.files?.[f] ?? null) !== hp && !own.some((o) => o.path === f)) behind++;
+    return { branch: id, parent: parent.id, parentName: parent.name, changes, behind, conflicts: changes.filter((c) => c.conflict).length };
+  }
+
+  async mergeEnv(id, { take = {}, author = null } = {}) {
+    const env = await this.getEnv(id);
+    const d = await this.diffEnv(id);
+    const before = await this.saveVersion(d.parent, { label: `Before merging ${env.name}`, author, kind: "auto" });
+    const meta = await this.getEnv(d.parent);
+    const styles = new Map();
+    let applied = 0;
+    for (const c of d.changes) {
+      if (c.conflict && take[c.key] === "main") continue;
+      applied++;
+      if (c.kind === "setting") applySetting(meta, c.key, c.branch);
+      if (c.kind === "style") {
+        const [sel, prop] = c.key.split("|");
+        if (!styles.has(sel)) styles.set(sel, {});
+        styles.get(sel)[prop] = c.branch;
+      }
+      if (c.kind === "file") await writeAtomic(path.join(this.envDir(d.parent), ...c.key.split("/")), await this.readFile(id, c.key));
+    }
+    await this.writeMeta(d.parent, meta);
+    for (const [sel, props] of styles) await this.setStyle(d.parent, sel, props);
+    const after = await this.saveVersion(d.parent, { label: `Merged ${env.name}`, author, kind: "manual" });
+    const fresh = await this.getEnv(id);
+    Object.assign(fresh, { archived: true, mergedAt: now(), mergedInto: d.parent });
+    await this.writeMeta(id, fresh);
+    return { parent: await this.getEnv(d.parent), before, after, applied };
+  }
+
+  // Takes main's changes that the branch hasn't touched itself.
+  async updateFromMain(id, { author = null } = {}) {
+    const env = await this.getEnv(id);
+    if (!env.parent || !env.branch) throw new StoreError("not_branch", `${env.name} isn't a branch`);
+    const parent = await this.getEnv(env.parent);
+    const snap = env.branch.snapshot || { settings: {}, styles: {} };
+    const B = flatSettings(env),
+      P = flatSettings(parent),
+      S = snap.settings || {};
+    let n = 0;
+    for (const k of new Set([...Object.keys(P), ...Object.keys(S)])) {
+      if ((P[k] ?? null) !== (S[k] ?? null) && (B[k] ?? null) === (S[k] ?? null)) (applySetting(env, k, P[k] ?? null), n++);
+    }
+    const Bs = cssMap(await this.getOverrides(id)),
+      Ps = cssMap(await this.getOverrides(parent.id)),
+      Ss = snap.styles || {};
+    const styles = new Map();
+    for (const k of new Set([...Object.keys(Ps), ...Object.keys(Ss)])) {
+      if ((Ps[k] ?? null) !== (Ss[k] ?? null) && (Bs[k] ?? null) === (Ss[k] ?? null)) {
+        const [sel, prop] = k.split("|");
+        if (!styles.has(sel)) styles.set(sel, {});
+        styles.get(sel)[prop] = Ps[k] ?? null;
+        n++;
+      }
+    }
+    env.branch = { ...env.branch, snapshot: await this.snapshotOf(parent.id), updatedFromMain: now() };
+    await this.writeMeta(id, env);
+    for (const [sel, props] of styles) await this.setStyle(id, sel, props);
+    if (n) await this.saveVersion(id, { label: `Updated from ${parent.name}`, author, kind: "auto" });
+    return { updated: n, env: await this.getEnv(id) };
   }
 
   async deleteEnv(id) {
     await this.getEnv(id);
+    // Guard: a branch without its own copy reads its files from here; deleting it would break the branch.
+    const users = (await this.listEnvs()).filter((e) => e.base === id);
+    if (users.length) throw new StoreError("in_use", `${users.map((e) => e.name).join(", ")} still use${users.length === 1 ? "s" : ""} this prototype's files. Delete or merge ${users.length === 1 ? "that branch" : "those branches"} first.`, 409);
     const key = `${id}--${Date.now().toString(36)}`;
     await fsp.rename(this.envDir(id), path.join(this.metaDir, "trash", key));
-    const w = await readJson(this.file("workshop.json"), {});
-    const pos = w.canvas?.boards?.[id] || null;
-    if (pos) {
-      delete w.canvas.boards[id];
-      await writeJson(this.file("workshop.json"), w);
-    }
-    await writeJson(path.join(this.metaDir, "trash", `${key}.json`), { id, pos, at: now() });
+    const boards = (await this.items()).filter((i) => i.type === "board" && i.env === id);
+    for (const b of boards) await fsp.rm(path.join(this.canvasDir, `${b.id}.json`), { force: true });
+    await writeJson(path.join(this.metaDir, "trash", `${key}.json`), { id, boards, at: now() });
     return { trash: key };
   }
 
@@ -388,22 +640,39 @@ export class Store {
     const id = (await exists(this.envDir(info.id))) ? await this.uniqueId(info.id) : info.id;
     await fsp.rename(path.join(this.metaDir, "trash", key), this.envDir(id));
     await fsp.rm(path.join(this.metaDir, "trash", `${key}.json`), { force: true });
-    if (info.pos) await this.moveBoard(id, info.pos.x, info.pos.y);
-    else await this.placeBoard(id);
+    if (info.boards?.length) for (const b of info.boards) await this.putItem({ ...b, env: id });
+    else await this.addBoard(id);
     return this.getEnv(id);
   }
 
   // ----- files -----
 
-  async listFiles(id) {
-    await this.getEnv(id);
-    return listFilesRec(this.envDir(id));
+  // A file of this environment, or — for a branch that hasn't changed it — of its base.
+  async resolveFile(id, rel, seen = new Set()) {
+    const p = this.safeJoin(this.envDir(id), rel);
+    const st = await fsp.stat(p).catch(() => null);
+    if (st && st.isFile()) return p;
+    // Guard: base chains are short and can't loop
+    if (seen.has(id) || seen.size > 8) return null;
+    seen.add(id);
+    const meta = await readJson(path.join(this.envDir(id), "env.json"), {});
+    return meta.base && ID_RE.test(meta.base) ? this.resolveFile(meta.base, rel, seen) : null;
+  }
+
+  async listFiles(id, seen = new Set()) {
+    const own = (await listFilesRec(this.envDir(id)).catch(() => [])).map((f) => ({ ...f, inherited: null }));
+    if (seen.has(id) || seen.size > 8) return own;
+    seen.add(id);
+    const meta = await readJson(path.join(this.envDir(id), "env.json"), {});
+    if (!meta.base || !ID_RE.test(meta.base)) return own;
+    const mine = new Set(own.map((f) => f.path));
+    for (const f of await this.listFiles(meta.base, seen)) if (!mine.has(f.path) && f.path !== "env.json" && f.path !== "overrides.css") own.push({ ...f, inherited: f.inherited || meta.base });
+    return own;
   }
 
   async readFile(id, rel) {
-    const p = this.safeJoin(this.envDir(id), rel);
-    const st = await fsp.stat(p).catch(() => null);
-    if (!st || !st.isFile()) throw new StoreError("not_found", `No file ${rel} in ${id}`, 404);
+    const p = await this.resolveFile(id, rel);
+    if (!p) throw new StoreError("not_found", `No file ${rel} in ${id}`, 404);
     return fsp.readFile(p);
   }
 
@@ -529,7 +798,7 @@ export class Store {
     return r;
   }
 
-  async addComment({ env, x, y, selector = null, text, author = "You", parent = null }) {
+  async addComment({ env, board = null, x, y, selector = null, text, author = "You", parent = null }) {
     await this.getEnv(env);
     const t = String(text || "").trim();
     if (!t) throw new StoreError("empty", "Write a comment first");
@@ -538,7 +807,7 @@ export class Store {
       fy = Number(y);
     if (!parent && !(Number.isFinite(fx) && Number.isFinite(fy))) throw new StoreError("bad_position", "A comment needs a spot on the board");
     const id = newId("c");
-    return this.putRecord("comments", { id, env, x: parent ? null : Math.round(fx), y: parent ? null : Math.round(fy), selector: selector ? checkSelector(selector) : null, text: t, author: String(author).slice(0, 80), parent, resolved: false, createdAt: now() });
+    return this.putRecord("comments", { id, env, board: board ? assertRecord(String(board)) : null, x: parent ? null : Math.round(fx), y: parent ? null : Math.round(fy), selector: selector ? checkSelector(selector) : null, text: t, author: String(author).slice(0, 80), parent, resolved: false, createdAt: now() });
   }
 
   async updateComment(id, patch) {
@@ -640,4 +909,47 @@ export class Store {
 export function titleOf(html) {
   const m = /<title[^>]*>([^<]{1,200})<\/title>/i.exec(String(html || ""));
   return m ? m[1].replace(/\s+/g, " ").trim() : "";
+}
+
+// ---------- flat views of settings and styles, so two sides can be compared key by key ----------
+
+export function flatSettings(env) {
+  const out = { theme: env.theme || "light", screen: env.screen ?? null, state: env.state ?? null, device: `${env.device?.w || 1728}×${env.device?.h || 1117}` };
+  for (const [k, v] of Object.entries(env.variants || {})) out[`variant:${k}`] = v;
+  for (const p of env.patches || []) if (p.type === "text") out[`text:${p.selector}`] = p.text;
+  return out;
+}
+
+export function cssMap(css) {
+  const out = {};
+  for (const r of rulesOf(css || "")) for (const [p, v] of r.decls) out[`${normSel(r.selector)}|${p}`] = v;
+  return out;
+}
+
+export function settingLabel(k) {
+  if (k === "theme") return "Theme";
+  if (k === "screen") return "Opens on";
+  if (k === "state") return "Screen state";
+  if (k === "device") return "Board size";
+  if (k.startsWith("variant:")) return k.slice(8);
+  if (k.startsWith("text:")) return `Text of ${k.slice(5)}`;
+  return k;
+}
+
+export function applySetting(meta, k, v) {
+  if (k === "theme") meta.theme = v || "light";
+  else if (k === "screen") meta.screen = v ?? null;
+  else if (k === "state") meta.state = v ?? null;
+  else if (k === "device") {
+    const m = /^(\d+)×(\d+)$/.exec(String(v || ""));
+    if (m) meta.device = { w: +m[1], h: +m[2] };
+  } else if (k.startsWith("variant:")) {
+    meta.variants = { ...(meta.variants || {}) };
+    if (v === null) delete meta.variants[k.slice(8)];
+    else meta.variants[k.slice(8)] = v;
+  } else if (k.startsWith("text:")) {
+    const sel = k.slice(5);
+    meta.patches = (meta.patches || []).filter((p) => !(p.type === "text" && p.selector === sel));
+    if (v !== null) meta.patches.push({ type: "text", selector: sel, text: v });
+  }
 }

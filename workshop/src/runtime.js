@@ -15,6 +15,12 @@
   var ENV = (me && me.getAttribute("data-env")) || "";
   var SETTINGS = {};
   try { SETTINGS = JSON.parse((me && me.getAttribute("data-settings")) || "{}") || {}; } catch (e) { SETTINGS = {}; }
+  try {
+    /* each board on the canvas is the same prototype at its own screen: /env/<id>/?ws-screen=Chat&ws-state=Empty */
+    var q = new URLSearchParams(location.search);
+    if (q.has("ws-screen")) SETTINGS.screen = q.get("ws-screen") || null;
+    if (q.has("ws-state")) SETTINGS.state = q.get("ws-state") || null;
+  } catch (e) {}
   var doc = document, root = doc.documentElement;
   root.classList.add("ws-env");
   var embedded = false;

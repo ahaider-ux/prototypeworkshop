@@ -9,10 +9,13 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
 
 1. **Working on prototypes** (most sessions). The prototypes live in `workspace/envs/<id>/`. Use the
    `workshop` MCP server (`.mcp.json` in this folder registers it): `list_environments`,
-   `get_selection` (what the designer is pointing at), `take_task` / `update_task` (requests typed on
-   the canvas), `set_style`, `read_file` / `write_file`, `fork_environment`, `save_version`,
-   `screenshot`. Visual tweaks go in `overrides.css`; structure goes in `index.html`. Fork before
-   anything risky. Keep to the prototype's own design system (Libra tokens for Libra prototypes).
+   `get_selection` (what the designer is pointing at), `list_canvas` (their notes, highlights and
+   arrows — read them as feedback), `take_task` / `update_task` (requests typed in Chat),
+   `create_branch` / `review_branch` / `merge_branch`, `set_style`, `read_file` / `write_file`,
+   `save_version`, `screenshot`. Work on a branch, not on main. A branch reads its parent's files
+   until it changes them; `checkout_branch` (or `take_task`) copies them into its folder. Visual
+   tweaks go in `overrides.css`; structure goes in `index.html`. Keep to the prototype's own design
+   system (Libra tokens for Libra prototypes).
 2. **Working on the Workshop itself** (`src/`, `ui/`, `bin/`, `test/`). Rules for that:
 
 ## Rules for the Workshop code
@@ -36,7 +39,7 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
 - **Tests.** `npm test` runs `node --test`. A fix comes with a test that fails without it. For UI
   changes, look at the result in a browser (`npm start`, open http://127.0.0.1:4600).
 - **Don't commit `workspace/.workshop/`** — it is one computer's local state (versions, trash,
-  tasks, comments, share links).
+  tasks, comments, share links). `workspace/canvas/` and `workspace/envs/` are shared and committed.
 
 ## Libra assets
 

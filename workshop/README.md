@@ -1,20 +1,13 @@
 # Libra Workshop
 
-A canvas for HTML prototypes. Every prototype is a folder with an `index.html`, shown on the canvas
-as a live board: the real page at its real size, running exactly like the app it imitates. Fork a
-prototype to try something next to the original, change it with Libra tokens, compare variants
-side by side, share it as a running app, and let coding agents — Claude Code or your own harness —
-work on the same files while the boards reload in front of you.
+A canvas for HTML prototypes where branching and annotating come first. Every prototype is a
+folder with an `index.html`; on the canvas it becomes a **section** of live boards, one per screen,
+each running exactly like the app it imitates. Try an idea on a **branch** — its own section, joined
+to where it came from by a line — then **review and merge** it. Mark things up with notes,
+highlights, arrows and comments. Coding agents (Claude Code or your own harness) work on the same
+files, read your annotations, and do their work on branches you merge.
 
-Think of it as three tools in one place:
-
-- **Canvas** — boards, layers, an inspector, comments, present mode.
-- **HTML-native design** — boards are real pages, so selecting an element selects the DOM node and
-  every change is real CSS in a file.
-- **Agents on the files** — requests typed on the canvas become tasks an agent picks up over MCP
-  (or a local command runs), with a version saved before every change.
-
-It starts with one prototype: **Libra — Fourth Age** (`workspace/envs/libra-fourth-age/`).
+It starts with **Libra — Fourth Age** and two example branches.
 
 ## Start
 
@@ -34,32 +27,36 @@ Open http://127.0.0.1:4600. The server only listens on this computer.
 
 ```
 workspace/
-  workshop.json              name, where each board sits, the agent command
-  envs/<id>/index.html       the prototype itself — edit it in anything
-  envs/<id>/env.json         name, lineage, board size, theme, opening screen, state, variants, text edits
-  envs/<id>/overrides.css    design tweaks from the inspector and agents; loads after the prototype's styles
-  .workshop/                 this computer's local state (not committed): versions, trash, tasks,
+  workshop.json              name and the agent command
+  envs/<id>/index.html       a prototype — edit it in anything
+  envs/<id>/env.json         name, theme, variants, text edits, and for a branch: its parent and base
+  envs/<id>/overrides.css    design tweaks from the inspector and agents; loads after the page's styles
+  canvas/<id>.json           what's on the canvas: boards (a prototype at a screen), notes, highlights, arrows
+  .workshop/                 this computer's own state (not committed): versions, trash, tasks,
                              comments, share links, the current selection, agent heartbeats
 ```
 
-Any change to these files — from the canvas, an editor or an agent — reaches every open canvas.
+A branch folder starts with just `env.json` and `overrides.css`: files it hasn't changed are read
+from its parent, so branching a 6 MB prototype takes no time and no space. Any change to these
+files — from the canvas, an editor or an agent — reaches every open canvas.
 
-## Using the canvas
+## The canvas
 
 | | |
 |---|---|
-| **Design mode** (`P` to switch) | Click inside a board to select the element under the pointer. `Esc` selects its parent. Double-click text to edit it. Drag a board by its name or from inside; resize it from the right and bottom handles. |
-| **Prototype mode** | The pointer goes to the page: use the prototype like the app. |
-| **Inspector** | For an element: text, padding, gap, radius, fill, text colour, size and weight — Libra tokens only. Anything off the system is flagged. Changes go to `overrides.css`, for this element or for every match. `⌘Z` undoes the last one. |
-| **Environment** | For a board: size presets, theme, the screen it opens on, screen state (default, loading, empty, no results, error) and the prototype's own variants. Libra prototypes expose these through their prototype tools; others can opt in (below). |
-| **Versions** | Save a version of the whole folder; restore it or fork from it. Restoring saves the current state first. |
-| **Fork** (`⌘D`) | Copies the folder — and the page's saved browser state — into a new board next to the original. Every board keeps its own storage, so forks never share state. |
-| **Comments** (`C`) | Pin a comment on a board; reply, resolve, or send it to an agent. Agents can read and resolve them too. |
-| **Share** | A local link on this computer, and — with network sharing on — view or comment links for people on the same network. Links open the running prototype and nothing else. |
-| **Present** | The board fills the window at 1:1 as the app. `Esc` exits. |
+| **Sections and branches** | Each prototype's boards sit in a section. **Branch** (in the section header) makes a new section with the same screens, below, joined by a lineage line. The header says how many changes the branch has and whether any conflict with main. |
+| **Review and merge** | Shows every change — settings, design overrides, files — with main's value and the branch's. Where main changed the same thing since the branch was made, pick which side wins. Merging saves main as a version first and archives the branch. **Update from main** brings main's newer changes into a branch. |
+| **Screens** (left panel) | Every screen, state and flow the prototype offers. Drag one onto the canvas or click to place it; **Place all** fills a row. Fourth Age lists its screens through its own prototype tools. |
+| **Annotate** | **N** note, **B** highlight (drag a box), **A** arrow (drag from a note, box or board to what it's about), **C** comment on a board. **Notes** (right panel) lists them all. Agents read them too. |
+| **Design mode** (**P** switches) | Click inside a board to select the element under the pointer; **Esc** selects its parent; double-click text to edit it. The inspector only offers Libra tokens and flags anything off the system. Changes go to the branch's `overrides.css`. |
+| **Prototype mode** | The pointer goes to the page: use it like the app. |
+| **Layers** (left panel) | The selected board's landmarks only — sidebar, content, panels, sections — folded. Click into a board to reach anything else. |
+| **Chat** (right panel) | Ask for a change. From main it happens on a new branch, so main only changes when you merge. |
+| **History** | Save versions of a prototype or branch; restore one or copy it as a new prototype. |
+| **Share · Present** | A local link, and view or comment links for people on your network. **Present** plays a board full-window at 1:1. |
 
-Other shortcuts: `V` select, `H` hand, `Space` drag to pan, `⇧1` zoom to fit, `⇧2` zoom to the
-selection, `⌘0` 100%, `⌘K` search.
+Other keys: **V** select, **H** hand, **Space** drag to pan, **⇧1** fit, **⇧2** zoom to the selection,
+**⌘D** duplicate, **⌘K** search, **⌘\** hide the panels, **⌘Z** undo a style edit.
 
 ## Connect a coding agent
 
@@ -71,13 +68,16 @@ From this folder, Claude Code picks up `.mcp.json` automatically. From anywhere 
 claude mcp add workshop -- node /path/to/workshop/bin/workshop.js mcp --workspace /path/to/workshop/workspace
 ```
 
-Then ask it things like "take the next Workshop task", "make the selected card denser", or "fork
-Fourth Age and try the citations panel at app level". The canvas shows it as connected.
+Then ask it things like "take the next Workshop task", "read the notes on the canvas and fix them",
+"make what I selected denser", or "branch Fourth Age and try the citations panel at app level".
+The canvas shows it as connected.
 
-Tools: `list_environments`, `get_environment`, `get_selection`, `read_file`, `write_file`,
-`create_environment`, `fork_environment`, `update_environment`, `set_style`, `set_text`,
-`save_version`, `list_versions`, `restore_version`, `screenshot`, `list_tasks`, `take_task`,
-`update_task`, `list_comments`, `reply_comment`, `resolve_comment`.
+Tools: `list_environments`, `get_environment`, `get_selection`, `list_canvas` (boards and your
+notes, highlights and arrows), `place_screen`, `add_note`, `create_branch`, `review_branch`,
+`merge_branch`, `checkout_branch`, `read_file`, `write_file`, `create_environment`,
+`fork_environment`, `update_environment`, `set_style`, `set_text`, `save_version`, `list_versions`,
+`restore_version`, `screenshot`, `list_tasks`, `take_task`, `update_task`, `list_comments`,
+`reply_comment`, `resolve_comment`.
 
 ### Run requests automatically
 

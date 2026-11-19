@@ -29,6 +29,15 @@ const TYPES = {
   ".md": "text/markdown; charset=utf-8", ".map": "application/json", ".wasm": "application/wasm", ".glb": "model/gltf-binary", ".gltf": "model/gltf+json",
 };
 
+// "Make the sidebar rows denser" → "Sidebar rows denser"
+export function branchNameFor(prompt) {
+  const words = String(prompt || "").replace(/[^\p{L}\p{N}\s-]/gu, " ").split(/\s+/).filter(Boolean);
+  const skip = new Set(["make", "please", "can", "you", "try", "the", "a", "an", "to", "and", "of", "this", "that", "it", "be", "more", "with", "for", "on", "in"]);
+  const keep = words.filter((w, i) => !(skip.has(w.toLowerCase()) && i < 3) && !skip.has(w.toLowerCase())).slice(0, 4);
+  const t = (keep.length ? keep : words.slice(0, 4)).join(" ");
+  return t ? t[0].toUpperCase() + t.slice(1) : "Agent branch";
+}
+
 function lanAddress() {
   for (const list of Object.values(os.networkInterfaces())) for (const a of list || []) if (a.family === "IPv4" && !a.internal) return a.address;
   return null;
@@ -107,7 +116,9 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
     if (rest === "__overrides.css") return send(res, 200, await store.getOverrides(id), { "content-type": "text/css; charset=utf-8" });
     if (rest === "__workshop.json") return json(res, 200, await settingsOf(id));
     const rel = rest === "" || rest.endsWith("/") ? rest + "index.html" : rest;
-    const file = store.safeJoin(store.envDir(id), decodeURIComponent(rel));
+    store.safeJoin(store.envDir(id), decodeURIComponent(rel)); // refuses ../ and dot files
+    const file = await store.resolveFile(id, decodeURIComponent(rel)); // a branch reads files it hasn't changed from its base
+    if (!file) return send(res, 404, "Not found", { "content-type": "text/plain; charset=utf-8" });
     const settings = /\.html?$/i.test(file) ? await settingsOf(id) : null;
     return serveFile(res, file, { inject: settings ? { env: id, settings } : null });
   }
@@ -120,14 +131,16 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
 
     if (a === "workspace" && !b) {
       if (m === "GET") {
-        const [ws, envs, harnesses] = await Promise.all([store.workspace(), store.listEnvs(), store.harnesses()]);
-        return json(res, 200, { ...ws, envs, harnesses, screenshot: await screenshotAvailable(), share: shareInfo(), cli: { node: process.execPath, bin: path.resolve(HERE, "..", "bin", "workshop.js") } });
+        const [ws, envs, harnesses, items] = await Promise.all([store.workspace(), store.listEnvs(), store.harnesses(), store.items()]);
+        return json(res, 200, { ...ws, envs, items, harnesses, screenshot: await screenshotAvailable(), share: shareInfo(), cli: { node: process.execPath, bin: path.resolve(HERE, "..", "bin", "workshop.js") } });
       }
       if (m === "PATCH") return json(res, 200, await store.updateWorkspace(await body(req)));
     }
-    if (a === "canvas" && b === "boards" && c && m === "PUT") {
-      const p = await body(req);
-      return json(res, 200, await store.moveBoard(c, p.x, p.y));
+    if (a === "canvas" && b === "items") {
+      if (!c && m === "GET") return json(res, 200, await store.items());
+      if (!c && m === "POST") return json(res, 201, await store.addItem(await body(req), me));
+      if (c && m === "PATCH") return json(res, 200, await store.updateItem(c, await body(req)));
+      if (c && m === "DELETE") return json(res, 200, await store.deleteItem(c));
     }
     if (a === "envs") {
       if (!b) {
@@ -156,6 +169,21 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
           return json(res, 200, r);
         }
       }
+      if (b && c === "branch" && m === "POST") {
+        const p = await body(req);
+        const env = await store.branchEnv(b, { name: p.name, author: me });
+        emit({ kind: "envs" });
+        return json(res, 201, env);
+      }
+      if (b && c === "diff" && m === "GET") return json(res, 200, await store.diffEnv(b));
+      if (b && c === "merge" && m === "POST") {
+        const p = await body(req);
+        const r = await store.mergeEnv(b, { take: p.take || {}, author: me });
+        emit({ kind: "envs" });
+        return json(res, 200, r);
+      }
+      if (b && c === "update-from-main" && m === "POST") return json(res, 200, await store.updateFromMain(b, { author: me }));
+      if (b && c === "checkout" && m === "POST") return json(res, 200, await store.checkout(b));
       if (b && c === "fork" && m === "POST") {
         const p = await body(req);
         const env = await store.forkEnv(b, { name: p.name, version: p.version ?? null, author: me });
@@ -232,7 +260,14 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
       if (!b && m === "POST") {
         const p = await body(req);
         const ws = await store.workspace();
-        const t = await store.addTask({ env: p.env, prompt: p.prompt, selection: p.selection, author: me, runner: ws.agent && runner ? "auto" : "harness" });
+        let env = p.env;
+        if (p.branch) {
+          // the agent works on its own branch, so main only changes when someone merges
+          const name = typeof p.branchName === "string" && p.branchName.trim() ? p.branchName : branchNameFor(p.prompt);
+          env = (await store.branchEnv(p.env, { name, author: me })).id;
+          emit({ kind: "envs" });
+        }
+        const t = await store.addTask({ env, prompt: p.prompt, selection: p.selection, author: me, runner: ws.agent && runner ? "auto" : "harness" });
         emit({ kind: "tasks" });
         if (t.runner === "auto") runner.kick();
         return json(res, 201, t);
@@ -390,6 +425,7 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
         queue(`env:${id}`, { kind: "env", id, files: [file] });
       }),
     );
+    watchers.push(watchTree(store.canvasDir, (name) => name && !String(name).endsWith(".tmp") && queue("canvas", { kind: "canvas" }), { maxDepth: 0 }));
     watchers.push(
       watchTree(store.metaDir, (name) => {
         if (!name || String(name).endsWith(".tmp")) return;

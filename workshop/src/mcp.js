@@ -24,7 +24,14 @@ export const TOOLS = [
   { name: "read_file", description: "Reads a text file from an environment (default index.html). Large files come back in slices: pass offset and length (characters) to page through.", inputSchema: S({ env: ENV, path: str("Path inside the environment folder, e.g. index.html"), offset: num("Character offset, default 0"), length: num(`Characters to read, default ${READ_CAP}`) }, ["env"]) },
   { name: "write_file", description: "Writes a whole text file in an environment. The canvas reloads that board. Save a version first for big changes.", inputSchema: S({ env: ENV, path: str("Path inside the environment folder"), content: str("The complete new file contents") }, ["env", "path", "content"]) },
   { name: "create_environment", description: "Creates a new environment from a complete HTML document. Returns its id.", inputSchema: S({ name: str("Name shown on the canvas"), html: str("A complete HTML document"), description: str("One line about it") }, ["name", "html"]) },
-  { name: "fork_environment", description: "Copies an environment (optionally from a saved version) into a new one next to it on the canvas, so you can try a change without touching the original.", inputSchema: S({ env: ENV, name: str("Name for the copy"), version: num("Version number to copy from (optional)") }, ["env"]) },
+  { name: "create_branch", description: "Creates a branch of an environment: a new section on the canvas with the same screens, reading the parent's files until it changes them. Try changes there, then the designer reviews and merges. Returns the branch id.", inputSchema: S({ env: ENV, name: str("Branch name, e.g. 'Denser sidebar'") }, ["env"]) },
+  { name: "checkout_branch", description: "Copies every file a branch still reads from its parent into the branch's own folder, so you can edit them there directly (take_task does this for you).", inputSchema: S({ env: ENV }, ["env"]) },
+  { name: "review_branch", description: "Lists what a branch changed compared with its parent (settings, styles, files) and which changes conflict with changes made on the parent since.", inputSchema: S({ env: ENV }, ["env"]) },
+  { name: "merge_branch", description: "Merges a branch into its parent and archives it. Conflicts go to the branch unless listed in keep_main. The parent's state is saved as a version first.", inputSchema: S({ env: ENV, keep_main: { type: "array", items: { type: "string" }, description: "Change keys (from review_branch) where the parent's value should win" } }, ["env"]) },
+  { name: "fork_environment", description: "Makes an independent copy of an environment (optionally from a saved version) — no link back to merge. Prefer create_branch for trying changes.", inputSchema: S({ env: ENV, name: str("Name for the copy"), version: num("Version number to copy from (optional)") }, ["env"]) },
+  { name: "list_canvas", description: "What is on the canvas: boards (an environment at a screen and state), and the designer's annotations — notes, boxes, arrows — with the boards each one sits over. Read the annotations as feedback.", inputSchema: S({ env: str("Only boards and annotations for this environment") }) },
+  { name: "place_screen", description: "Puts a board for one of an environment's screens on the canvas (screens are listed by get_environment under catalog).", inputSchema: S({ env: ENV, screen: str("Screen name, e.g. Chat"), state: str("Screen state, e.g. Empty (optional)") }, ["env", "screen"]) },
+  { name: "add_note", description: "Pins a note on the canvas next to an environment's boards, e.g. to explain a change or ask a question.", inputSchema: S({ env: ENV, text: str("The note"), tone: { type: "string", enum: ["warm", "info", "plain"] } }, ["env", "text"]) },
   { name: "update_environment", description: "Changes an environment's settings: name, description, theme (light/dark/system), opening screen, screen state, board size, or variants (an object of variant label → option).", inputSchema: S({ env: ENV, name: str("New name"), description: str("New description"), theme: { type: "string", enum: ["light", "dark", "system"] }, screen: str("Screen to open on, e.g. Chat"), state: str("Screen state, e.g. Empty"), width: num("Board width in px"), height: num("Board height in px"), variants: { type: "object", additionalProperties: { type: "string" } } }, ["env"]) },
   { name: "set_style", description: "Sets CSS properties for a selector in the environment's overrides.css (rules there win over the prototype's styles). Pass null or '' to remove a property. Prefer the prototype's CSS variables, e.g. var(--text-secondary).", inputSchema: S({ env: ENV, selector: str("CSS selector, e.g. from get_selection"), props: { type: "object", description: "CSS property → value", additionalProperties: { type: ["string", "null"] } } }, ["env", "selector", "props"]) },
   { name: "set_text", description: "Replaces the text of the element(s) a selector matches, applied every time the prototype loads. Pass null to remove the edit.", inputSchema: S({ env: ENV, selector: str("CSS selector"), text: { type: ["string", "null"] } }, ["env", "selector", "text"]) },
@@ -40,12 +47,13 @@ export const TOOLS = [
   { name: "resolve_comment", description: "Marks a canvas comment as resolved.", inputSchema: S({ id: str("Comment id") }, ["id"]) },
 ];
 
-const INSTRUCTIONS = `Libra Workshop holds HTML prototypes ("environments") that a designer arranges on a canvas.
+const INSTRUCTIONS = `Libra Workshop holds HTML prototypes ("environments") that a designer arranges on a canvas as boards, one per screen.
 Each environment is a folder with index.html; you can edit those files directly or through these tools, and the canvas reloads live.
-- list_environments shows ids and folders. get_selection tells you what the designer is pointing at.
+- list_environments shows ids, folders and branches. get_selection tells you what the designer is pointing at.
+- list_canvas shows the designer's notes, boxes and arrows: treat them as feedback on the boards they sit over.
 - Requests typed on the canvas wait as tasks: take_task, do the work, then update_task with status done and a short reply.
-- Visual tweaks belong in overrides.css (set_style); structure and behaviour in index.html.
-- fork_environment before trying something risky; save_version before big edits.`;
+- Try changes on a branch (create_branch); the designer reviews and merges it. A branch reads its parent's files until checkout_branch copies them.
+- Visual tweaks belong in overrides.css (set_style); structure and behaviour in index.html. save_version before big edits.`;
 
 function text(t) {
   return { content: [{ type: "text", text: typeof t === "string" ? t : JSON.stringify(t, null, 2) }] };
@@ -72,7 +80,7 @@ export async function callTool(store, name, a = {}, ctx = {}) {
       return text({
         workspace: ws.name,
         root: store.root,
-        environments: envs.map((e) => ({ id: e.id, name: e.name, folder: store.envDir(e.id), parent: e.parent, device: e.device, theme: e.theme, screen: e.screen, versions: e.versions, overrides: e.overrides, updatedAt: e.updatedAt })),
+        environments: envs.map((e) => ({ id: e.id, name: e.name, folder: store.envDir(e.id), parent: e.parent, branch: !!e.branch, readsFilesFrom: e.base || null, archived: e.archived, device: e.device, theme: e.theme, screen: e.screen, versions: e.versions, overrides: e.overrides, updatedAt: e.updatedAt })),
       });
     }
     case "get_environment": {
@@ -98,6 +106,46 @@ export async function callTool(store, name, a = {}, ctx = {}) {
     case "create_environment": {
       const e = await store.createEnv({ name: a.name, html: a.html, description: a.description || "", author: who, source: { kind: "agent", by: who } });
       return text({ id: e.id, name: e.name, folder: store.envDir(e.id) });
+    }
+    case "create_branch": {
+      const e = await store.branchEnv(a.env, { name: a.name, author: who });
+      return text({ id: e.id, name: e.name, folder: store.envDir(e.id), parent: e.parent, note: "The branch reads its parent's files until you edit one or call checkout_branch." });
+    }
+    case "checkout_branch":
+      return text(await store.checkout(a.env));
+    case "review_branch":
+      return text(await store.diffEnv(a.env));
+    case "merge_branch": {
+      const take = {};
+      for (const k of Array.isArray(a.keep_main) ? a.keep_main : []) take[String(k)] = "main";
+      const r = await store.mergeEnv(a.env, { take, author: who });
+      return text({ mergedInto: r.parent.id, applied: r.applied, savedBeforeAs: r.before.n, savedAfterAs: r.after.n });
+    }
+    case "list_canvas": {
+      const items = await store.items();
+      const boards = items.filter((i) => i.type === "board");
+      const over = (r) => boards.filter((b) => r.x < b.x + b.w && r.x + (r.w || 1) > b.x && r.y < b.y + b.h && r.y + (r.h || 1) > b.y).map((b) => ({ board: b.id, env: b.env, screen: b.screen }));
+      const pick = a.env ? new Set(boards.filter((b) => b.env === a.env).map((b) => b.id)) : null;
+      const out = {
+        boards: boards.filter((b) => !a.env || b.env === a.env).map((b) => ({ id: b.id, env: b.env, screen: b.screen || "start screen", state: b.state || "Default", x: b.x, y: b.y, w: b.w, h: b.h })),
+        notes: items.filter((i) => i.type === "note").map((n) => ({ id: n.id, text: n.text, author: n.author, over: over({ ...n, h: 120 }) })),
+        boxes: items.filter((i) => i.type === "box").map((x) => ({ id: x.id, label: x.label, author: x.author, over: over(x) })),
+        arrows: items.filter((i) => i.type === "arrow").map((r) => ({ id: r.id, label: r.label, from: r.from, to: r.to })),
+      };
+      if (pick) {
+        out.notes = out.notes.filter((n) => n.over.some((o) => pick.has(o.board)));
+        out.boxes = out.boxes.filter((n) => n.over.some((o) => pick.has(o.board)));
+      }
+      return text(out);
+    }
+    case "place_screen": {
+      const b = await store.addBoard(a.env, { screen: String(a.screen), state: a.state ? String(a.state) : null, author: who });
+      return text({ board: b.id, x: b.x, y: b.y });
+    }
+    case "add_note": {
+      const bounds = await store.boundsOf(a.env);
+      const n = await store.addItem({ type: "note", text: a.text, tone: a.tone || "info", x: bounds ? bounds.x1 + 80 : 0, y: bounds ? bounds.y0 : 0 }, who);
+      return text({ note: n.id });
     }
     case "fork_environment": {
       const e = await store.forkEnv(a.env, { name: a.name, version: a.version ?? null, author: who });
@@ -147,6 +195,7 @@ export async function callTool(store, name, a = {}, ctx = {}) {
       if (!t) return text("No requests are waiting. The designer types them on the canvas, in the Agent panel.");
       if (t.status !== "queued") return text(`Task ${t.id} is already ${t.status}.`);
       const env = await store.getEnv(t.env);
+      if (env.base) await store.checkout(t.env); // so you can edit the branch's files in its folder
       const v = await store.saveVersion(t.env, { label: `Before ${who}: ${t.prompt.slice(0, 60)}`, author: who, kind: "auto" });
       await store.updateTask(t.id, { status: "working", claimedBy: who, beforeVersion: v.n, log: `${who} took this request. Saved version ${v.n} first.`, logKind: "note" });
       return text({ id: t.id, env: t.env, brief: taskPrompt(t, env, store.envDir(t.env)) });

@@ -177,3 +177,44 @@ test("canvas requests run through a configured agent, with a version saved first
     await srv.close();
   }
 });
+
+test("API: canvas items, branches, review and merge, and requests that branch", async () => {
+  const srv = await startServer({ workspace: await tmp(), port: 0, quiet: true, agent: false });
+  try {
+    const u = srv.url;
+    const call = async (p, method = "GET", body) => {
+      const r = await fetch(`${u}/api/${p}`, { method, headers: method === "GET" ? {} : H, body: body === undefined ? undefined : JSON.stringify(body) });
+      return { status: r.status, body: await r.json() };
+    };
+    const env = (await call("envs", "POST", { html: HTML })).body;
+    const ws = (await call("workspace")).body;
+    assert.equal(ws.items.filter((i) => i.type === "board").length, 1, "a new prototype gets a board");
+    const chat = (await call("canvas/items", "POST", { type: "board", env: env.id, screen: "Chat" })).body;
+    assert.equal(chat.screen, "Chat");
+    const page = await (await fetch(`${u}/env/${env.id}/?ws-screen=Chat`)).text();
+    assert.match(page, /runtime\.js/);
+    const note = (await call("canvas/items", "POST", { type: "note", x: 10, y: 10, text: "Look here" })).body;
+    assert.equal((await call(`canvas/items/${note.id}`, "PATCH", { text: "Look again" })).body.text, "Look again");
+    assert.equal((await call("canvas/items", "POST", { type: "note", x: "far", y: 0 })).status, 400);
+
+    const br = (await call(`envs/${env.id}/branch`, "POST", { name: "Bolder" })).body;
+    assert.equal(br.parent, env.id);
+    assert.equal((await fetch(`${u}/env/${br.id}/`)).status, 200, "a branch serves its parent's files");
+    await call(`envs/${br.id}/styles`, "PATCH", { selector: "p.t", props: { "font-weight": "500" } });
+    const d = (await call(`envs/${br.id}/diff`)).body;
+    assert.equal(d.changes.length, 1);
+    const m = (await call(`envs/${br.id}/merge`, "POST", { take: {} })).body;
+    assert.equal(m.applied, 1);
+    assert.match(await (await fetch(`${u}/env/${env.id}/__overrides.css`)).text(), /font-weight: 500/);
+    assert.equal((await call(`envs/${br.id}`)).body.archived, true);
+    assert.equal((await call(`envs/${env.id}`, "DELETE")).status, 409, "the merged branch still reads its files");
+
+    const t = (await call("tasks", "POST", { env: env.id, prompt: "Make the text bigger please", branch: true })).body;
+    assert.notEqual(t.env, env.id, "the request went to a branch of its own");
+    const tb = (await call(`envs/${t.env}`)).body;
+    assert.equal(tb.parent, env.id);
+    assert.equal(tb.name, "Text bigger");
+  } finally {
+    await srv.close();
+  }
+});

@@ -25,7 +25,8 @@
   const id = location.pathname.split("/").filter(Boolean)[1] || "";
   const shared = new URLSearchParams(location.search).has("shared");
   const bar = document.getElementById("bar");
-  document.getElementById("app").src = `/env/${encodeURIComponent(id)}/`;
+  const screen = new URLSearchParams(location.search).get("screen");
+  document.getElementById("app").src = `/env/${encodeURIComponent(id)}/${screen ? `?ws-screen=${encodeURIComponent(screen)}` : ""}`;
   if (shared) {
     document.getElementById("back").remove();
     document.getElementById("note").textContent = "Shared from Libra Workshop · view only";

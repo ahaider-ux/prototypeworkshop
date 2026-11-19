@@ -106,6 +106,7 @@ export class AgentRunner {
       return;
     }
     const dir = s.envDir(task.env);
+    if (env.base) await s.checkout(task.env); // the agent edits real files in this folder
     const before = await s.saveVersion(task.env, { label: `Before agent: ${task.prompt.slice(0, 60)}`, author: agent.name, kind: "auto" });
     await s.updateTask(task.id, { status: "working", claimedBy: agent.name, beforeVersion: before.n, log: `${agent.name} started. Saved version ${before.n} first.`, logKind: "note" });
     this.emit({ kind: "tasks" });

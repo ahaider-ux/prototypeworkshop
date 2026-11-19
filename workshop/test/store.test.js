@@ -18,8 +18,11 @@ test("creates, lists and forks an environment with its lineage and canvas spot",
   assert.equal(b.parent, a.id);
   assert.equal(b.id, "sample-app-dark");
   assert.equal((await s.readFile(b.id, "assets/note.txt")).toString(), "hello");
-  const ws = await s.workspace();
-  assert.ok(ws.canvas.boards[b.id].x > ws.canvas.boards[a.id].x, "the fork sits to the right of its parent");
+  const items = await s.items();
+  const ba = items.find((i) => i.env === a.id),
+    bb = items.find((i) => i.env === b.id);
+  assert.ok(bb.y > ba.y + ba.h, "the copy gets its own row below its parent");
+  assert.equal(bb.x, ba.x);
   assert.equal((await s.listEnvs()).length, 2);
 });
 
@@ -76,12 +79,17 @@ test("versions snapshot the folder and restore saves the current state first", a
 test("delete goes to the trash and comes back", async () => {
   const s = await Store.open(await tmp());
   const a = await s.createEnv({ html: HTML });
-  await s.moveBoard(a.id, 400, 300);
+  const b0 = (await s.items())[0];
+  await s.updateItem(b0.id, { x: 400, y: 300 });
+  await s.addBoard(a.id, { screen: "Chat" });
   const { trash } = await s.deleteEnv(a.id);
   assert.equal((await s.listEnvs()).length, 0);
+  assert.equal((await s.items()).length, 0, "its boards leave the canvas with it");
   const back = await s.restoreEnv(trash);
   assert.equal(back.id, a.id);
-  assert.deepEqual((await s.workspace()).canvas.boards[a.id], { x: 400, y: 300 });
+  const bs = await s.items();
+  assert.equal(bs.length, 2);
+  assert.ok(bs.some((b) => b.x === 400 && b.y === 300));
 });
 
 test("settings are validated", async () => {
@@ -93,7 +101,8 @@ test("settings are validated", async () => {
   assert.deepEqual(e.variants, { Sidebar: "V2" });
   await assert.rejects(() => s.updateEnv(a.id, { theme: "neon" }), /Theme/);
   await assert.rejects(() => s.updateEnv(a.id, { device: { w: 10, h: 10 } }), /between/);
-  await assert.rejects(() => s.moveBoard(a.id, NaN, 0), /off the canvas/);
+  const b0 = (await s.items())[0];
+  await assert.rejects(() => s.updateItem(b0.id, { x: NaN }), /off the canvas/);
 });
 
 test("tasks, comments and shares are one file each", async () => {
@@ -114,4 +123,105 @@ test("tasks, comments and shares are one file each", async () => {
   await s.revokeShare(sh.id);
   assert.equal(await s.shareByToken(sh.token), null);
   await assert.rejects(() => s.addShare({ env: a.id, role: "edit" }), /view or comment/);
+});
+
+test("a branch is instant: it reads its parent's files until it changes them", async () => {
+  const s = await Store.open(await tmp());
+  const a = await s.createEnv({ html: HTML });
+  await s.writeFile(a.id, "assets/app.js", "console.log(1)");
+  await s.addBoard(a.id, { screen: "Chat" });
+  const b = await s.branchEnv(a.id, { name: "Dense" });
+  assert.equal(b.base, a.id);
+  assert.equal(b.parent, a.id);
+  assert.equal(b.ownIndex, false, "no copy of index.html was made");
+  assert.match((await s.readFile(b.id, "index.html")).toString(), />Go</);
+  const files = await s.listFiles(b.id);
+  assert.equal(files.find((f) => f.path === "assets/app.js").inherited, a.id);
+  const boards = (await s.items()).filter((i) => i.env === b.id);
+  assert.deepEqual(boards.map((x) => x.screen).sort(), ["Chat", null].sort(), "the branch gets the same screens");
+  await assert.rejects(() => s.deleteEnv(a.id), /still uses/);
+  const co = await s.checkout(b.id);
+  assert.equal(co.copied, 2);
+  assert.equal((await s.getEnv(b.id)).base, null);
+});
+
+test("review and merge: both sides' changes, conflicts, and the merge itself", async () => {
+  const s = await Store.open(await tmp());
+  const a = await s.createEnv({ html: HTML });
+  await s.setStyle(a.id, ".m", { gap: "8px" });
+  const b = await s.branchEnv(a.id, { name: "Dark" });
+  await s.updateEnv(b.id, { theme: "dark", variants: { Sidebar: "V1" } });
+  await s.setStyle(b.id, ".m", { gap: "12px" });
+  await s.setStyle(b.id, ".b", { color: "var(--text-accent, #5266ba)" });
+  await s.writeFile(b.id, "index.html", HTML.replace("Go", "Start"));
+  // main moves on too: the same gap changed both ways is a conflict
+  await s.setStyle(a.id, ".m", { gap: "16px" });
+  await s.updateEnv(a.id, { screen: "Chat" });
+  const d = await s.diffEnv(b.id);
+  const byKey = Object.fromEntries(d.changes.map((c) => [c.key, c]));
+  assert.equal(byKey.theme.branch, "dark");
+  assert.equal(byKey["variant:Sidebar"].branch, "V1");
+  assert.equal(byKey[".m|gap"].conflict, true);
+  assert.equal(byKey[".b|color"].conflict, false);
+  assert.equal(byKey["index.html"].kind, "file");
+  assert.equal(d.conflicts, 1);
+  assert.equal(d.behind, 1, "main's new opening screen is waiting to come in");
+  const r = await s.mergeEnv(b.id, { take: { ".m|gap": "main" } });
+  const main = await s.getEnv(a.id);
+  assert.equal(main.theme, "dark");
+  assert.equal(main.variants.Sidebar, "V1");
+  assert.equal(main.screen, "Chat", "main's own change stays");
+  const css = await s.getOverrides(a.id);
+  assert.match(css, /gap: 16px/);
+  assert.match(css, /--text-accent/);
+  assert.match((await s.readFile(a.id, "index.html")).toString(), />Start</);
+  assert.equal((await s.getEnv(b.id)).archived, true);
+  assert.deepEqual((await s.listVersions(a.id)).map((v) => v.label).slice(0, 2), ["Merged Dark", "Before merging Dark"]);
+  assert.equal(r.applied, 4);
+});
+
+test("update from main takes what the branch didn't touch", async () => {
+  const s = await Store.open(await tmp());
+  const a = await s.createEnv({ html: HTML });
+  const b = await s.branchEnv(a.id, {});
+  await s.updateEnv(b.id, { theme: "dark" });
+  await s.updateEnv(a.id, { theme: "light", screen: "Review" });
+  await s.setStyle(a.id, ".m", { padding: "16px" });
+  const u = await s.updateFromMain(b.id);
+  const br = await s.getEnv(b.id);
+  assert.equal(u.updated, 2);
+  assert.equal(br.screen, "Review");
+  assert.equal(br.theme, "dark", "the branch keeps its own theme");
+  assert.match(await s.getOverrides(b.id), /padding: 16px/);
+  assert.equal((await s.diffEnv(b.id)).behind, 0);
+});
+
+test("canvas items are checked and arrows go with what they point at", async () => {
+  const s = await Store.open(await tmp());
+  const a = await s.createEnv({ html: HTML });
+  const n = await s.addItem({ type: "note", x: 10, y: 20, text: "Too tight" });
+  const x = await s.addItem({ type: "box", x: 0, y: 0, w: 300, h: 120, label: "1" });
+  const ar = await s.addItem({ type: "arrow", from: { item: n.id }, to: { x: 400, y: 50 } });
+  assert.equal(ar.from.item, n.id);
+  await assert.rejects(() => s.addItem({ type: "note", x: Infinity, y: 0 }), /off the canvas/);
+  await assert.rejects(() => s.addItem({ type: "sticker" }), /go on the canvas/);
+  await assert.rejects(() => s.addItem({ type: "board", env: "nope", x: 0, y: 0 }), /No environment/);
+  await s.updateItem(x.id, { label: "Spacing" });
+  assert.equal((await s.item(x.id)).label, "Spacing");
+  await s.deleteItem(n.id);
+  assert.deepEqual((await s.items()).map((i) => i.type).sort(), ["board", "box"], "the arrow pinned to the note went with it");
+  void a;
+});
+
+test("old workspaces move their boards onto the canvas", async () => {
+  const dir = await tmp();
+  const s0 = await Store.open(dir);
+  const a = await s0.createEnv({ html: HTML });
+  for (const it of await s0.items()) await s0.deleteItem(it.id);
+  await fsp.writeFile(path.join(dir, "workshop.json"), JSON.stringify({ name: "Old", canvas: { boards: { [a.id]: { x: 40, y: 80 } } } }));
+  const s = await Store.open(dir);
+  const items = await s.items();
+  assert.equal(items.length, 1);
+  assert.equal(items[0].x, 40);
+  assert.equal(JSON.parse(await fsp.readFile(path.join(dir, "workshop.json"), "utf8")).canvas, undefined);
 });
