@@ -54,18 +54,43 @@ files — from the canvas, an editor or an agent — reaches every open canvas.
 | **Notes** (left) | Every note, highlight and comment on this page, or on all of the prototype's pages. |
 | **History** (left) | Versions of this page (restore one, or copy it as a new prototype) and the branches merged so far. |
 | **Page banner** | Across the top of the canvas: which page this is. On a branch: how many changes and conflicts, **Compare with main** (main's screens above the branch's, both live), **Update from main** and **Review and merge**. |
-| **Design** (right) | Whatever is selected: the page (its changes, or its branches when it's main), a frame (screen, state, size), an element (Libra tokens only, anything off the system flagged) or an annotation. |
+| **Design** (right) | Whatever is selected: the page (its changes, or its branches when it's main), a frame (screen, state, size), an element (see below) or an annotation. |
 | **Prototype** (right) | How this page runs: theme and variants, its flows (place one or play it in a new tab), Interact, Present and Share. The zoom is next to the tabs. |
 | **Review and merge** | Every change — settings, design overrides, files — with main's value and the branch's. Where main changed the same thing since the branch was made, pick which side wins. Merging saves main as a version first and archives the branch. |
 
 The toolbar: **V** select, **H** hand, **N** note, **B** highlight (drag a box), **A** arrow (drag
 from a note, box or board to what it's about), **C** comment on a board, **P** Interact (the pointer
-goes to the page: use it like the app). Click inside a board to select the element under the
-pointer; **Esc** selects its parent; double-click text to edit it. Changes go to the page's
-`overrides.css`.
+goes to the page: use it like the app).
+
+## Editing elements
+
+Elements inside a board are edited like frames in a design tool, and every edit is saved as CSS in
+the page's `overrides.css`, so the prototype shows it everywhere it runs: on every board, in
+Present, in a new tab and in share links. On a branch it is one of the changes you review and merge.
+
+- **Select**: click inside a board to select the element under the pointer; **Esc** selects its
+  parent, **Enter** on a frame its first child. Layers shows where it sits.
+- **Move**: drag it. Inside an auto layout (a flex or grid parent) dragging **reorders** it among
+  its siblings, with a line showing where it will land (saved with `order`); anywhere else it moves
+  freely (saved with `translate`). Arrow keys reorder or nudge it, **Shift** for 8 px.
+- **Resize**: drag one of its eight handles (saved as `width` and `height`; in an auto layout it
+  stops growing or shrinking along that axis).
+- **Remove**: **Delete** hides it with `display: none`, so it can come back.
+- **Design panel**, in the same order as FigCraft's: Position (X, Y, rotation), Layout (add or
+  remove auto layout, direction, alignment, gap, width and height as Fixed, Hug or Fill, padding,
+  clip content), Appearance (opacity, corner radius, visible), Typography (size, weight, line
+  height, alignment, colour, the text itself), Fill, Stroke and Effects. Colours, spacing, radii and
+  type sizes come from the Libra tokens, and anything off the system is flagged. Number fields
+  step with the arrow keys or scrub by dragging their label.
+- **This element or all like it**: an edit applies to the selected element, or to every element
+  like it, as a component would. Moves always apply to the one you moved.
+- **Undo**: **⌘Z** undoes element edits one at a time. **Changes on this element** lists what the
+  page changed on it, with **Reset**.
+
+Drag a frame by its title, or select the frame first (**Esc** from an element) and drag it.
 
 Other keys: **Space** drag to pan, **⇧1** fit, **⇧2** zoom to the selection, **⌘D** duplicate,
-**⌘K** search, **⌘\** hide the panels, **⌘Z** undo a style edit.
+**⌘K** search, **⌘\** hide the panels, **⌘Z** undo an element edit.
 
 ## Connect a coding agent
 

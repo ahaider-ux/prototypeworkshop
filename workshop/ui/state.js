@@ -25,7 +25,7 @@ export const S = {
   cam: { x: 320, y: 120, z: 0.25 }, // screen = world * z + (x, y)
   leftTab: "file", // file | screens | agents | notes | history
   rightTab: "design", // design | prototype
-  scope: "class", // inspector edits: "class" (all matches) or "exact" (this element)
+  scope: "exact", // element edits: "exact" (this element) or "class" (all like it, like a component)
   showArchived: false,
   showResolved: false,
   notesAll: false,

@@ -225,3 +225,18 @@ test("old workspaces move their boards onto the canvas", async () => {
   assert.equal(items[0].x, 40);
   assert.equal(JSON.parse(await fsp.readFile(path.join(dir, "workshop.json"), "utf8")).canvas, undefined);
 });
+
+test("several style rules land in one write, or none do", async () => {
+  const s = await Store.open(await tmp());
+  const e = await s.createEnv({ html: HTML });
+  const r = await s.setStyles(e.id, [
+    { selector: "li:nth-of-type(1)", props: { order: "1" } },
+    { selector: "li:nth-of-type(2)", props: { order: "0" } },
+  ]);
+  assert.match(r.css, /li:nth-of-type\(1\) \{[^}]*order: 1 !important/);
+  assert.match(r.css, /li:nth-of-type\(2\) \{[^}]*order: 0 !important/);
+  // a bad rule anywhere in the batch leaves the file as it was
+  await assert.rejects(s.setStyles(e.id, [{ selector: "p", props: { color: "red" } }, { selector: "p", props: { "bad prop": "x" } }]));
+  assert.equal(await s.getOverrides(e.id), r.css);
+  await assert.rejects(s.setStyles(e.id, []), /between 1 and 100/);
+});

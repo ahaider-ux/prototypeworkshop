@@ -79,7 +79,7 @@
     }
     return parts.join(" > ");
   }
-  var STYLE_KEYS = ["display", "position", "width", "height", "padding-top", "padding-right", "padding-bottom", "padding-left", "margin-top", "margin-bottom", "gap", "border-radius", "background-color", "color", "font-family", "font-size", "font-weight", "line-height", "letter-spacing", "text-align", "opacity", "box-shadow", "border-top-width", "border-top-color", "flex-direction", "align-items", "justify-content"];
+  var STYLE_KEYS = ["display", "position", "width", "height", "padding-top", "padding-right", "padding-bottom", "padding-left", "margin-top", "margin-bottom", "gap", "border-radius", "background-color", "color", "font-family", "font-size", "font-weight", "line-height", "letter-spacing", "text-align", "opacity", "box-shadow", "border-top-width", "border-top-style", "border-top-color", "flex-direction", "flex-wrap", "align-items", "justify-content", "translate", "rotate", "overflow", "visibility", "flex-grow", "flex-basis", "align-self", "order", "min-width", "max-width"];
   function describe(el) {
     if (!el || el.nodeType !== 1) return null;
     var cs = getComputedStyle(el), st = {};

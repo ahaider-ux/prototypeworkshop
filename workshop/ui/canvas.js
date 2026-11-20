@@ -6,11 +6,12 @@
 
 import { S, on, fire, itemsOf, isBranch, screenName, pageItems, pageEnv } from "./state.js";
 import { $, h, esc, clamp, frScale, api, toast, IC, menu, rmo, timeAgo } from "./lib.js";
+import { commitRules, preview, endPreview, undoStyle } from "./styles.js";
 
 const B = new Map(); // board item id → {id, env, el, frame, hit, ready, loaded}
 const NEL = new Map(); // note/box item id → element
 const GH = new Map(); // compare boards: main's screens above a branch's, not saved anywhere
-const HUD = { labels: new Map(), alabels: new Map(), pins: new Map(), sel: null, hover: null, size: null, handles: [], draft: null };
+const HUD = { labels: new Map(), alabels: new Map(), pins: new Map(), sel: null, hover: null, size: null, handles: [], ehandles: [], ins: null, draft: null };
 let cv, world, hud, wires, boardLayer, noteLayer, rulerH, rulerV;
 const RULER = 20;
 const KEEP_LOADED = 24; // boards of other pages stay loaded so switching back is instant, up to this many
@@ -322,7 +323,12 @@ function onBoardLoad(b) {
       if (S.presenting && e.key === "Escape") return fire("exit-present");
       if (S.mode === "prototype" && !(e.key === "Escape" && (e.metaKey || e.ctrlKey))) return;
       if (isTyping(e.target)) return;
-      onKey(e);
+      // a key pressed while a board's page has focus acts on the canvas (undo, search, nudge…), as if
+      // pressed outside it, and doesn't reach the prototype's own shortcuts while you're designing
+      const fwd = new KeyboardEvent("keydown", { key: e.key, code: e.code, metaKey: e.metaKey, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: e.altKey, bubbles: true, cancelable: true });
+      document.dispatchEvent(fwd);
+      e.stopPropagation();
+      if (fwd.defaultPrevented) e.preventDefault();
     }, true);
     d.addEventListener("keyup", onKeyUp, true);
     d.addEventListener("pointerdown", () => {
@@ -714,6 +720,13 @@ export function drawHud() {
       hud.append(d);
       HUD.handles.push(d);
     }
+    for (const k of ["nw", "n", "ne", "e", "se", "s", "sw", "w"]) {
+      const d = h(`<div class="hdl ${k}" data-h="${k}" data-el="1"></div>`);
+      hud.append(d);
+      HUD.ehandles.push(d);
+    }
+    HUD.ins = h(`<div class="insline" hidden></div>`);
+    hud.append(HUD.ins);
   }
   const s = S.sel;
   let selRect = null;
@@ -722,18 +735,29 @@ export function drawHud() {
     placeBox(HUD.sel, selRect, null);
   } else if (s?.kind === "el" && S.mode === "design") {
     selRect = elScreenRect(s.item, s.el);
-    placeBox(HUD.sel, selRect, selRect ? `${s.info?.label || s.el.localName}  ${selRect.rw}×${selRect.rh}` : null);
+    placeBox(HUD.sel, selRect, selRect ? s.info?.label || s.el.localName : null);
   } else placeBox(HUD.sel, null);
   for (const [id, el] of NEL) el.classList.toggle("on", s?.item === id);
   const br = s?.kind === "board" ? selRect : null;
-  HUD.size.hidden = !br;
-  if (br) {
-    const bi = item(s.item);
-    HUD.size.style.left = br.x + br.w / 2 + "px";
-    HUD.size.style.top = br.y + br.h + "px";
-    const t = `${bi.w} × ${bi.h}`;
+  const er = s?.kind === "el" && S.mode === "design" ? selRect : null;
+  HUD.size.hidden = !(br || er);
+  if (br || er) {
+    const r = br || er;
+    HUD.size.style.left = r.x + r.w / 2 + "px";
+    HUD.size.style.top = r.y + r.h + "px";
+    const t = br ? `${item(s.item).w} × ${item(s.item).h}` : `${r.rw} × ${r.rh}`;
     if (HUD.size.textContent !== t) HUD.size.textContent = t;
   }
+  // an element's resize handles, as on a frame
+  const eh = er && S.tool === "move" && drag?.mode !== "reorder" ? er : null;
+  for (const d of HUD.ehandles) {
+    d.hidden = !eh;
+    if (!eh) continue;
+    const k = d.dataset.h;
+    d.style.left = (k.includes("w") ? eh.x : k.includes("e") ? eh.x + eh.w : eh.x + eh.w / 2) + "px";
+    d.style.top = (k.includes("n") ? eh.y : k.includes("s") ? eh.y + eh.h : eh.y + eh.h / 2) + "px";
+  }
+  drawInsertion();
   for (const d of HUD.handles) {
     d.hidden = !br;
     if (!br) continue;
@@ -772,6 +796,251 @@ export function drawHud() {
 
 function tracking() {
   return dirty || S.sel?.kind === "el" || !!S.hover || !!pop || !!drag;
+}
+
+// ---------- editing elements: move, reorder, resize, nudge, remove ----------
+// Every edit is CSS in the page's overrides.css (see styles.js), so it shows in the prototype
+// everywhere it runs. Inside an auto layout (a flex or grid parent) dragging reorders, with the CSS
+// order property; anywhere else it moves the element with translate.
+const cssOf = (id, el) => {
+  try {
+    return winOf(id).getComputedStyle(el);
+  } catch {
+    return null;
+  }
+};
+export const exactSel = (id, el) => {
+  try {
+    return rt(id)?.selectorFor(el, true) || null;
+  } catch {
+    return null;
+  }
+};
+export function parseTranslate(v) {
+  const m = /(-?[\d.]+)px(?:\s+(-?[\d.]+)px)?/.exec(String(v || ""));
+  return m ? { x: +m[1] || 0, y: +(m[2] || 0) || 0 } : { x: 0, y: 0 };
+}
+const shown = (id, el) => {
+  const r = el.getBoundingClientRect();
+  return (r.width > 0 || r.height > 0) && cssOf(id, el)?.display !== "none" && !el.classList.contains("ws-ghost");
+};
+// how an element's parent lays it out
+export function flowOf(id, el) {
+  const p = el?.parentElement;
+  const cs = p && cssOf(id, p);
+  if (!cs) return { kind: "free" };
+  const flex = /flex/.test(cs.display),
+    grid = /grid/.test(cs.display);
+  if (!flex && !grid) return { kind: "free", parent: p, pcs: cs };
+  const sibs = [...p.children].filter((c) => shown(id, c));
+  // Guard: reordering writes one rule per sibling; past this many it would bloat overrides.css.
+  if (sibs.length < 2 || sibs.length > 60 || !sibs.includes(el)) return { kind: "free", parent: p, pcs: cs };
+  // the order you see: by the order property, then document order (the sort is stable)
+  sibs.sort((a, b) => (parseInt(cssOf(id, a)?.order, 10) || 0) - (parseInt(cssOf(id, b)?.order, 10) || 0));
+  const row = grid || !/column/.test(cs.flexDirection);
+  return { kind: grid || /wrap/.test(cs.flexWrap) ? "grid" : "flex", row, sibs, parent: p, pcs: cs };
+}
+function insertIndex(flow, pt, dragged) {
+  const others = flow.sibs.filter((x) => x !== dragged);
+  for (let i = 0; i < others.length; i++) {
+    const r = others[i].getBoundingClientRect();
+    if (flow.kind === "grid") {
+      if (pt.y < r.top || (pt.y <= r.bottom && pt.x < r.left + r.width / 2)) return i;
+    } else if (flow.row ? pt.x < r.left + r.width / 2 : pt.y < r.top + r.height / 2) return i;
+  }
+  return others.length;
+}
+function drawInsertion() {
+  const d = drag;
+  if (!HUD.ins) return;
+  if (d?.kind !== "el" || d.mode !== "reorder" || d.idx === undefined) return void (HUD.ins.hidden = true);
+  const it = item(d.id);
+  const others = d.flow.sibs.filter((x) => x !== d.el);
+  const ref = others[Math.min(d.idx, others.length - 1)];
+  if (!ref || !it) return void (HUD.ins.hidden = true);
+  const r = ref.getBoundingClientRect();
+  const after = d.idx >= others.length;
+  const vertical = d.flow.kind === "grid" || d.flow.row;
+  const a = toScreen({ x: it.x + (vertical ? (after ? r.right : r.left) : r.left), y: it.y + (vertical ? r.top : after ? r.bottom : r.top) });
+  HUD.ins.hidden = false;
+  HUD.ins.style.left = a.x - (vertical ? 1 : 0) + "px";
+  HUD.ins.style.top = a.y - (vertical ? 0 : 1) + "px";
+  HUD.ins.style.width = (vertical ? 2 : r.width * S.cam.z) + "px";
+  HUD.ins.style.height = (vertical ? r.height * S.cam.z : 2) + "px";
+}
+// the element's selector for size and style edits: this one, or all like it
+const scopeSel = (s) => (S.scope === "exact" ? s.info?.exactSelector : s.info?.selector) || exactSel(s.item, s.el);
+function scopeEls(s) {
+  if (S.scope === "exact") return [s.el];
+  try {
+    const all = [...docOf(s.item).querySelectorAll(s.info.selector)];
+    return all.length ? all : [s.el];
+  } catch {
+    return [s.el];
+  }
+}
+async function saveOrder(id, env, list, el) {
+  const rules = list.map((x, i) => ({ selector: exactSel(id, x), props: { order: String(i) } }));
+  if (rules.some((r) => !r.selector)) return toast("Couldn't reorder that", "One of its neighbours has no selector to write a rule for");
+  await commitRules(env, rules, "order");
+  if (el.isConnected) selectEl(id, el, { quiet: true });
+  fire("sel", { quiet: true });
+}
+function startElDrag(d) {
+  const s = S.sel;
+  if (!(s?.kind === "el" && s.el === d.el)) selectEl(d.id, d.el, { quiet: true });
+  d.env = item(d.id)?.env;
+  d.flow = flowOf(d.id, d.el);
+  d.mode = d.flow.kind === "free" ? "move" : "reorder";
+  d.t0 = parseTranslate(cssOf(d.id, d.el)?.translate);
+  d.sel = exactSel(d.id, d.el);
+  d.started = true;
+  setHover(null, null);
+}
+function moveElDrag(d, dx, dy, e) {
+  const z = S.cam.z;
+  const st = e.shiftKey ? 8 : 1;
+  const x = Math.round((d.t0.x + dx / z) / st) * st,
+    y = Math.round((d.t0.y + dy / z) / st) * st;
+  if (d.mode === "move") {
+    d.cur = { x, y };
+    preview([d.el], { translate: `${x}px ${y}px` });
+  } else {
+    preview([d.el], { translate: `${d.t0.x + dx / z}px ${d.t0.y + dy / z}px`, opacity: "0.6" });
+    const it = item(d.id);
+    const w = toWorld(local(e));
+    d.idx = insertIndex(d.flow, { x: w.x - it.x, y: w.y - it.y }, d.el);
+  }
+  dirty = true;
+}
+async function endElDrag(d) {
+  if (d.mode === "move") {
+    const { x, y } = d.cur || d.t0;
+    if (d.sel && (x !== d.t0.x || y !== d.t0.y)) await commitRules(d.env, [{ selector: d.sel, props: { translate: x || y ? `${x}px ${y}px` : null } }], "position");
+    endPreview([d.el], ["translate"]);
+    return;
+  }
+  endPreview([d.el], ["translate", "opacity"]);
+  const others = d.flow.sibs.filter((x) => x !== d.el);
+  const next = [...others.slice(0, d.idx), d.el, ...others.slice(d.idx)];
+  if (d.idx === undefined || next.every((x, i) => x === d.flow.sibs[i])) return void (dirty = true);
+  await saveOrder(d.id, d.env, next, d.el);
+}
+function startElResize(handle, p) {
+  const s = S.sel;
+  const cs = cssOf(s.item, s.el);
+  if (!cs) return null;
+  const r = s.el.getBoundingClientRect();
+  const num = (v) => parseFloat(v) || 0;
+  const border = cs.boxSizing === "border-box";
+  return {
+    kind: "elresize",
+    id: s.item,
+    env: s.env,
+    el: s.el,
+    h: handle.dataset.h,
+    p0: p,
+    w0: r.width,
+    h0: r.height,
+    t0: parseTranslate(cs.translate),
+    // content-box elements: the rule's width leaves out padding and border
+    padW: border ? 0 : num(cs.paddingLeft) + num(cs.paddingRight) + num(cs.borderLeftWidth) + num(cs.borderRightWidth),
+    padH: border ? 0 : num(cs.paddingTop) + num(cs.paddingBottom) + num(cs.borderTopWidth) + num(cs.borderBottomWidth),
+    targets: scopeEls(s),
+    selAll: scopeSel(s),
+    sel: s.info?.exactSelector || exactSel(s.item, s.el),
+    flow: flowOf(s.item, s.el),
+  };
+}
+function moveElResize(d, dx, dy, e) {
+  const z = S.cam.z;
+  const st = e.shiftKey ? 8 : 1;
+  const k = d.h;
+  const snap = (v) => Math.max(1, Math.round(v / st) * st);
+  const w = k.includes("e") ? snap(d.w0 + dx / z) : k.includes("w") ? snap(d.w0 - dx / z) : d.w0;
+  const hh = k.includes("s") ? snap(d.h0 + dy / z) : k.includes("n") ? snap(d.h0 - dy / z) : d.h0;
+  const props = {};
+  if (/[ew]/.test(k)) props.width = `${Math.max(0, w - d.padW)}px`;
+  if (/[ns]/.test(k)) props.height = `${Math.max(0, hh - d.padH)}px`;
+  // a fixed size in an auto layout doesn't grow or shrink along its axis
+  const pflex = d.flow.pcs && /flex/.test(d.flow.pcs.display);
+  const prow = pflex && !/column/.test(d.flow.pcs.flexDirection);
+  if (pflex && ((prow && props.width) || (!prow && props.height))) props.flex = "0 0 auto";
+  d.props = props;
+  d.w = w;
+  d.hh = hh;
+  preview(d.targets, props);
+  // dragging a left or top edge keeps the opposite edge where it was
+  if (/[nw]/.test(k)) {
+    d.tr = { x: d.t0.x + (k.includes("w") ? d.w0 - w : 0), y: d.t0.y + (k.includes("n") ? d.h0 - hh : 0) };
+    preview([d.el], { translate: `${d.tr.x}px ${d.tr.y}px` });
+  }
+  d.moved = true;
+  dirty = true;
+}
+async function endElResize(d) {
+  if (!d.props) return;
+  // a min or max size in the prototype's CSS would hold the element back: lift it
+  const r = d.el.getBoundingClientRect();
+  if (d.props.width && Math.abs(r.width - d.w) > 1) Object.assign(d.props, { "min-width": "0", "max-width": "none" });
+  if (d.props.height && Math.abs(r.height - d.hh) > 1) Object.assign(d.props, { "min-height": "0", "max-height": "none" });
+  const rules = [{ selector: d.selAll, props: d.props }];
+  if (d.tr) {
+    const t = { translate: d.tr.x || d.tr.y ? `${d.tr.x}px ${d.tr.y}px` : null };
+    if (d.selAll === d.sel) Object.assign(rules[0].props, t);
+    else rules.push({ selector: d.sel, props: t });
+  }
+  await commitRules(d.env, rules, "size");
+  endPreview(d.targets, Object.keys(d.props));
+  if (d.tr) endPreview([d.el], ["translate"]);
+}
+// arrow keys: reorder inside an auto layout, nudge anywhere else (Shift: 8 px)
+let nudging = null;
+function nudge(key, big) {
+  const s = S.sel;
+  const flow = flowOf(s.item, s.el);
+  if (flow.kind !== "free") {
+    const i = flow.sibs.indexOf(s.el);
+    const j = clamp(i + (key === "ArrowLeft" || key === "ArrowUp" ? -1 : 1), 0, flow.sibs.length - 1);
+    if (i === j) return;
+    const next = flow.sibs.filter((x) => x !== s.el);
+    next.splice(j, 0, s.el);
+    return saveOrder(s.item, s.env, next, s.el);
+  }
+  const st = big ? 8 : 1;
+  if (!nudging || nudging.el !== s.el) {
+    if (nudging) flushNudge();
+    nudging = { id: s.item, env: s.env, el: s.el, sel: s.info?.exactSelector || exactSel(s.item, s.el), t: parseTranslate(cssOf(s.item, s.el)?.translate) };
+  }
+  const n = nudging;
+  if (key === "ArrowLeft") n.t.x -= st;
+  if (key === "ArrowRight") n.t.x += st;
+  if (key === "ArrowUp") n.t.y -= st;
+  if (key === "ArrowDown") n.t.y += st;
+  preview([n.el], { translate: `${n.t.x}px ${n.t.y}px` });
+  dirty = true;
+  clearTimeout(n.timer);
+  n.timer = setTimeout(flushNudge, 350);
+}
+async function flushNudge() {
+  const n = nudging;
+  nudging = null;
+  if (!n) return;
+  clearTimeout(n.timer);
+  await commitRules(n.env, [{ selector: n.sel, props: { translate: n.t.x || n.t.y ? `${n.t.x}px ${n.t.y}px` : null } }], "position");
+  endPreview([n.el], ["translate"]);
+}
+export async function removeEl() {
+  const s = S.sel;
+  if (s?.kind !== "el") return;
+  const sel = scopeSel(s);
+  if (!sel) return;
+  const parent = s.el.parentElement;
+  const d = docOf(s.item);
+  if (!(await commitRules(s.env, [{ selector: sel, props: { display: "none" } }], "removal"))) return;
+  toast("Removed from the page", "It's display: none in overrides.css, so it can come back", { label: "Undo", fn: () => undoStyle() });
+  if (parent && d && parent !== d.body && parent !== d.documentElement) selectEl(s.item, parent);
+  else selectBoard(s.item);
 }
 function loop() {
   if (tracking()) drawHud();
@@ -1070,7 +1339,10 @@ function onDown(e) {
   const under = itemUnder(e.target) || alabel?.dataset.item;
   const editingNote = e.target.closest(".note .tx[contenteditable]");
   if (editingNote) return;
-  if (handle && S.sel?.kind === "board") {
+  if (handle && handle.dataset.el && S.sel?.kind === "el") {
+    drag = startElResize(handle, p);
+    if (!drag) return;
+  } else if (handle && S.sel?.kind === "board") {
     const it = item(S.sel.item);
     drag = { kind: "resize", id: it.id, h: handle.dataset.h, p0: p, w0: it.w, h0: it.h };
   } else if (pan) {
@@ -1109,7 +1381,16 @@ function onDown(e) {
     else drag = { kind: "group", p0: p, group: [{ id: it.id, x: it.x, y: it.y }], moved: false };
   } else if (onBoard) {
     const id = onBoard.dataset.item;
-    drag = { kind: "board", id, p0: p, group: [{ id, x: item(id).x, y: item(id).y }], moved: false, el: elAt(id, p) };
+    const boardSel = S.sel?.kind === "board" && S.sel.item === id;
+    const under = elAt(id, p);
+    // Design mode: a drag inside a board edits what's under the pointer — or the selected element
+    // when the drag starts on it. Drag a frame by its title, or once the frame itself is selected.
+    if (S.mode === "design" && S.tool === "move" && !boardSel && under) {
+      const cur = S.sel?.kind === "el" && S.sel.item === id && S.sel.el.isConnected ? S.sel.el : null;
+      const r = cur && elScreenRect(id, cur);
+      const onCur = r && p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+      drag = { kind: "el", id, el: onCur ? cur : under, click: under, p0: p, moved: false };
+    } else drag = { kind: "board", id, p0: p, group: [{ id, x: item(id).x, y: item(id).y }], moved: false, el: under };
   } else {
     drag = { kind: "empty", p0: p, c0: { ...S.cam }, moved: false };
   }
@@ -1150,6 +1431,12 @@ function onMove(e) {
     if (drag.kind === "board" && S.sel?.item !== drag.id) selectBoard(drag.id);
     setHover(null, null);
     dirty = true;
+  } else if (drag.kind === "el" && (far || drag.moved)) {
+    if (!drag.started) startElDrag(drag);
+    drag.moved = true;
+    moveElDrag(drag, dx, dy, e);
+  } else if (drag.kind === "elresize") {
+    moveElResize(drag, dx, dy, e);
   } else if (drag.kind === "arrowmove" && (far || drag.moved)) {
     drag.moved = true;
     const it = item(drag.id);
@@ -1211,6 +1498,11 @@ async function onUp(e) {
     saveItem(it.id, { w: it.w, h: it.h });
     return;
   }
+  if (d.kind === "el") {
+    if (d.moved) return endElDrag(d);
+    return selectEl(d.id, d.click || d.el);
+  }
+  if (d.kind === "elresize") return endElResize(d);
   if (d.kind === "board" && !d.moved) {
     if (S.mode === "design" && S.tool === "move") {
       const el = d.el || elAt(d.id, p);
@@ -1287,7 +1579,11 @@ function onKey(e) {
     e.preventDefault();
     return;
   }
-  if (mod && (k === "d" || k === "D")) return e.preventDefault(), duplicateSel();
+  if (mod && (k === "d" || k === "D")) {
+    e.preventDefault();
+    if (S.sel?.kind === "el") return toast("Duplicating an element changes the page's HTML", "Ask an agent to do it, or duplicate the whole board from its frame");
+    return duplicateSel();
+  }
   if (mod && (k === "=" || k === "+")) return e.preventDefault(), zoomBy(1.25);
   if (mod && k === "-") return e.preventDefault(), zoomBy(0.8);
   if (mod && k === "0") return e.preventDefault(), zoomTo(1);
@@ -1310,6 +1606,14 @@ function onKey(e) {
   if (k === "@" || (e.shiftKey && k === "2")) return S.sel && focusItem(S.sel.item);
   if (k === "=" || k === "+") return zoomBy(1.25);
   if (k === "-" || k === "_") return zoomBy(0.8);
+  if (S.sel?.kind === "el" && S.mode === "design" && /^Arrow(Left|Right|Up|Down)$/.test(k)) {
+    e.preventDefault();
+    return nudge(k, e.shiftKey);
+  }
+  if ((k === "Backspace" || k === "Delete") && S.sel?.kind === "el" && S.mode === "design") {
+    e.preventDefault();
+    return removeEl();
+  }
   if ((k === "Backspace" || k === "Delete") && S.sel?.item && S.sel.kind !== "el") {
     e.preventDefault();
     return removeItems([S.sel.item]);
@@ -1388,8 +1692,12 @@ export function initCanvas() {
   cv.addEventListener("pointermove", onMove);
   cv.addEventListener("pointerup", onUp);
   cv.addEventListener("pointercancel", () => {
+    const d = drag;
     drag = null;
     cv.classList.remove("grabbing");
+    // a cancelled edit leaves the page as it was
+    if (d?.kind === "el" && d.started) endPreview([d.el], ["translate", "opacity"]);
+    if (d?.kind === "elresize") endPreview([...d.targets, d.el], [...Object.keys(d.props || {}), "translate"]);
   });
   cv.addEventListener("pointerleave", () => !drag && setHover(null, null));
   cv.addEventListener("dblclick", onDbl);

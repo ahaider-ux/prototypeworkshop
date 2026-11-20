@@ -203,6 +203,7 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
         if (m === "GET") return json(res, 200, { css: await store.getOverrides(b) });
         if (m === "PATCH") {
           const p = await body(req);
+          if (Array.isArray(p.rules)) return json(res, 200, await store.setStyles(b, p.rules));
           return json(res, 200, await store.setStyle(b, p.selector, p.props || {}));
         }
         if (m === "DELETE") {

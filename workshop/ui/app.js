@@ -3,7 +3,8 @@
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural } from "./state.js";
 import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented } from "./lib.js";
 import { initCanvas, sync, fit, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
-import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff, undoStyle } from "./panels.js";
+import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff } from "./panels.js";
+import { undoStyle } from "./styles.js";
 
 const pageName = (e) => (e ? (isBranch(e) ? e.name : "Main") : "");
 const store = {
@@ -891,7 +892,7 @@ async function boot() {
     if (mod && e.key === "\\") return e.preventDefault(), toggleUi();
     if (mod && !e.shiftKey && (e.key === "z" || e.key === "Z") && !isTyping(e.target)) {
       e.preventDefault();
-      undoStyle().then((did) => !did && toast("Nothing to undo", "Style edits from the inspector undo here; everything else has its own Undo"));
+      undoStyle().then((did) => !did && toast("Nothing to undo", "Edits to elements undo here; everything else has its own Undo"));
     }
   });
   window.addEventListener("hashchange", applyRoute);

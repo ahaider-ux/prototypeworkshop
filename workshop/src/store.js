@@ -693,6 +693,18 @@ export class Store {
     return { css: next, rules: rulesOf(next) };
   }
 
+  // Several rules in one write, so a drag that touches many elements (reordering siblings) lands
+  // whole or not at all, and undoes in one step.
+  async setStyles(id, rules) {
+    // Guard: one request edits at most this many rules, so a runaway client can't grind the file.
+    if (!Array.isArray(rules) || !rules.length || rules.length > 100) throw new StoreError("bad_rules", "Send between 1 and 100 rules");
+    const env = await this.getEnv(id);
+    let next = (await this.getOverrides(id)) || OVERRIDES_HEAD(env.name);
+    for (const r of rules) next = mergeRule(next, r?.selector, r?.props || {});
+    await writeAtomic(path.join(this.envDir(id), "overrides.css"), next);
+    return { css: next, rules: rulesOf(next) };
+  }
+
   async clearStyles(id, selector) {
     const css = await this.getOverrides(id);
     const keep = parseCss(css).filter((c) => !(c.kind === "rule" && (!selector || normSel(c.selector) === normSel(checkSelector(selector)))));

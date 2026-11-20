@@ -6,8 +6,9 @@
 // across the canvas says which page this is and what to do with it.
 
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, familyOf, pageEnv, protoId, pageItems, pageOf, nearestBoard, screenName, plural } from "./state.js";
-import { $, h, esc, api, toast, IC, dropdown, segmented, copyText, timeAgo } from "./lib.js";
-import { rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, setMode, docOf } from "./canvas.js";
+import { $, h, esc, api, toast, IC, dropdown, segmented, copyText, timeAgo, clamp } from "./lib.js";
+import { rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, setMode, docOf, winOf, flowOf, parseTranslate, exactSel, removeEl } from "./canvas.js";
+import { loadOverrides, cachedOverrides, forgetOverrides, rulesFor, boardsLive, commitRules, resetSelectors, preview, endPreview } from "./styles.js";
 
 // ---------- Libra tokens offered by the inspector ----------
 const FILL = [
@@ -53,64 +54,6 @@ function hexOf(rgb) {
 }
 const tokenOf = (set, rgb) => set.find((t) => t.hex.includes(hexOf(rgb))) || null;
 const px = (v) => Math.round(parseFloat(v) || 0);
-
-// ---------- overrides cache ----------
-const OV = new Map();
-export async function loadOverrides(id, force = false) {
-  if (!force && OV.has(id)) return OV.get(id);
-  try {
-    OV.set(id, (await api(`envs/${id}/styles`)).css);
-  } catch {
-    OV.set(id, "");
-  }
-  return OV.get(id);
-}
-function parseRules(css) {
-  const out = [];
-  const re = /([^{}@][^{}]*)\{([^{}]*)\}/g;
-  let m;
-  const src = String(css || "").replace(/\/\*[\s\S]*?\*\//g, "");
-  while ((m = re.exec(src))) out.push({ selector: m[1].trim().replace(/\s+/g, " "), decls: m[2].split(";").map((d) => d.trim()).filter(Boolean).map((d) => [d.slice(0, d.indexOf(":")).trim(), d.slice(d.indexOf(":") + 1).trim().replace(/\s*!important$/, "")]) });
-  return out;
-}
-const norm = (s) => String(s || "").replace(/\s+/g, " ").replace(/\s*>\s*/g, " > ").trim();
-const boardsLive = (env) => boardsOf(env).map((b) => rt(b.id)).filter(Boolean);
-
-// ---------- style edits, with undo ----------
-const UNDO = [];
-async function applyStyle(props, label) {
-  const s = S.sel;
-  if (s?.kind !== "el") return;
-  const selector = S.scope === "exact" ? s.info.exactSelector : s.info.selector;
-  const cur = parseRules(await loadOverrides(s.env)).find((r) => norm(r.selector) === norm(selector));
-  const prev = {};
-  for (const p of Object.keys(props)) prev[p] = cur?.decls.find(([k]) => k === p)?.[1] ?? null;
-  try {
-    const r = await api(`envs/${s.env}/styles`, { method: "PATCH", body: { selector, props } });
-    OV.set(s.env, r.css);
-    for (const x of boardsLive(s.env)) x.setOverrides(r.css);
-    UNDO.push({ env: s.env, selector, prev, label });
-    if (UNDO.length > 100) UNDO.shift();
-    S.diffs.delete(s.env);
-  } catch (e) {
-    return toast("Couldn't apply that", e.message);
-  }
-  requestAnimationFrame(() => (refreshSelInfo(), renderDesign(), markDirty()));
-}
-export async function undoStyle() {
-  const u = UNDO.pop();
-  if (!u) return false;
-  try {
-    const r = await api(`envs/${u.env}/styles`, { method: "PATCH", body: { selector: u.selector, props: u.prev } });
-    OV.set(u.env, r.css);
-    for (const x of boardsLive(u.env)) x.setOverrides(r.css);
-    toast(`Undid ${u.label}`);
-    requestAnimationFrame(() => (refreshSelInfo(), renderDesign(), markDirty()));
-  } catch (e) {
-    toast("Couldn't undo", e.message);
-  }
-  return true;
-}
 
 const diffing = new Map();
 const diffFailed = new Map(); // id → when it last failed
@@ -501,11 +444,14 @@ export function renderRight() {
     x.setAttribute("aria-selected", String(x.dataset.t === S.rightTab));
   }
   const st = body.scrollTop;
+  const ae = document.activeElement;
+  const focusK = body.contains(ae) ? ae.dataset?.k : null;
   body.replaceChildren();
   if (!pageEnv()) return;
   if (S.rightTab === "design") renderDesignInto(body);
   else renderProto(body);
   body.scrollTop = st;
+  if (focusK) [...body.querySelectorAll("[data-k]")].find((x) => x.dataset.k === focusK)?.focus();
 }
 export function renderDesign() {
   if (S.rightTab === "design") renderRight();
@@ -724,93 +670,388 @@ function swatches(set, current, onPick) {
   return w;
 }
 
+// ----- an element, edited like a frame: Position, Layout, Appearance, Typography, Fill, Stroke, Effects -----
+const STROKE = [
+  { name: "border-subtle", css: "var(--border-subtle, #e9eaea)", hex: ["#e9eaea", "#2a2927"] },
+  { name: "border-default", css: "var(--border-default, #c8cbcb)", hex: ["#c8cbcb", "#3a3936"] },
+  { name: "text-primary", css: "var(--text-primary, #161a1b)", hex: ["#161a1b", "#ecebe8"] },
+  { name: "text-accent", css: "var(--text-accent, #5266ba)", hex: ["#5266ba", "#95a6f2"] },
+  { name: "text-error", css: "var(--text-error, #c00c30)", hex: ["#c00c30", "#ff6b85"] },
+];
+const SHADOWS = [
+  { label: "None", value: "none", css: null },
+  { label: "Small", value: "sh-sm", css: "var(--sh-sm, 0 1px 2px rgba(22,26,27,.06))" },
+  { label: "Medium", value: "sh-md", css: "var(--sh-md, 0 4px 16px rgba(22,26,27,.09))" },
+];
+const LEADING = [1.2, 1.3, 1.45, 1.5];
+
+// A number field like a design tool's: type a value, step it with the arrow keys (Shift: ×10), or
+// drag the label to scrub. It previews as it changes and saves when you let go.
+function numField(label, value, { onLive, onCommit, onCancel, step = 1, min = -100000, max = 100000, suffix = "", title = label, k = label, icon = "" } = {}) {
+  const v0 = Number.isFinite(+value) ? Math.round(+value * 100) / 100 : 0;
+  const w = h(`<label class="nf" title="${esc(title)}"><span class="l" aria-hidden="true">${icon || esc(label)}</span><input type="text" inputmode="decimal" spellcheck="false" autocomplete="off" data-k="${esc(k)}" aria-label="${esc(title)}"><span class="u">${esc(suffix)}</span></label>`);
+  const inp = w.querySelector("input");
+  inp.value = String(v0);
+  let last = v0;
+  let timer = 0;
+  const fix = (n) => clamp(Math.round(n / step) * step, min, max);
+  const commit = (n) => {
+    clearTimeout(timer);
+    n = fix(n);
+    inp.value = String(n);
+    if (n === last) return;
+    last = n;
+    onCommit?.(n);
+  };
+  inp.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const n = parseFloat(inp.value);
+      if (Number.isFinite(n)) commit(n);
+      else inp.value = String(last);
+    } else if (e.key === "Escape") {
+      inp.value = String(last);
+      onCancel?.();
+      inp.blur();
+    } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      e.preventDefault();
+      const n = fix((parseFloat(inp.value) || 0) + (e.key === "ArrowUp" ? 1 : -1) * step * (e.shiftKey ? 10 : 1));
+      inp.value = String(n);
+      onLive?.(n);
+      clearTimeout(timer);
+      timer = setTimeout(() => commit(n), 450);
+    }
+  });
+  inp.addEventListener("change", () => {
+    const n = parseFloat(inp.value);
+    if (Number.isFinite(n)) commit(n);
+    else inp.value = String(last);
+  });
+  inp.addEventListener("focus", () => inp.select());
+  w.querySelector(".l").addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    const x0 = e.clientX,
+      base = parseFloat(inp.value) || 0;
+    let n = base;
+    const mv = (ev) => {
+      n = fix(base + Math.round((ev.clientX - x0) / 2) * step * (ev.shiftKey ? 10 : 1));
+      inp.value = String(n);
+      onLive?.(n);
+    };
+    const up = () => {
+      removeEventListener("pointermove", mv);
+      removeEventListener("pointerup", up);
+      if (n !== base) commit(n);
+    };
+    addEventListener("pointermove", mv);
+    addEventListener("pointerup", up);
+  });
+  return w;
+}
+const g2 = (...kids) => {
+  const g = h(`<div class="g2"></div>`);
+  g.append(...kids);
+  return g;
+};
+function switchRow(text, on, onChange) {
+  const r = h(`<div class="setrow"><div class="tx"><span style="font-size:12px;color:var(--text-primary)">${esc(text)}</span></div><button type="button" class="sw" role="switch" aria-checked="${on}" aria-label="${esc(text)}"><i></i></button></div>`);
+  r.querySelector(".sw").onclick = () => onChange(!on);
+  return r;
+}
+
 function designEl(body, s) {
   const i = s.info || {};
   const st = i.styles || {};
   const env = S.envs.get(s.env);
-  const t = h(`<div class="isec"><div class="ititle"><span class="nm">${esc(i.label || s.el.localName)}</span><span class="pth"><span>${esc(env?.name || s.env)} · ${esc(screenName(S.items.get(s.item)))}</span></span></div><div class="crumbs"></div></div>`);
+  const id = s.item,
+    el = s.el;
+  const exact = i.exactSelector || exactSel(id, el);
+  const sel = S.scope === "exact" ? exact : i.selector || exact;
+  const targets = () => {
+    if (S.scope === "exact") return [el];
+    try {
+      const all = [...docOf(id).querySelectorAll(i.selector)];
+      return all.length ? all : [el];
+    } catch {
+      return [el];
+    }
+  };
+  // write a change: to this element, or to all like it; position always to this one
+  const set = (props, what, exactOnly = false) => commitRules(s.env, [{ selector: exactOnly ? exact : sel, props }], what);
+  const field = (label, value, toProps, what, o = {}) =>
+    numField(label, value, {
+      ...o,
+      k: o.k || label,
+      onLive: (n) => preview(o.exactOnly ? [el] : targets(), toProps(n)),
+      onCommit: async (n) => {
+        const props = toProps(n);
+        await set(props, what, o.exactOnly);
+        endPreview(o.exactOnly ? [el] : targets(), Object.keys(props));
+      },
+      onCancel: () => endPreview(o.exactOnly ? [el] : targets(), Object.keys(toProps(value))),
+    });
+  // header: what it is, where it sits, and what an edit applies to
+  const t = h(`<div class="isec"><div class="ititle"><span class="nm">${esc(i.label || el.localName)}</span><span class="pth"><span>${esc(pageName(env))} · ${esc(screenName(S.items.get(id)))}</span></span></div><div class="crumbs"></div></div>`);
   const chain = [];
-  for (let el = s.el; el && el.parentElement && chain.length < 4; el = el.parentElement) chain.unshift(el);
-  for (const el of chain) {
-    const b = h(`<button type="button" class="${el === s.el ? "cur" : ""}">${esc(rt(s.item)?.label(el) || el.localName)}</button>`);
-    b.onclick = () => selectEl(s.item, el);
-    b.onpointerenter = () => setHover(s.item, el);
+  for (let x = el; x && x.parentElement && chain.length < 4; x = x.parentElement) chain.unshift(x);
+  for (const x of chain) {
+    const b = h(`<button type="button" class="${x === el ? "cur" : ""}">${esc(rt(id)?.label(x) || x.localName)}</button>`);
+    b.onclick = () => selectEl(id, x);
+    b.onpointerenter = () => setHover(id, x);
     b.onpointerleave = () => setHover(null, null);
     t.querySelector(".crumbs").append(b);
   }
   if (i.matches > 1) t.append(segmented([{ label: "This element", value: "exact" }, { label: `All ${i.matches} like it`, value: "class" }], S.scope, (v) => ((S.scope = v), renderDesign(), fire("scope")), { full: true, label: "Apply changes to" }));
+  if (env && !isBranch(env)) t.append(h(`<span class="lineage">Changes go straight to main. Create a branch to try them first.</span>`));
   body.append(t);
-  if (i.editableText) {
-    const tx = sec("Text");
-    const ta = h(`<textarea class="afld-ta" aria-label="Text" style="min-height:44px">${esc(i.text)}</textarea>`);
-    ta.addEventListener("change", async () => {
-      try {
-        await api(`envs/${s.env}/text`, { method: "PUT", body: { selector: i.exactSelector, text: ta.value } });
-        s.el.textContent = ta.value;
-        S.diffs.delete(s.env);
-        refreshSelInfo();
-        markDirty();
-      } catch (e) {
-        toast("Couldn't save the text", e.message);
-      }
-    });
-    tx.append(ta);
-    body.append(tx);
-  }
-  const L = sec("Layout");
+
   const r = i.rect || {};
-  L.append(row("Size", `<span class="ro">${r.w ?? "–"} × ${r.h ?? "–"}</span>`));
-  const pads = ["padding-top", "padding-right", "padding-bottom", "padding-left"].map((k) => px(st[k]));
-  const even = pads.every((p) => p === pads[0]);
-  const spaceOpts = SPACE.map((n) => ({ label: `${n}`, value: n }));
-  L.append(row("Padding", dropdown({ value: even ? pads[0] : "mixed", options: even ? spaceOpts : [{ label: pads.join(" · "), value: "mixed" }, ...spaceOpts], full: true, label: "Padding", onChange: (n) => n !== "mixed" && applyStyle({ padding: `${n}px` }, "padding") })));
-  if (/flex|grid/.test(st.display || "")) {
-    const g = px(st.gap);
-    L.append(row("Gap", dropdown({ value: SPACE.includes(g) ? g : "off", options: SPACE.includes(g) ? spaceOpts : [{ label: `${g} · off system`, value: "off" }, ...spaceOpts], full: true, label: "Gap", onChange: (n) => n !== "off" && applyStyle({ gap: `${n}px` }, "gap") })));
+  const flow = flowOf(id, el);
+  const pcs = flow.pcs;
+  const pflex = !!pcs && /flex/.test(pcs.display);
+  const prow = pflex && !/column/.test(pcs.flexDirection);
+  const pcol = pflex && !prow;
+
+  // Position — from where the page puts it, with translate; rotation
+  const P = sec("Position", flow.kind !== "free" ? `<span class="tagro" title="Its parent is an auto layout: drag or use the arrow keys to reorder">IN AUTO LAYOUT</span>` : "");
+  const tr = parseTranslate(st.translate);
+  P.append(
+    g2(
+      field("X", r.x, (n) => ({ translate: `${tr.x + (n - r.x)}px ${tr.y}px` }), "position", { exactOnly: true }),
+      field("Y", r.y, (n) => ({ translate: `${tr.x}px ${tr.y + (n - r.y)}px` }), "position", { exactOnly: true }),
+    ),
+  );
+  const rot = parseFloat(st.rotate) || 0;
+  P.append(g2(field("", rot, (n) => ({ rotate: n ? `${n}deg` : null }), "rotation", { exactOnly: true, suffix: "°", min: -360, max: 360, title: "Rotation", k: "rotation", icon: '<svg class="ic" viewBox="0 0 16 16"><path d="M3 12.5h10M3 12.5 10 4.5M7.5 12.5a4.5 4.5 0 0 0-1.4-3.3"/></svg>' }), h(`<span></span>`)));
+  if (tr.x || tr.y) {
+    const rb = h(`<button type="button" class="ghbtn sm" style="align-self:flex-start">${IC.restore}Back to its place</button>`);
+    rb.onclick = () => set({ translate: null }, "position", true);
+    P.append(rb);
   }
-  const rad = px(st["border-radius"]);
-  L.append(row("Radius", dropdown({ value: RADII.includes(rad) ? rad : "off", options: [...(RADII.includes(rad) ? [] : [{ label: `${rad} · off system`, value: "off" }]), ...RADII.map((n) => ({ label: `${n}`, value: n }))], full: true, label: "Radius", onChange: (n) => n !== "off" && applyStyle({ "border-radius": `${n}px` }, "radius") })));
+  body.append(P);
+
+  // Layout — auto layout (flex), its size (Fixed / Hug / Fill), padding, clip
+  const isFlex = /flex/.test(st.display),
+    isGrid = /grid/.test(st.display);
+  const L = sec(isFlex ? "Auto layout" : isGrid ? "Grid" : "Layout");
+  if (isFlex) {
+    const rm = h(`<button type="button" class="ib24" aria-label="Remove auto layout" data-tip="Remove auto layout"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 8h8"/></svg></button>`);
+    rm.onclick = () => set({ display: "block", "flex-direction": null, "flex-wrap": null, gap: null, "align-items": null, "justify-content": null }, "auto layout");
+    L.querySelector(".ih").append(rm);
+  } else if (!isGrid) {
+    const add = h(`<button type="button" class="ib24" aria-label="Add auto layout" data-tip="Add auto layout">${IC.plus}</button>`);
+    add.onclick = () => {
+      // lay the children out the way they already sit
+      const kids = [...el.children].filter((c) => c.getBoundingClientRect().width);
+      const a = kids[0]?.getBoundingClientRect(),
+        b = kids[1]?.getBoundingClientRect();
+      const row = a && b && b.left >= a.right - 1 && Math.abs(b.top - a.top) < a.height;
+      set({ display: "flex", "flex-direction": row ? "row" : "column", gap: "8px" }, "auto layout");
+    };
+    L.querySelector(".ih").append(add);
+  }
+  if (isFlex) {
+    const wrap = /wrap/.test(st["flex-wrap"]) && !/nowrap/.test(st["flex-wrap"]);
+    const dir = wrap ? "wrap" : /column/.test(st["flex-direction"]) ? "column" : "row";
+    L.append(
+      segmented(
+        [
+          { label: "Horizontal", value: "row" },
+          { label: "Vertical", value: "column" },
+          { label: "Wrap", value: "wrap" },
+        ],
+        dir,
+        (v) => set(v === "wrap" ? { "flex-direction": "row", "flex-wrap": "wrap" } : { "flex-direction": v, "flex-wrap": "nowrap" }, "direction"),
+        { full: true, label: "Direction" },
+      ),
+    );
+    // alignment: a 3×3 grid, main axis along the direction
+    const POS = ["flex-start", "center", "flex-end"];
+    const at = (v) => (/center/.test(v) ? 1 : /end|right|bottom/.test(v) ? 2 : /start|left|top|normal|stretch/.test(v) ? 0 : -1);
+    const jc = at(st["justify-content"]),
+      ai = at(st["align-items"]);
+    const vertical = dir === "column";
+    const grid = h(`<div class="algrid" role="radiogroup" aria-label="Alignment"></div>`);
+    for (let y = 0; y < 3; y++)
+      for (let x = 0; x < 3; x++) {
+        const main = vertical ? y : x,
+          cross = vertical ? x : y;
+        const on = main === jc && cross === ai;
+        const b = h(`<button type="button" role="radio" aria-checked="${on}" class="${on ? "on" : ""}" aria-label="Align ${["top", "middle", "bottom"][y]} ${["left", "centre", "right"][x]}"></button>`);
+        b.onclick = () => set({ "justify-content": POS[main], "align-items": POS[cross] }, "alignment");
+        grid.append(b);
+      }
+    const gapV = px(st.gap);
+    const spread = /space-between/.test(st["justify-content"]);
+    const gapDD = dropdown({ value: spread ? "auto" : SPACE.includes(gapV) ? gapV : "off", options: [{ label: "Auto · space between", value: "auto" }, ...(SPACE.includes(gapV) || spread ? [] : [{ label: `${gapV} · off system`, value: "off" }]), ...SPACE.map((n) => ({ label: `${n}`, value: n }))], full: true, label: "Gap between items", onChange: (n) => n !== "off" && set(n === "auto" ? { "justify-content": "space-between" } : { gap: `${n}px`, ...(spread ? { "justify-content": "flex-start" } : {}) }, "gap") });
+    const side = h(`<div style="display:flex;flex-direction:column;gap:8px;min-width:0"></div>`);
+    side.append(row("Gap", gapDD, true));
+    const lay = h(`<div class="lay"></div>`);
+    lay.append(grid, side);
+    L.append(lay);
+  } else if (isGrid) {
+    const gapV = px(st.gap);
+    L.append(row("Gap", dropdown({ value: SPACE.includes(gapV) ? gapV : "off", options: [...(SPACE.includes(gapV) ? [] : [{ label: `${gapV} · off system`, value: "off" }]), ...SPACE.map((n) => ({ label: `${n}`, value: n }))], full: true, label: "Gap", onChange: (n) => n !== "off" && set({ gap: `${n}px` }, "gap") })));
+  }
+  // size, as Fixed, Hug or Fill
+  const cs = (() => {
+    try {
+      return winOf(id).getComputedStyle(el);
+    } catch {
+      return null;
+    }
+  })();
+  const n0 = (v) => parseFloat(v) || 0;
+  const border = !cs || cs.boxSizing === "border-box";
+  const padW = border ? 0 : n0(cs.paddingLeft) + n0(cs.paddingRight) + n0(cs.borderLeftWidth) + n0(cs.borderRightWidth);
+  const padH = border ? 0 : n0(cs.paddingTop) + n0(cs.paddingBottom) + n0(cs.borderTopWidth) + n0(cs.borderBottomWidth);
+  const own = rulesFor(s.env, [i.selector, exact]).flatMap((x) => x.decls);
+  const ownVal = (p) => own.filter(([k]) => k === p).map(([, v]) => v).pop();
+  const sizing = (axis) => {
+    const p = axis === "w" ? "width" : "height";
+    const v = ownVal(p);
+    if (v === "fit-content") return "hug";
+    if (v === "100%" || (v === undefined && ((axis === "w" && prow) || (axis === "h" && pcol)) && n0(st["flex-grow"]) > 0)) return "fill";
+    if (v && /px$/.test(v)) return "fixed";
+    if (axis === "w" && !pflex && /^(block|flex|grid|table)$/.test(st.display)) return "fill";
+    if ((axis === "w" && pcol) || (axis === "h" && prow)) return /stretch|normal/.test(st["align-self"]) && /stretch|normal/.test(pcs?.alignItems || "") ? "fill" : "hug";
+    return "hug";
+  };
+  const sizeProps = (axis, mode) => {
+    const main = (axis === "w" && prow) || (axis === "h" && pcol);
+    const cross = (axis === "w" && pcol) || (axis === "h" && prow);
+    const p = axis === "w" ? "width" : "height";
+    const cur = axis === "w" ? r.w - padW : r.h - padH;
+    if (mode === "fixed") return { [p]: `${Math.max(0, Math.round(cur))}px`, ...(main ? { flex: "0 0 auto" } : {}) };
+    if (mode === "hug") return { [p]: "fit-content", ...(main ? { flex: "0 0 auto" } : {}), ...(cross ? { "align-self": "flex-start" } : {}) };
+    if (main) return { flex: "1 1 0", [p]: null, [`min-${p}`]: "0" };
+    if (cross) return { "align-self": "stretch", [p]: null };
+    return { [p]: "100%" };
+  };
+  const SIZING = [
+    { label: "Fixed", value: "fixed" },
+    { label: "Hug", value: "hug" },
+    { label: "Fill", value: "fill" },
+  ];
+  const wh = (axis) => {
+    const p = axis === "w" ? "width" : "height";
+    const pad = axis === "w" ? padW : padH;
+    const main = (axis === "w" && prow) || (axis === "h" && pcol);
+    const f = field(axis.toUpperCase(), axis === "w" ? r.w : r.h, (n) => ({ [p]: `${Math.max(0, n - pad)}px`, ...(main ? { flex: "0 0 auto" } : {}) }), "size", { min: 0, title: axis === "w" ? "Width" : "Height" });
+    const dd = dropdown({ value: sizing(axis), options: SIZING, label: `${axis === "w" ? "Width" : "Height"} sizing`, onChange: (m) => set(sizeProps(axis, m), "sizing") });
+    dd.classList.add("szdd");
+    const g = h(`<div class="whr"></div>`);
+    g.append(f, dd);
+    return g;
+  };
+  L.append(wh("w"), wh("h"));
+  // padding
+  const pads = ["padding-top", "padding-right", "padding-bottom", "padding-left"].map((k) => px(st[k]));
+  const spaceDD = (v, label, props) => dropdown({ value: SPACE.includes(v) ? v : "off", options: [...(SPACE.includes(v) ? [] : [{ label: v === "mixed" ? "Mixed" : `${v} · off system`, value: "off" }]), ...SPACE.map((n) => ({ label: `${n}`, value: n }))], full: true, label, onChange: (n) => n !== "off" && set(props(n), "padding") });
+  const ph = pads[1] === pads[3] ? pads[1] : "mixed",
+    pv = pads[0] === pads[2] ? pads[0] : "mixed";
+  const padRow = h(`<div class="g2"></div>`);
+  padRow.append(row("Sides", spaceDD(ph, "Horizontal padding", (n) => ({ "padding-left": `${n}px`, "padding-right": `${n}px` }))), row("Top · bottom", spaceDD(pv, "Vertical padding", (n) => ({ "padding-top": `${n}px`, "padding-bottom": `${n}px` }))));
+  for (const x of padRow.querySelectorAll(".irow")) x.classList.add("stack");
+  L.append(padRow);
+  L.append(switchRow("Clip content", /hidden|clip/.test(st.overflow), (v) => set({ overflow: v ? "hidden" : null }, "clipping")));
   body.append(L);
+
+  // Appearance
+  const A = sec("Appearance");
+  const op = Math.round((parseFloat(st.opacity) || 0) * 100);
+  const rad = px(st["border-radius"]);
+  const radDD = dropdown({ value: RADII.includes(rad) ? rad : "off", options: [...(RADII.includes(rad) ? [] : [{ label: `${rad} · off system`, value: "off" }]), ...RADII.map((n) => ({ label: `${n}`, value: n }))], full: true, label: "Corner radius", onChange: (n) => n !== "off" && set({ "border-radius": `${n}px` }, "radius") });
+  const radWrap = h(`<div class="nfdd" title="Corner radius"><span class="l" aria-hidden="true"><svg class="ic" viewBox="0 0 16 16"><path d="M3.5 12.5V8a4.5 4.5 0 0 1 4.5-4.5h4.5"/></svg></span></div>`);
+  radWrap.append(radDD);
+  A.append(g2(field("", op, (n) => ({ opacity: n >= 100 ? null : String(n / 100) }), "opacity", { min: 0, max: 100, title: "Opacity", k: "opacity", suffix: "%", icon: '<svg class="ic" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5"/><path d="M8 3a5 5 0 0 1 0 10Z" fill="currentColor"/></svg>' }), radWrap));
+  A.append(switchRow("Visible", st.visibility !== "hidden", (v) => set({ visibility: v ? null : "hidden" }, "visibility")));
+  body.append(A);
+
+  // Typography — for elements with text
+  if (i.text) {
+    const T = sec("Typography");
+    const fs = px(st["font-size"]);
+    T.append(row("Size", dropdown({ value: SIZES.includes(fs) ? fs : "off", options: [...(SIZES.includes(fs) ? [] : [{ label: `${fs} · off the ramp`, value: "off" }]), ...SIZES.map((n) => ({ label: `${n}`, value: n }))], full: true, label: "Font size", onChange: (n) => n !== "off" && set({ "font-size": `${n}px` }, "size") })));
+    const fw = Math.round(parseFloat(st["font-weight"]) || 400);
+    T.append(row("Weight", segmented([{ label: "Regular", value: 400 }, { label: "Medium", value: 500 }], fw >= 500 ? 500 : 400, (n) => set({ "font-weight": String(n) }, "weight"), { full: true, label: "Weight" })));
+    const lhPx = parseFloat(st["line-height"]);
+    const lh = fs && Number.isFinite(lhPx) ? Math.round((lhPx / fs) * 100) / 100 : null;
+    const lhNear = LEADING.find((x) => lh && Math.abs(x - lh) < 0.03);
+    T.append(row("Line height", dropdown({ value: lhNear ?? "off", options: [...(lhNear ? [] : [{ label: lh ? `${lh} · off the ramp` : "Normal", value: "off" }]), ...LEADING.map((n) => ({ label: `${n}`, value: n }))], full: true, label: "Line height", onChange: (n) => n !== "off" && set({ "line-height": String(n) }, "line height") })));
+    const ta = /center/.test(st["text-align"]) ? "center" : /right|end/.test(st["text-align"]) ? "right" : "left";
+    T.append(row("Align", segmented([{ label: "Left", value: "left" }, { label: "Centre", value: "center" }, { label: "Right", value: "right" }], ta, (v) => set({ "text-align": v }, "alignment"), { full: true, label: "Text align" })));
+    const inkTok = tokenOf(INK, st.color);
+    T.append(h(`<div class="ih"><span class="tokname${inkTok ? "" : " off"}">${esc(inkTok ? inkTok.name : hexOf(st.color))}</span></div>`), swatches(INK, inkTok, (tk) => set({ color: tk.css }, "text colour")));
+    if (i.editableText) {
+      const tx = h(`<textarea class="afld-ta" aria-label="Text" style="min-height:44px">${esc(i.text)}</textarea>`);
+      tx.addEventListener("change", async () => {
+        try {
+          await api(`envs/${s.env}/text`, { method: "PUT", body: { selector: exact, text: tx.value } });
+          el.textContent = tx.value;
+          S.diffs.delete(s.env);
+          refreshSelInfo();
+          markDirty();
+        } catch (e) {
+          toast("Couldn't save the text", e.message);
+        }
+      });
+      T.append(tx);
+    }
+    body.append(T);
+  }
+
+  // Fill
   const fillTok = tokenOf(FILL, st["background-color"]);
   const F = sec("Fill", `<span class="tokname${fillTok ? "" : " off"}">${esc(fillTok ? fillTok.name : hexOf(st["background-color"]))}</span>`);
-  F.append(swatches(FILL, fillTok, (tk) => applyStyle({ "background-color": tk.css }, "fill")));
+  F.append(swatches(FILL, fillTok, (tk) => set({ "background-color": tk.css }, "fill")));
   body.append(F);
-  const inkTok = tokenOf(INK, st.color);
-  const T = sec("Text style", `<span class="tokname${inkTok ? "" : " off"}">${esc(inkTok ? inkTok.name : hexOf(st.color))}</span>`);
-  T.append(swatches(INK, inkTok, (tk) => applyStyle({ color: tk.css }, "text colour")));
-  const fs = px(st["font-size"]);
-  T.append(row("Size", dropdown({ value: SIZES.includes(fs) ? fs : "off", options: [...(SIZES.includes(fs) ? [] : [{ label: `${fs} · off the ramp`, value: "off" }]), ...SIZES.map((n) => ({ label: `${n}`, value: n }))], full: true, label: "Font size", onChange: (n) => n !== "off" && applyStyle({ "font-size": `${n}px` }, "size") })));
-  const fw = Math.round(parseFloat(st["font-weight"]) || 400);
-  T.append(row("Weight", segmented([{ label: "Regular", value: 400 }, { label: "Medium", value: 500 }], fw >= 500 ? 500 : 400, (n) => applyStyle({ "font-weight": String(n) }, "weight"), { full: true, label: "Weight" })));
-  body.append(T);
+
+  // Stroke
+  const bw = parseFloat(st["border-top-width"]) || 0;
+  const hasStroke = bw > 0 && st["border-top-style"] !== "none";
+  const stTok = tokenOf(STROKE, st["border-top-color"]);
+  const K = sec("Stroke", hasStroke ? `<span class="tokname${stTok ? "" : " off"}">${esc(stTok ? stTok.name : hexOf(st["border-top-color"]))}</span>` : "");
+  const WIDTHS = [0, 0.5, 1, 2];
+  K.append(row("Width", segmented(WIDTHS.map((n) => ({ label: n ? `${n}` : "None", value: n })), hasStroke ? WIDTHS.find((n) => Math.abs(n - bw) < 0.01) ?? -1 : 0, (n) => set(n ? { "border-style": "solid", "border-width": `${n}px`, ...(hasStroke ? {} : { "border-color": STROKE[1].css }) } : { "border-style": "none", "border-width": null, "border-color": null }, "stroke"), { full: true, label: "Stroke width" })));
+  if (hasStroke) K.append(swatches(STROKE, stTok, (tk) => set({ "border-color": tk.css }, "stroke colour")));
+  body.append(K);
+
+  // Effects
+  const sh = st["box-shadow"];
+  const E = sec("Effects");
+  E.append(row("Shadow", segmented(SHADOWS.map(({ label, value }) => ({ label, value })), !sh || sh === "none" ? "none" : ownVal("box-shadow")?.includes("--sh-md") ? "sh-md" : ownVal("box-shadow")?.includes("--sh-sm") ? "sh-sm" : "custom", (v) => set({ "box-shadow": SHADOWS.find((x) => x.value === v)?.css ?? "none" }, "shadow"), { full: true, label: "Shadow" })));
+  body.append(E);
+
+  // off the system
   const off = [];
   if (!fillTok) off.push(`fill ${hexOf(st["background-color"])}`);
-  if (!inkTok) off.push(`text ${hexOf(st.color)}`);
-  if (!SIZES.includes(fs)) off.push(`${fs}px type`);
+  if (i.text && !tokenOf(INK, st.color)) off.push(`text ${hexOf(st.color)}`);
+  const fsz = px(st["font-size"]);
+  if (i.text && !SIZES.includes(fsz)) off.push(`${fsz}px type`);
   if (!RADII.includes(rad)) off.push(`${rad}px radius`);
   const badPad = [...new Set(pads.filter((p) => !SPACE.includes(p)))];
   if (badPad.length) off.push(`${badPad.join(", ")}px padding`);
   if (off.length) body.append(h(`<div class="isec"><div class="shnote">${IC.info}<div><b>Off the system</b><br><span>${esc(off.join(" · "))}. Pick a token above to bring it back.</span></div></div></div>`));
-  const css = OV.get(s.env);
-  if (css === undefined) loadOverrides(s.env).then(() => S.sel === s && renderDesign());
-  const mine = parseRules(css || "").filter((ru) => norm(ru.selector) === norm(i.selector) || norm(ru.selector) === norm(i.exactSelector));
-  const a = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="agent">${IC.spark}Ask an agent about this</button>${mine.length ? `<button type="button" class="ghbtn sm" data-a="reset">${IC.restore}Reset this element</button>` : ""}</div></div>`);
-  a.querySelector('[data-a="agent"]').onclick = () => fire("ask-agent", {});
-  const rs = a.querySelector('[data-a="reset"]');
-  if (rs)
-    rs.onclick = async () => {
-      try {
-        let res;
-        for (const ru of mine) res = await api(`envs/${s.env}/styles`, { method: "DELETE", body: { selector: ru.selector } });
-        OV.set(s.env, res.css);
-        for (const x of boardsLive(s.env)) x.setOverrides(res.css);
-        S.diffs.delete(s.env);
-        requestAnimationFrame(() => (refreshSelInfo(), renderDesign(), markDirty()));
-      } catch (e) {
-        toast("Couldn't reset", e.message);
-      }
-    };
-  body.append(a);
+
+  // what this page changed on it
+  if (cachedOverrides(s.env) === undefined) loadOverrides(s.env).then(() => S.sel === s && renderDesign());
+  const mine = rulesFor(s.env, [i.selector, exact]);
+  const C = sec("Changes on this element", `<span class="tct">${mine.reduce((n, x) => n + x.decls.length, 0) || ""}</span>`);
+  if (!mine.length) C.append(h(`<span class="lineage">None yet. Drag it, resize it from its handles, or change anything above; it's saved in ${esc(pageName(env))}'s overrides.css.</span>`));
+  else {
+    const ch = h(`<div class="chg"></div>`);
+    for (const x of mine) for (const [k, v] of x.decls) ch.append(h(`<div class="r"><b>${esc(k)}</b><span>${esc(v)}</span></div>`));
+    C.append(ch);
+  }
+  const acts = h(`<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="agent">${IC.spark}Ask an agent</button>${mine.length ? `<button type="button" class="dbtn sm" data-a="reset">${IC.restore}Reset</button>` : ""}<button type="button" class="dbtn sm err" data-a="rm">${IC.trash}Remove</button></div>`);
+  acts.querySelector('[data-a="agent"]').onclick = () => fire("ask-agent", {});
+  acts.querySelector('[data-a="rm"]').onclick = () => removeEl();
+  const rs = acts.querySelector('[data-a="reset"]');
+  if (rs) rs.onclick = () => resetSelectors(s.env, [i.selector, exact]);
+  C.append(acts);
+  body.append(C);
 }
 
 function designAnnotation(body, id) {
@@ -1003,7 +1244,7 @@ export function initPanels() {
   });
   on("catalog", () => (S.leftTab === "screens" && renderLeft(), S.rightTab === "prototype" && renderRight()));
   on("env-meta", (id) => {
-    OV.delete(id);
+    forgetOverrides(id);
     S.diffs.delete(id);
     if (id === S.page) (renderRight(), renderBanner(), loadDiff(id));
     renderLeft();
@@ -1014,6 +1255,7 @@ export function initPanels() {
     if (S.leftTab === "file" || S.leftTab === "agents") renderLeft();
     if (!S.sel && (id === S.page || S.envs.get(id)?.parent === S.page)) renderRight();
   });
+  on("styles-changed", () => S.sel?.kind === "el" && renderDesign());
   on("focus-label", () => ((renderDesign.focusLabel = true), (S.rightTab = "design"), renderRight()));
   on("ask-agent", ({ prompt } = {}) => {
     S.leftTab = "agents";
