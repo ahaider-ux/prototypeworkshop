@@ -2,10 +2,11 @@
   "id": "n-mwnsi09b-013370",
   "type": "note",
   "x": 3776,
-  "y": 1757,
+  "y": 120,
   "w": 320,
-  "text": "V1 reads calmer in dark. Check the Chat screen before merging — the composer still sits low.",
+  "text": "V1 reads calmer in dark. Check the Chat screen before merging \u2014 the composer still sits low.",
   "tone": "warm",
   "author": "You",
-  "createdAt": "2026-11-19T16:53:56.303Z"
+  "createdAt": "2026-11-19T16:53:56.303Z",
+  "env": "sidebar-v1-in-dark"
 }

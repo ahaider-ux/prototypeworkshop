@@ -1,11 +1,12 @@
 # Libra Workshop
 
-A canvas for HTML prototypes where branching and annotating come first. Every prototype is a
-folder with an `index.html`; on the canvas it becomes a **section** of live boards, one per screen,
-each running exactly like the app it imitates. Try an idea on a **branch** — its own section, joined
-to where it came from by a line — then **review and merge** it. Mark things up with notes,
-highlights, arrows and comments. Coding agents (Claude Code or your own harness) work on the same
-files, read your annotations, and do their work on branches you merge.
+A canvas for HTML prototypes where branching and annotating come first. It is laid out like a
+design tool: **Home** lists your prototypes, each opens in a **tab**, and inside a prototype every
+**branch is a page**, with **main** as the first one. A page shows the prototype's screens as live
+boards, each running exactly like the app it imitates. Try an idea on a branch, mark it up with
+notes, highlights, arrows and comments, **compare** it with main, then **review and merge** it.
+Coding agents (Claude Code or your own harness) work on the same files, read your annotations, and
+do their work on branches you merge.
 
 It starts with **Libra — Fourth Age** and two example branches.
 
@@ -31,7 +32,8 @@ workspace/
   envs/<id>/index.html       a prototype — edit it in anything
   envs/<id>/env.json         name, theme, variants, text edits, and for a branch: its parent and base
   envs/<id>/overrides.css    design tweaks from the inspector and agents; loads after the page's styles
-  canvas/<id>.json           what's on the canvas: boards (a prototype at a screen), notes, highlights, arrows
+  canvas/<id>.json           what's on the canvas: boards (a prototype at a screen), and the notes,
+                             highlights and arrows made on each page
   .workshop/                 this computer's own state (not committed): versions, trash, tasks,
                              comments, share links, the current selection, agent heartbeats
 ```
@@ -40,23 +42,30 @@ A branch folder starts with just `env.json` and `overrides.css`: files it hasn't
 from its parent, so branching a 6 MB prototype takes no time and no space. Any change to these
 files — from the canvas, an editor or an agent — reaches every open canvas.
 
-## The canvas
+## Finding your way
 
 | | |
 |---|---|
-| **Sections and branches** | Each prototype's boards sit in a section. **Branch** (in the section header) makes a new section with the same screens, below, joined by a lineage line. The header says how many changes the branch has and whether any conflict with main. |
-| **Review and merge** | Shows every change — settings, design overrides, files — with main's value and the branch's. Where main changed the same thing since the branch was made, pick which side wins. Merging saves main as a version first and archives the branch. **Update from main** brings main's newer changes into a branch. |
-| **Screens** (left panel) | Every screen, state and flow the prototype offers. Drag one onto the canvas or click to place it; **Place all** fills a row. Fourth Age lists its screens through its own prototype tools. |
-| **Annotate** | **N** note, **B** highlight (drag a box), **A** arrow (drag from a note, box or board to what it's about), **C** comment on a board. **Notes** (right panel) lists them all. Agents read them too. |
-| **Design mode** (**P** switches) | Click inside a board to select the element under the pointer; **Esc** selects its parent; double-click text to edit it. The inspector only offers Libra tokens and flags anything off the system. Changes go to the branch's `overrides.css`. |
-| **Prototype mode** | The pointer goes to the page: use it like the app. |
-| **Layers** (left panel) | The selected board's landmarks only — sidebar, content, panels, sections — folded. Click into a board to reach anything else. |
-| **Chat** (right panel) | Ask for a change. From main it happens on a new branch, so main only changes when you merge. |
-| **History** | Save versions of a prototype or branch; restore one or copy it as a new prototype. |
-| **Share · Present** | A local link, and view or comment links for people on your network. **Present** plays a board full-window at 1:1. |
+| **Home** | Your prototypes, with their open branches and a live preview. Click one to open it in a tab; **Import HTML** adds another. The top bar shows whether an agent is connected. |
+| **Branches** (File, left) | Main and every branch of the open prototype, like pages, with how many changes each has. Click one to go to its page; **+** creates a branch of the page you're on. |
+| **Layers** (File, left) | This page's frames — one per screen — and its notes, highlights and arrows. Open a frame to reach the live page's landmarks: sidebar, content, panels. |
+| **Screens** (left) | Every screen, state and flow the prototype offers. Click to place it on this page or drag it onto the canvas; **Place all** fills a row. Fourth Age lists its screens through its own prototype tools. |
+| **Agents** (left) | Ask for a change. From main it happens on a new branch, so main only changes when you merge. **Ask** in the toolbar opens it. |
+| **Notes** (left) | Every note, highlight and comment on this page, or on all of the prototype's pages. |
+| **History** (left) | Versions of this page (restore one, or copy it as a new prototype) and the branches merged so far. |
+| **Page banner** | Across the top of the canvas: which page this is. On a branch: how many changes and conflicts, **Compare with main** (main's screens above the branch's, both live), **Update from main** and **Review and merge**. |
+| **Design** (right) | Whatever is selected: the page (its changes, or its branches when it's main), a frame (screen, state, size), an element (Libra tokens only, anything off the system flagged) or an annotation. |
+| **Prototype** (right) | How this page runs: theme and variants, its flows (place one or play it in a new tab), Interact, Present and Share. The zoom is next to the tabs. |
+| **Review and merge** | Every change — settings, design overrides, files — with main's value and the branch's. Where main changed the same thing since the branch was made, pick which side wins. Merging saves main as a version first and archives the branch. |
 
-Other keys: **V** select, **H** hand, **Space** drag to pan, **⇧1** fit, **⇧2** zoom to the selection,
-**⌘D** duplicate, **⌘K** search, **⌘\** hide the panels, **⌘Z** undo a style edit.
+The toolbar: **V** select, **H** hand, **N** note, **B** highlight (drag a box), **A** arrow (drag
+from a note, box or board to what it's about), **C** comment on a board, **P** Interact (the pointer
+goes to the page: use it like the app). Click inside a board to select the element under the
+pointer; **Esc** selects its parent; double-click text to edit it. Changes go to the page's
+`overrides.css`.
+
+Other keys: **Space** drag to pan, **⇧1** fit, **⇧2** zoom to the selection, **⌘D** duplicate,
+**⌘K** search, **⌘\** hide the panels, **⌘Z** undo a style edit.
 
 ## Connect a coding agent
 

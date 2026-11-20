@@ -1,9 +1,26 @@
-// Libra Workshop — boot, live updates, branches, review and merge, and the dialogs.
+// Libra Workshop — boot, Home and tabs, pages, live updates, branches, review and merge, dialogs.
 
-import { S, on, fire, envList, visibleEnvs, boardsOf, itemsOf, selEnv, selEnvId, isBranch, screenName } from "./state.js";
+import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural } from "./state.js";
 import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented } from "./lib.js";
-import { initCanvas, sync, fit, focusEnv, focusItem, fitRect, selectSection, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, sectionRect, selectItem } from "./canvas.js";
-import { initPanels, renderLeft, renderRight, loadVersions, loadDiff, undoStyle } from "./panels.js";
+import { initCanvas, sync, fit, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
+import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff, undoStyle } from "./panels.js";
+
+const pageName = (e) => (e ? (isBranch(e) ? e.name : "Main") : "");
+const store = {
+  get(k, d) {
+    try {
+      const v = JSON.parse(localStorage.getItem(k) || "null");
+      return v ?? d;
+    } catch {
+      return d;
+    }
+  },
+  set(k, v) {
+    try {
+      localStorage.setItem(k, JSON.stringify(v));
+    } catch {}
+  },
+};
 
 // ---------- data ----------
 async function loadWorkspace() {
@@ -11,10 +28,9 @@ async function loadWorkspace() {
   S.ws = ws;
   S.envs = new Map(ws.envs.map((e) => [e.id, e]));
   S.items = new Map(ws.items.map((i) => [i.id, i]));
-  if (S.sel && S.sel.env && !S.envs.has(S.sel.env)) clearSel();
   if (S.sel && S.sel.item && !S.items.has(S.sel.item)) clearSel();
-  $("wsName").textContent = ws.name;
-  document.title = `${ws.name} · Libra Workshop`;
+  S.tabs = S.tabs.filter((id) => S.envs.has(id) && !isBranch(S.envs.get(id)));
+  if (S.view === "proto" && !S.envs.has(S.page)) return applyRoute();
   sync();
   renderAll();
 }
@@ -27,14 +43,15 @@ async function loadItems() {
     S.items = new Map(list.map((i) => [i.id, i]));
     if (S.sel?.item && !S.items.has(S.sel.item)) clearSel();
     sync();
+    if (S.view === "home") return renderHome();
     renderLeft();
-    if (S.rightTab !== "design") renderRight();
+    renderBanner();
   } catch {}
 }
 async function loadComments() {
   S.comments = await api("comments").catch(() => S.comments);
   markDirty();
-  renderRight();
+  if (S.view === "proto" && (S.leftTab === "notes" || S.leftTab === "file")) renderLeft();
 }
 let lastStatus = new Map();
 async function loadTasks() {
@@ -43,18 +60,23 @@ async function loadTasks() {
     const was = lastStatus.get(t.id);
     if (was && was !== t.status && (t.status === "done" || t.status === "failed")) {
       const env = S.envs.get(t.env);
-      toast(t.status === "done" ? `${t.claimedBy || "The agent"} finished` : `${t.claimedBy || "The agent"} couldn't finish`, `${env?.name || t.env}${t.reply ? ` · ${t.reply.slice(0, 120)}` : ""}`, isBranch(env) && t.status === "done" ? { label: "Review and merge", fn: () => openReview(env.id) } : { label: "Show", fn: () => (selectSection(t.env), fire("ask-agent", {})) });
+      toast(t.status === "done" ? `${t.claimedBy || "The agent"} finished` : `${t.claimedBy || "The agent"} couldn't finish`, `${pageName(env) || t.env}${t.reply ? ` · ${t.reply.slice(0, 120)}` : ""}`, isBranch(env) && t.status === "done" ? { label: "Review and merge", fn: () => openReview(env.id) } : { label: "Show", fn: () => (go(t.env), fire("ask-agent", {})) });
       S.diffs.delete(t.env);
+      loadDiff(t.env);
     }
   }
   lastStatus = new Map(list.map((t) => [t.id, t.status]));
   S.tasks = list;
-  renderRight();
+  if (S.view === "proto") renderLeft();
 }
 function renderAll() {
+  renderTabs();
   renderWho();
+  renderAgent();
+  if (S.view === "home") return renderHome();
   renderLeft();
   renderRight();
+  renderBanner();
   markDirty();
 }
 function renderWho() {
@@ -69,6 +91,202 @@ function renderWho() {
     c.onclick = openConnect;
     w.append(c);
   }
+}
+function renderAgent() {
+  const ws = S.ws;
+  const hs = ws?.harnesses || [];
+  $("agentDot").classList.toggle("on", !!(hs.length || ws?.agent));
+  $("agentTxt").innerHTML = hs.length ? `<b>${esc(hs[0].client)}</b> connected` : ws?.agent ? `Requests run with <b>${esc(ws.agent.name)}</b>` : "Connect an agent";
+}
+
+// ---------- where you are: Home, or a page of a prototype ----------
+// #/ is Home; #/p/<prototype> is its main page; #/p/<prototype>/<branch> one of its branches.
+const lastPage = new Map(store.get("ws-last", []));
+function parseHash() {
+  const m = /^#\/p\/([^/?#]+)(?:\/([^/?#]+))?/.exec(location.hash);
+  if (!m) return { view: "home" };
+  const dec = (s) => {
+    try {
+      return decodeURIComponent(s);
+    } catch {
+      return "";
+    }
+  };
+  return { view: "proto", root: dec(m[1]), page: m[2] ? dec(m[2]) : null };
+}
+function hashFor(page) {
+  const root = rootOf(page);
+  if (!root) return "#/";
+  return `#/p/${encodeURIComponent(root.id)}${page !== root.id ? `/${encodeURIComponent(page)}` : ""}`;
+}
+function go(page) {
+  const want = page === "home" || !S.envs.has(page) ? "#/" : hashFor(page);
+  if (location.hash === want) applyRoute();
+  else location.hash = want;
+}
+function applyRoute() {
+  const r = parseHash();
+  const root = r.view === "proto" ? S.envs.get(r.root) : null;
+  if (!root || isBranch(root)) {
+    if (r.view === "proto") history.replaceState(null, "", "#/");
+    return showHome();
+  }
+  const page = r.page && S.envs.has(r.page) && rootOf(r.page)?.id === root.id ? r.page : root.id;
+  if (r.page && page !== r.page) history.replaceState(null, "", hashFor(page));
+  openPage(page);
+}
+function showHome() {
+  if (presenting) stopPresent();
+  S.view = "home";
+  S.page = null;
+  S.compare = false;
+  if (S.sel) clearSel();
+  $("home").hidden = false;
+  $("work").hidden = true;
+  $("frame").classList.add("home-on");
+  sync();
+  renderTabs();
+  homeKey = "";
+  renderHome();
+  document.title = `${S.ws.name} · Libra Workshop`;
+  store.set("ws-route", "#/");
+}
+function openPage(page) {
+  const changed = S.page !== page || S.view !== "proto";
+  const root = rootOf(page);
+  S.view = "proto";
+  if (!S.tabs.includes(root.id)) (S.tabs.push(root.id), store.set("ws-tabs", S.tabs));
+  lastPage.set(root.id, page);
+  store.set("ws-last", [...lastPage].slice(-50));
+  store.set("ws-route", hashFor(page));
+  $("home").hidden = true;
+  $("home").replaceChildren(); // its thumbnails are live pages: let them go
+  $("work").hidden = false;
+  $("frame").classList.remove("home-on");
+  if (changed) {
+    if (presenting) stopPresent();
+    S.page = page;
+    S.compare = false;
+    if (S.sel) clearSel();
+    sync();
+    if (!restoreCam(page)) requestAnimationFrame(() => fit({ ms: 0 }));
+    loadDiff(page);
+    for (const e of envList()) if (e.parent === page) loadDiff(e.id);
+  }
+  renderAll();
+  document.title = `${pageName(pageEnv())} · ${root.name}`;
+}
+function renderTabs() {
+  const t = $("tabs");
+  t.replaceChildren();
+  const home = h(`<div class="tab home${S.view === "home" ? " on" : ""}" role="tab" tabindex="0" aria-selected="${S.view === "home"}">${IC.home}<span class="t">Home</span></div>`);
+  home.onclick = () => go("home");
+  home.onkeydown = (e) => e.key === "Enter" && go("home");
+  t.append(home);
+  for (const id of S.tabs) {
+    const e = S.envs.get(id);
+    if (!e) continue;
+    const on = S.view === "proto" && protoId() === id;
+    const tab = h(`<div class="tab${on ? " on" : ""}" role="tab" tabindex="0" aria-selected="${on}" title="${esc(e.name)}"><span class="t">${esc(e.name)}</span><button type="button" class="ib24" aria-label="Close ${esc(e.name)}">${IC.x}</button></div>`);
+    const open = () => go(S.envs.has(lastPage.get(id)) ? lastPage.get(id) : id);
+    tab.onclick = (ev) => !ev.target.closest(".ib24") && open();
+    tab.onkeydown = (ev) => ev.key === "Enter" && open();
+    tab.querySelector(".ib24").onclick = (ev) => (ev.stopPropagation(), closeTab(id));
+    t.append(tab);
+  }
+}
+function closeTab(id) {
+  const i = S.tabs.indexOf(id);
+  S.tabs = S.tabs.filter((x) => x !== id);
+  store.set("ws-tabs", S.tabs);
+  if (protoId() === id && S.view === "proto") {
+    const next = S.tabs[Math.min(i, S.tabs.length - 1)];
+    return go(next ? lastPage.get(next) || next : "home");
+  }
+  renderTabs();
+}
+
+// ---------- Home: what this is, and your prototypes ----------
+let homeKey = "";
+function lastEdit(rootId) {
+  const fam = new Set(familyOf(rootId).map((x) => x.env.id));
+  let t = 0;
+  const see = (s) => {
+    const v = Date.parse(s || "");
+    if (Number.isFinite(v) && v > t) t = v;
+  };
+  for (const x of familyOf(rootId)) see(x.env.created), see(x.env.branch?.at), see(x.env.mergedAt);
+  for (const it of S.items.values()) if (fam.has(pageOf(it))) see(it.updatedAt), see(it.createdAt);
+  for (const tk of S.tasks) if (fam.has(tk.env)) see(tk.updatedAt);
+  return t ? new Date(t).toISOString() : null;
+}
+function renderHome() {
+  if (S.view !== "home") return;
+  const rs = roots();
+  const key = JSON.stringify([S.ws.name, rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen])]);
+  if (key === homeKey) return;
+  homeKey = key;
+  const el = $("home");
+  const inner = h(`<div class="in"></div>`);
+  const hh = h(`<div class="hh"><div class="tt"><h1>${esc(S.ws.name)}</h1><p>HTML prototypes that run live on a canvas. Try every idea on a branch, mark it up, let agents do the work, and merge what's right.</p></div><button type="button" class="createbtn">${IC.upload}Import HTML</button></div>`);
+  hh.querySelector("button").onclick = openImport;
+  inner.append(hh);
+  const steps = [
+    [IC.board, "Open a prototype", "Each screen runs live on the canvas, exactly like the app it imitates."],
+    [IC.fork, "Branch an idea", "A branch is its own page with the same screens. Main stays as it is."],
+    [IC.note, "Mark it up, or ask", "Notes, highlights and comments. Agents read them and work on branches too."],
+    [IC.check, "Review and merge", "Compare with main, see every change, pick what wins, and merge."],
+  ];
+  inner.append(h(`<div class="steps">${steps.map(([ic, b, s]) => `<div class="step"><span class="k">${ic}</span><span class="tx"><b>${b}</b><span>${s}</span></span></div>`).join("")}</div>`));
+  const sec = h(`<div class="hsec"><div class="shd"><span>Prototypes</span><span class="n">${rs.length || ""}</span></div><div class="cards"></div></div>`);
+  const cards = sec.querySelector(".cards");
+  for (const e of rs) {
+    const fam = familyOf(e.id);
+    const open = fam.filter((x) => isBranch(x.env) && !x.env.archived).map((x) => x.env);
+    const edited = lastEdit(e.id);
+    const first = boardsOf(e.id)[0];
+    const c = h(`<div class="card" role="button" tabindex="0" aria-label="Open ${esc(e.name)}"><div class="th"><span class="ph">${IC.board}</span></div><div class="bd2"><b>${esc(e.name)}</b><span class="m">${plural(boardsOf(e.id).length, "screen")} · ${plural(open.length, "open branch", "open branches")}${edited ? ` · edited ${esc(timeAgo(edited))}` : ""}</span><div class="brs"></div></div></div>`);
+    const brs = c.querySelector(".brs");
+    for (const b of open.slice(0, 4)) {
+      const tag = h(`<span class="brtag" role="link" tabindex="0">${IC.fork}${esc(b.name)} <span class="n"></span></span>`);
+      tag.onclick = (ev) => (ev.stopPropagation(), go(b.id));
+      tag.onkeydown = (ev) => ev.key === "Enter" && (ev.stopPropagation(), go(b.id));
+      brs.append(tag);
+      // change counts fill in as they arrive, without reloading the previews
+      const count = () => (tag.querySelector(".n").textContent = S.diffs.get(b.id)?.changes.length || "");
+      if (S.diffs.has(b.id)) count();
+      else loadDiff(b.id).then(count);
+    }
+    if (open.length > 4) brs.append(h(`<span class="brtag">+${open.length - 4}</span>`));
+    if (!open.length) brs.hidden = true;
+    c.onclick = () => go(S.envs.has(lastPage.get(e.id)) ? lastPage.get(e.id) : e.id);
+    c.onkeydown = (ev) => ev.key === "Enter" && c.click();
+    // a live thumbnail of its first screen
+    const th = c.querySelector(".th");
+    const fr = document.createElement("iframe");
+    fr.title = `${e.name} preview`;
+    fr.loading = "lazy";
+    fr.tabIndex = -1;
+    fr.setAttribute("aria-hidden", "true");
+    const q = new URLSearchParams({ "ws-board": `thumb-${e.id}` });
+    if (first?.screen) q.set("ws-screen", first.screen);
+    fr.src = `/env/${encodeURIComponent(e.id)}/?${q}`;
+    const w = e.device?.w || 1440,
+      ht = e.device?.h || 900;
+    fr.style.width = w + "px";
+    fr.style.height = ht + "px";
+    const scale = () => (fr.style.transform = `scale(${th.clientWidth / w})`);
+    new ResizeObserver(scale).observe(th);
+    fr.onload = () => (th.querySelector(".ph")?.remove(), scale());
+    th.append(fr);
+    cards.append(c);
+  }
+  const nw = h(`<div class="card new" role="button" tabindex="0">${IC.plus}<b>Import a prototype</b><span style="font-size:12px">An HTML file or a whole document you paste</span></div>`);
+  nw.onclick = openImport;
+  nw.onkeydown = (ev) => ev.key === "Enter" && openImport();
+  cards.append(nw);
+  inner.append(sec);
+  el.replaceChildren(inner);
 }
 
 // ---------- branches ----------
@@ -87,7 +305,7 @@ function copyStorage(from, to) {
 function createBranch(id) {
   const src = S.envs.get(id);
   if (!src) return;
-  const md = modal(`<div class="md-h"><div class="tt"><h2>Create a branch of ${esc(src.name)}</h2><p>A new section with the same ${boardsOf(id).length || ""} screen${boardsOf(id).length === 1 ? "" : "s"}. Change anything there; ${esc(src.name)} only changes when you merge.</p></div></div><form class="md-b" id="brF"><div class="fld"><span class="lr">What are you trying?</span><div class="afld-in"><input id="brIn" maxlength="120" placeholder="Denser sidebar" autofocus></div></div></form><div class="md-f"><button type="button" class="ghbtn" data-a="x">Cancel</button><button type="button" class="createbtn" data-a="ok">${IC.fork}Create branch</button></div>`);
+  const md = modal(`<div class="md-h"><div class="tt"><h2>Create a branch of ${esc(pageName(src))}</h2><p>A new page with the same ${plural(boardsOf(id).length, "screen")}. Change anything there; ${esc(pageName(src))} only changes when you merge.</p></div></div><form class="md-b" id="brF"><div class="fld"><span class="lr">What are you trying?</span><div class="afld-in"><input id="brIn" maxlength="120" placeholder="Denser sidebar" autofocus></div></div></form><div class="md-f"><button type="button" class="ghbtn" data-a="x">Cancel</button><button type="button" class="createbtn" data-a="ok">${IC.fork}Create branch</button></div>`);
   md.style.width = "480px";
   let busy = false;
   const ok = async () => {
@@ -98,9 +316,8 @@ function createBranch(id) {
       copyStorage(id, env.id);
       closeModal();
       await loadWorkspace();
-      selectSection(env.id);
-      requestAnimationFrame(() => fitRect(boundsOfEnvs([id, env.id])));
-      toast(`Branched ${src.name}`, `${env.name} reads ${src.name}'s files until it changes them`);
+      go(env.id);
+      toast(`Created ${env.name}`, `A branch of ${pageName(src)}. It reads ${pageName(src)}'s files until it changes them`);
     } catch (e) {
       busy = false;
       toast("Couldn't create the branch", e.message);
@@ -109,11 +326,6 @@ function createBranch(id) {
   md.querySelector('[data-a="ok"]').onclick = ok;
   md.querySelector('[data-a="x"]').onclick = closeModal;
   $("brF").onsubmit = (e) => (e.preventDefault(), ok());
-}
-function boundsOfEnvs(ids) {
-  const rs = ids.map(sectionRect).filter(Boolean);
-  if (!rs.length) return null;
-  return { x0: Math.min(...rs.map((r) => r.x)), y0: Math.min(...rs.map((r) => r.y)), x1: Math.max(...rs.map((r) => r.x + r.w)), y1: Math.max(...rs.map((r) => r.y + r.h)) };
 }
 const fmt = (v, key = "") => (v === null || v === undefined || v === "" ? (key.startsWith("variant:") ? "default" : key.startsWith("text:") ? "original text" : "none") : String(v));
 async function openReview(id) {
@@ -128,22 +340,22 @@ async function openReview(id) {
   }
   const parent = S.envs.get(env.parent);
   const take = {};
-  const md = modal(`<div class="md-h"><div class="tt"><h2>Review and merge</h2><p>${esc(env.name)} into ${esc(parent.name)} · ${d.changes.length} change${d.changes.length === 1 ? "" : "s"}${d.conflicts ? ` · ${d.conflicts} conflict${d.conflicts === 1 ? "" : "s"}: ${esc(parent.name)} changed the same thing since the branch was made` : ""}</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div><div class="md-b" id="rvB"></div><div class="md-f">${d.behind ? `<span style="font-size:12px;color:var(--text-secondary)">${d.behind} change${d.behind === 1 ? "" : "s"} on ${esc(parent.name)} stay as they are.</span>` : ""}<span class="sp"></span><button type="button" class="ghbtn" data-a="x2">Cancel</button><button type="button" class="createbtn" data-a="ok" ${d.changes.length ? "" : "disabled"}>Merge into ${esc(parent.name)}</button></div>`, { wide: true });
+  const md = modal(`<div class="md-h"><div class="tt"><h2>Review and merge</h2><p>${esc(env.name)} into ${esc(pageName(parent))} · ${d.changes.length} change${d.changes.length === 1 ? "" : "s"}${d.conflicts ? ` · ${d.conflicts} conflict${d.conflicts === 1 ? "" : "s"}: ${esc(pageName(parent))} changed the same thing since the branch was made` : ""}</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div><div class="md-b" id="rvB"></div><div class="md-f">${d.behind ? `<span style="font-size:12px;color:var(--text-secondary)">${d.behind} change${d.behind === 1 ? "" : "s"} on ${esc(pageName(parent))} stay as they are.</span>` : ""}<span class="sp"></span><button type="button" class="ghbtn" data-a="x2">Cancel</button><button type="button" class="createbtn" data-a="ok" ${d.changes.length ? "" : "disabled"}>Merge into ${esc(pageName(parent))}</button></div>`, { wide: true });
   const b = $("rvB");
-  if (!d.changes.length) b.append(h(`<div class="pempty" style="padding:0"><b>Nothing to merge yet</b>This branch is the same as ${esc(parent.name)} was when it was made.</div>`));
+  if (!d.changes.length) b.append(h(`<div class="pempty" style="padding:0"><b>Nothing to merge yet</b>This branch is the same as ${esc(pageName(parent))} was when it was made.</div>`));
   const groups = [["setting", "SETTINGS"], ["style", "DESIGN OVERRIDES"], ["file", "FILES"]];
   for (const [kind, title] of groups) {
     const cs = d.changes.filter((c) => c.kind === kind);
     if (!cs.length) continue;
     const g = h(`<div class="rvg"><div class="rvh">${title} · ${cs.length}</div></div>`);
     for (const c of cs) {
-      const val = kind === "file" ? (c.conflict ? `Changed here and on ${esc(parent.name)}` : "Changed on the branch") : `<del>${esc(fmt(c.main, c.key))}</del> → <ins>${esc(fmt(c.branch, c.key))}</ins>`;
+      const val = kind === "file" ? (c.conflict ? `Changed here and on ${esc(pageName(parent))}` : "Changed on the branch") : `<del>${esc(fmt(c.main, c.key))}</del> → <ins>${esc(fmt(c.branch, c.key))}</ins>`;
       const r = h(`<div class="rvr${c.conflict ? " conflict" : ""}"><div style="display:flex;flex-direction:column;gap:4px;min-width:0"><span class="k">${esc(c.label)}</span><span class="v">${val}</span></div><span class="ch"></span></div>`);
       if (c.conflict) {
         take[c.key] = "branch";
         const pick = () =>
           r.querySelector(".ch").replaceChildren(
-            segmented([{ label: "Keep branch", value: "branch" }, { label: `Keep ${parent.name.length > 14 ? "main" : parent.name}`, value: "main" }], take[c.key], (v) => {
+            segmented([{ label: "Keep branch", value: "branch" }, { label: `Keep ${pageName(parent).length > 14 ? "main" : pageName(parent)}`, value: "main" }], take[c.key], (v) => {
               take[c.key] = v;
               pick();
             }, { label: `Resolve ${c.label}` }),
@@ -164,9 +376,8 @@ async function openReview(id) {
       const r = await api(`envs/${id}/merge`, { method: "POST", body: { take } });
       closeModal();
       await loadWorkspace();
-      selectSection(parent.id);
-      focusEnv(parent.id);
-      toast(`Merged ${env.name} into ${parent.name}`, `${r.applied} change${r.applied === 1 ? "" : "s"} · the branch is archived · V${r.before.n} has ${parent.name} as it was`, {
+      go(parent.id);
+      toast(`Merged ${env.name} into ${pageName(parent)}`, `${plural(r.applied, "change")} · the branch is archived · V${r.before.n} has ${pageName(parent)} as it was`, {
         label: "Undo",
         fn: async () => {
           await api(`envs/${parent.id}/versions/${r.before.n}/restore`, { method: "POST" });
@@ -186,7 +397,7 @@ async function updateFromMain(id) {
     S.diffs.delete(id);
     await loadWorkspace();
     loadDiff(id);
-    toast(r.updated ? `Brought in ${r.updated} change${r.updated === 1 ? "" : "s"} from ${S.envs.get(S.envs.get(id).parent)?.name}` : "Already up to date");
+    toast(r.updated ? `Brought in ${plural(r.updated, "change")} from ${pageName(S.envs.get(S.envs.get(id).parent))}` : "Already up to date");
   } catch (e) {
     toast("Couldn't update the branch", e.message);
   }
@@ -195,19 +406,21 @@ function envMenu({ anchor, env: id }) {
   const e = S.envs.get(id);
   if (!e) return;
   const br = isBranch(e);
+  const name = br ? "branch" : "prototype";
   menu(anchor, [
-    { label: "Create branch", icon: IC.fork, onClick: () => createBranch(id) },
-    ...(br && !e.archived ? [{ label: "Review and merge", icon: IC.check, onClick: () => openReview(id) }, { label: `Update from ${S.envs.get(e.parent)?.name || "main"}`, icon: IC.restore, onClick: () => updateFromMain(id) }] : []),
+    ...(br ? [{ head: e.name }] : [{ head: e.name }]),
+    ...(id !== S.page ? [{ label: br ? "Open branch" : "Open main", icon: br ? IC.fork : IC.board, onClick: () => go(id) }] : []),
+    { label: br ? "Create a branch of this" : "Create branch", icon: IC.fork, onClick: () => createBranch(id) },
+    ...(br && !e.archived ? [{ label: "Review and merge", icon: IC.check, onClick: () => openReview(id) }, { label: `Update from ${pageName(S.envs.get(e.parent))}`, icon: IC.restore, onClick: () => updateFromMain(id) }] : []),
     "-",
-    { label: "Place a screen", icon: IC.plus, onClick: () => (selectSection(id), fire("left-tab", "screens")) },
-    { label: "Present", icon: IC.play, disabled: !boardsOf(id).length, onClick: () => present(boardsOf(id)[0]?.id) },
+    { label: "Present", icon: IC.play, disabled: !boardsOf(id).length, onClick: () => (go(id), setTimeout(() => present(boardsOf(id)[0]?.id), 120)) },
     { label: "Share", icon: IC.share, onClick: () => openShare(id) },
     { label: "Rename", icon: IC.board, onClick: () => rename(id) },
     { label: "Copy folder path", icon: IC.folder, onClick: () => copyText(`${S.ws.root}/envs/${id}`) },
     { label: "Make an independent copy", icon: IC.copy, onClick: () => duplicateEnv(id) },
     "-",
-    ...(br ? [{ label: e.archived ? "Unarchive branch" : "Archive branch", onClick: () => api(`envs/${id}`, { method: "PATCH", body: { archived: !e.archived } }).then(loadWorkspace) }] : []),
-    { label: `Delete ${br ? "branch" : "prototype"}`, icon: IC.trash, danger: true, onClick: () => remove(id) },
+    ...(br ? [{ label: e.archived ? "Unarchive branch" : "Archive branch", onClick: () => fire(e.archived ? "unarchive" : "archive", id) }] : [{ label: "Close tab", onClick: () => closeTab(id) }]),
+    { label: `Delete ${name}`, icon: IC.trash, danger: true, onClick: () => remove(id) },
   ], { width: 256 });
 }
 async function duplicateEnv(id, version = null) {
@@ -216,9 +429,8 @@ async function duplicateEnv(id, version = null) {
     const env = await api(`envs/${id}/fork`, { method: "POST", body: { version, name: version ? `${src.name} V${version}` : undefined } });
     copyStorage(id, env.id);
     await loadWorkspace();
-    selectSection(env.id);
-    focusEnv(env.id);
-    toast(`Copied as ${env.name}`, "An independent copy, with no branch link back");
+    go(env.id);
+    toast(`Copied as ${env.name}`, "An independent prototype in its own tab, with no branch link back");
   } catch (e) {
     toast("Couldn't copy it", e.message);
   }
@@ -227,16 +439,20 @@ async function remove(id) {
   const env = S.envs.get(id);
   if (!env) return;
   try {
+    const parent = isBranch(env) ? env.parent : null;
+    const here = S.page === id;
     const { trash } = await api(`envs/${id}`, { method: "DELETE" });
     if (S.sel?.env === id) clearSel();
+    if (!parent) (S.tabs = S.tabs.filter((x) => x !== id)), store.set("ws-tabs", S.tabs);
     await loadWorkspace();
+    if (here) go(parent || "home");
     toast(`Deleted ${env.name}`, "It's in .workshop/trash until you empty it", {
       label: "Undo",
       fn: async () => {
         try {
           const back = await api("envs/restore", { method: "POST", body: { trash } });
           await loadWorkspace();
-          selectSection(back.id);
+          go(back.id);
         } catch (e) {
           toast("Couldn't restore it", e.message);
         }
@@ -258,6 +474,7 @@ function rename(id) {
       S.envs.set(id, await api(`envs/${id}`, { method: "PATCH", body: { name: v } }));
       closeModal();
       renderAll();
+      if (S.page) document.title = `${pageName(pageEnv())} · ${rootOf(S.page)?.name}`;
     } catch (e) {
       toast("Couldn't rename", e.message);
     }
@@ -313,7 +530,7 @@ function present(bid) {
   boardOf(bid)?.el.classList.add("presenting");
   setMode("prototype");
   const env = S.envs.get(it.env);
-  const bar = h(`<div class="prsbar float" role="toolbar" aria-label="Presenting"><span style="padding:0 8px 0 12px;font-weight:500;white-space:nowrap">${esc(env.name)} · ${esc(screenName(it))}</span><span class="tagro">${it.w} × ${it.h}</span><span class="vsep" style="width:1px;height:20px;background:var(--border-subtle);margin:0 4px"></span><button type="button" class="ghbtn sm" data-a="tab">${IC.ext}New tab</button><button type="button" class="createbtn sm" data-a="exit">Exit · Esc</button></div>`);
+  const bar = h(`<div class="prsbar" role="toolbar" aria-label="Presenting"><span style="padding:0 8px 0 12px;font-weight:500;white-space:nowrap">${esc(pageName(env))} · ${esc(screenName(it))}</span><span class="tagro">${it.w} × ${it.h}</span><span style="width:1px;height:20px;background:var(--border-subtle);margin:0 4px"></span><button type="button" class="ghbtn sm" data-a="tab">${IC.ext}New tab</button><button type="button" class="createbtn sm" data-a="exit">Exit · Esc</button></div>`);
   bar.querySelector('[data-a="tab"]').onclick = () => window.open(`/present/${it.env}/?screen=${encodeURIComponent(it.screen || "")}`, "_blank", "noopener");
   bar.querySelector('[data-a="exit"]').onclick = stopPresent;
   $("frame").append(bar);
@@ -349,8 +566,8 @@ document.addEventListener("keydown", (e) => presenting && e.key === "Escape" && 
 // ---------- share ----------
 async function openShare(id) {
   const env = S.envs.get(id);
-  if (!env) return toast("Select a prototype or branch to share");
-  const md = modal(`<div class="md-h"><div class="tt"><h2>Share ${esc(env.name)}</h2><p>People open it as the running app. Links can't change it.</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div><div class="md-b" id="shB"><div class="pempty" style="padding:0">Loading links</div></div><div class="md-f"><button type="button" class="createbtn" data-a="done">Done</button></div>`);
+  if (!env) return toast("Open a prototype to share it");
+  const md = modal(`<div class="md-h"><div class="tt"><h2>Share ${esc(isBranch(env) ? env.name : rootOf(env.id)?.name || env.name)}</h2><p>People open it as the running app. Links can't change it.</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div><div class="md-b" id="shB"><div class="pempty" style="padding:0">Loading links</div></div><div class="md-f"><button type="button" class="createbtn" data-a="done">Done</button></div>`);
   md.querySelector('[data-a="x"]').onclick = closeModal;
   md.querySelector('[data-a="done"]').onclick = closeModal;
   let role = "view";
@@ -472,7 +689,7 @@ function openConnect() {
 
 // ---------- import ----------
 function openImport() {
-  const md = modal(`<div class="md-h"><div class="tt"><h2>Import a prototype</h2><p>An HTML file becomes a prototype with its own section, branches and history.</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div>
+  const md = modal(`<div class="md-h"><div class="tt"><h2>Import a prototype</h2><p>An HTML file becomes a prototype with its own tab, branches and history.</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div>
   <div class="md-b">
     <div class="drop" id="imDrop" tabindex="0" role="button"><b>Drop an HTML file</b><span>or choose one from your computer</span><button type="button" class="dbtn" id="imPick">${IC.upload}Choose file</button></div>
     <div class="fld"><span class="lr">Or paste HTML<span class="hint">A whole document, e.g. an HTML artifact</span></span><textarea class="afld-ta" id="imHtml" style="min-height:120px;font-family:var(--mono);font-size:12px" placeholder="<!doctype html>…"></textarea></div>
@@ -511,8 +728,7 @@ function openImport() {
       if (!file) toast(`Added ${env.name}`, `Saved to envs/${env.id}/index.html`);
       closeModal();
       await loadWorkspace();
-      selectSection(env.id);
-      focusEnv(env.id);
+      go(env.id);
     } catch (e) {
       busy = false;
       toast("Couldn't import", e.message);
@@ -527,16 +743,20 @@ const openPal = () => ($("pal").classList.add("open"), ($("palIn").value = ""), 
 const closePal = () => $("pal").classList.remove("open");
 function paintPal() {
   const qv = $("palIn").value.trim().toLowerCase();
-  const env = selEnv();
+  const env = pageEnv();
+  const pid = protoId();
   const items = [
-    ...envList().filter((e) => !e.archived).map((e) => ({ label: e.name, k: isBranch(e) ? "Branch" : "Prototype", fn: () => (selectSection(e.id), focusEnv(e.id)) })),
-    ...itemsOf("board").map((b) => ({ label: `${S.envs.get(b.env)?.name || b.env} · ${screenName(b)}`, k: "Board", fn: () => (selectBoard(b.id), focusItem(b.id, { maxZ: 0.6 })) })),
-    ...(env?.catalog?.screens || []).map((s) => ({ label: `Place ${s.name}`, k: env.name, fn: () => placeScreen(env.id, s.name, S.placeState).then((it) => it && (selectBoard(it.id), focusItem(it.id, { maxZ: 0.6 }))) })),
-    ...(env ? [{ label: `Create a branch of ${env.name}`, k: "Action", fn: () => createBranch(env.id) }] : []),
+    ...(pid ? familyOf(pid).filter((x) => !x.env.archived).map((x) => ({ label: isBranch(x.env) ? x.env.name : `Main · ${x.env.name}`, k: isBranch(x.env) ? "Branch" : "Main", fn: () => go(x.env.id) })) : []),
+    ...roots().filter((e) => e.id !== pid).map((e) => ({ label: e.name, k: "Prototype", fn: () => go(e.id) })),
+    ...(env ? pageItems("board").map((b) => ({ label: screenName(b), k: "On this page", fn: () => (selectBoard(b.id), focusItem(b.id, { maxZ: 0.6 })) })) : []),
+    ...(env ? (env.catalog?.screens || rootOf(env.id)?.catalog?.screens || []).map((s) => ({ label: `Place ${s.name}`, k: "Screen", fn: () => placeScreen(env.id, s.name, S.placeState).then((it) => it && (selectBoard(it.id), focusItem(it.id, { maxZ: 0.6 }))) })) : []),
+    ...(env ? [{ label: `Create a branch of ${pageName(env)}`, k: "Action", fn: () => createBranch(env.id) }] : []),
+    ...(env && isBranch(env) && !env.archived ? [{ label: "Review and merge", k: "Action", fn: () => openReview(env.id) }, { label: S.compare ? "Hide compare" : `Compare with ${pageName(S.envs.get(env.parent))}`, k: "Action", fn: () => fire("compare") }] : []),
+    { label: "Ask an agent", k: "Action", fn: () => env && fire("ask-agent", {}) },
     { label: "Import HTML", k: "Action", fn: openImport },
     { label: "Connect an agent", k: "Action", fn: openConnect },
-    { label: "Zoom to fit", k: "Canvas", fn: () => fit() },
-    { label: "Show or hide panels", k: "Canvas", fn: toggleUi },
+    { label: "Go home", k: "Action", fn: () => go("home") },
+    ...(env ? [{ label: "Zoom to fit", k: "Canvas", fn: () => fit() }, { label: "Show or hide panels", k: "Canvas", fn: toggleUi }] : []),
   ];
   palItems = items.filter((x) => !qv || x.label.toLowerCase().includes(qv)).slice(0, 60);
   palIdx = 0;
@@ -544,7 +764,7 @@ function paintPal() {
   rs.replaceChildren();
   if (!palItems.length) rs.append(h(`<div class="none">Nothing matches "${esc(qv)}"</div>`));
   palItems.forEach((x, i) => {
-    const b = h(`<button type="button" role="option" class="${i === palIdx ? "on" : ""}">${x.k === "Branch" ? IC.fork : x.k === "Prototype" || x.k === "Board" ? IC.board : IC.chevr}<span class="l">${esc(x.label)}</span><span class="k">${esc(x.k)}</span></button>`);
+    const b = h(`<button type="button" role="option" class="${i === palIdx ? "on" : ""}">${x.k === "Branch" ? IC.fork : x.k === "Main" || x.k === "Prototype" ? IC.board : x.k === "On this page" || x.k === "Screen" ? IC.frame : IC.chevr}<span class="l">${esc(x.label)}</span><span class="k">${esc(x.k)}</span></button>`);
     b.onclick = () => (closePal(), x.fn());
     b.onpointerenter = () => setPal(i);
     rs.append(b);
@@ -593,6 +813,7 @@ function renameWorkspace() {
     if (!v) return;
     await api("workspace", { method: "PATCH", body: { name: v } }).catch((e) => toast("Couldn't rename", e.message));
     closeModal();
+    homeKey = "";
     loadWorkspace();
   };
   md.querySelector('[data-a="ok"]').onclick = ok;
@@ -613,28 +834,48 @@ async function onEvent(ev) {
     S.diffs.delete(ev.id);
     for (const e of envList()) if (e.parent === ev.id) S.diffs.delete(e.id);
     reloadEnv(ev.id, ev.files || []);
+    if (S.view === "home") return renderHome();
+    const fam = new Set(familyOf(protoId()).map((x) => x.env.id));
+    if (fam.has(ev.id)) {
+      loadDiff(ev.id);
+      for (const e of envList()) if (e.parent === ev.id) loadDiff(e.id);
+    }
     renderLeft();
-    if (selEnvId() === ev.id) renderRight();
+    if (ev.id === S.page) (renderRight(), renderBanner());
     return;
   }
   if (ev.kind === "tasks") return loadTasks();
   if (ev.kind === "comments") return loadComments();
-  if (ev.kind === "versions") return selEnvId() && loadVersions(selEnvId());
+  if (ev.kind === "versions") return S.page && loadVersions(S.page);
   if (ev.kind === "harness") {
     const ws = await api("workspace").catch(() => null);
-    if (ws) ((S.ws.harnesses = ws.harnesses), renderWho(), renderRight());
+    if (ws) ((S.ws.harnesses = ws.harnesses), renderWho(), renderAgent(), S.view === "proto" && renderLeft());
+  }
+}
+
+async function patchArchived(id, archived) {
+  const e = S.envs.get(id);
+  try {
+    await api(`envs/${id}`, { method: "PATCH", body: { archived } });
+    await loadWorkspace();
+    if (archived) toast(`Archived ${e?.name}`, "Find it under Show merged in Branches", { label: "Undo", fn: () => patchArchived(id, false) });
+  } catch (er) {
+    toast("Couldn't change that", er.message);
   }
 }
 
 async function boot() {
-  const hadCam = initCanvas();
+  initCanvas();
   initPanels();
+  S.tabs = store.get("ws-tabs", []);
+  if (!Array.isArray(S.tabs)) S.tabs = [];
   $("wsBtn").onclick = wsMenu;
-  $("wsBtn").onkeydown = (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), wsMenu());
   $("uiToggle").onclick = toggleUi;
-  $("shareBtn").onclick = () => openShare(selEnvId() || visibleEnvs()[0]?.id);
-  $("presentBtn").onclick = () => present(S.sel?.item && S.items.get(S.sel.item)?.type === "board" ? S.sel.item : boardsOf(selEnvId() || visibleEnvs()[0]?.id)[0]?.id);
-  $("cvImport").onclick = openImport;
+  $("agentBtn").onclick = openConnect;
+  $("askBtn").onclick = () => fire("ask-agent", {});
+  $("shareBtn").onclick = () => openShare(S.page);
+  $("presentBtn").onclick = () => present(S.sel?.kind === "board" ? S.sel.item : pageItems("board")[0]?.id);
+  $("cvScreens").onclick = () => fire("left-tab", "screens");
   $("palIn").oninput = paintPal;
   $("palIn").onkeydown = (e) => {
     if (e.key === "ArrowDown") (e.preventDefault(), setPal(Math.min(palItems.length - 1, palIdx + 1)));
@@ -646,12 +887,32 @@ async function boot() {
   document.addEventListener("keydown", (e) => {
     const mod = e.metaKey || e.ctrlKey;
     if (mod && (e.key === "k" || e.key === "K")) return e.preventDefault(), $("pal").classList.contains("open") ? closePal() : openPal();
+    if (S.view !== "proto") return;
     if (mod && e.key === "\\") return e.preventDefault(), toggleUi();
     if (mod && !e.shiftKey && (e.key === "z" || e.key === "Z") && !isTyping(e.target)) {
       e.preventDefault();
       undoStyle().then((did) => !did && toast("Nothing to undo", "Style edits from the inspector undo here; everything else has its own Undo"));
     }
   });
+  window.addEventListener("hashchange", applyRoute);
+  on("go", go);
+  on("go-item", (id) => {
+    const it = S.items.get(id);
+    if (!it) return;
+    const pg = pageOf(it);
+    if (pg && pg !== S.page) go(pg);
+    setTimeout(() => (selectItem(id), it.type !== "arrow" && focusItem(id, { maxZ: 0.8 })), pg !== S.page ? 360 : 0);
+  });
+  on("open-proto", async (id) => (await loadWorkspace(), go(id)));
+  on("compare", () => {
+    S.compare = !S.compare;
+    sync();
+    renderBanner();
+    renderRight();
+    requestAnimationFrame(() => fitRect(pageBounds(), { maxZ: 0.6 }));
+  });
+  on("archive", (id) => patchArchived(id, true));
+  on("unarchive", (id) => patchArchived(id, false));
   on("branch", createBranch);
   on("review", openReview);
   on("update-from-main", updateFromMain);
@@ -667,29 +928,32 @@ async function boot() {
   on("save-version", saveVersion);
   on("restore-version", restoreVersion);
   on("reload-workspace", loadWorkspace);
-  on("items-changed", () => (renderLeft(), S.rightTab === "comments" && renderRight()));
+  on("items-changed", () => (renderLeft(), renderBanner()));
   on("remove-item", (id) => {
     selectItem(id);
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
   });
   on("open-thread", (id) => {
     const c = S.comments.find((x) => x.id === id);
-    const b = c && ((c.board && S.items.get(c.board)) || boardsOf(c.env)[0]);
-    if (b) focusItem(b.id, { maxZ: 0.6 });
-    setTimeout(() => openThread(id), 360);
+    if (!c) return;
+    const away = c.env !== S.page;
+    if (away) go(c.env);
+    setTimeout(() => {
+      const b = (c.board && S.items.get(c.board)) || pageItems("board")[0];
+      if (b) focusItem(b.id, { maxZ: 0.6 });
+      setTimeout(() => openThread(id), 360);
+    }, away ? 300 : 0);
   });
   on("comments-changed", async (d) => {
     await loadComments();
     if (d?.reopen) openThread(d.reopen);
   });
   on("tasks-changed", async (d) => {
-    if (d?.created && d.created.env !== selEnvId()) {
-      // the request opened a branch: show it next to where it came from
+    if (d?.created && d.created.env !== S.page) {
+      // the request opened a branch: go to its page, where the agent will work
       await loadWorkspace();
-      selectSection(d.created.env);
-      const e = S.envs.get(d.created.env);
-      requestAnimationFrame(() => fitRect(boundsOfEnvs([e?.parent, d.created.env].filter(Boolean))));
-      fire("ask-agent", {});
+      go(d.created.env);
+      setTimeout(() => fire("ask-agent", {}), 200);
     }
     loadTasks();
   });
@@ -700,13 +964,17 @@ async function boot() {
     return;
   }
   await Promise.all([loadComments(), loadTasks()]);
-  for (const e of envList()) if (isBranch(e) && !e.archived) loadDiff(e.id).then(renderLeft);
-  if (!hadCam) requestAnimationFrame(() => fit({ ms: 0, maxZ: 0.5 }));
+  // a fresh visit picks up where this browser left off
+  if (!location.hash || location.hash === "#") {
+    const last = store.get("ws-route", "");
+    if (typeof last === "string" && last.startsWith("#/p/")) history.replaceState(null, "", last);
+  }
+  applyRoute();
   events(onEvent);
   setInterval(() => api("workspace").then((ws) => {
     const before = JSON.stringify(S.ws?.harnesses?.map((x) => x.client));
     S.ws.harnesses = ws.harnesses;
-    if (JSON.stringify(ws.harnesses.map((x) => x.client)) !== before) (renderWho(), renderRight());
+    if (JSON.stringify(ws.harnesses.map((x) => x.client)) !== before) (renderWho(), renderAgent(), S.view === "proto" && renderLeft());
   }).catch(() => {}), 20000);
 }
 

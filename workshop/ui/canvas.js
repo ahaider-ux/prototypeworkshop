@@ -1,17 +1,19 @@
-// The canvas. Boards are live pages (a prototype at one screen) at their real size; each
-// prototype's boards sit in a section, and every branch has a section of its own, joined to its
-// parent by a lineage line. Notes, highlight boxes, arrows and comment pins annotate any of it.
-// Design mode puts a hit layer over each board to select elements inside it; Prototype mode hands
-// the pointer to the page.
+// The canvas shows one page: a prototype's main, or one of its branches. Boards are live pages (the
+// prototype at one screen) at their real size, titled like frames in a design tool. Notes,
+// highlight boxes, arrows and comment pins annotate the page. On a branch, Compare puts main's
+// screens above the branch's, live. Design mode puts a hit layer over each board to select elements
+// inside it; Interact hands the pointer to the page.
 
-import { S, on, fire, visibleEnvs, boardsOf, itemsOf, isBranch, screenName } from "./state.js";
+import { S, on, fire, itemsOf, isBranch, screenName, pageItems, pageEnv } from "./state.js";
 import { $, h, esc, clamp, frScale, api, toast, IC, menu, rmo, timeAgo } from "./lib.js";
 
 const B = new Map(); // board item id → {id, env, el, frame, hit, ready, loaded}
 const NEL = new Map(); // note/box item id → element
-const SEC = new Map(); // env id → section element (world)
-const HUD = { heads: new Map(), labels: new Map(), alabels: new Map(), pins: new Map(), sel: null, hover: null, handles: [], draft: null };
-let cv, world, hud, lines, wires, secLayer, boardLayer, noteLayer;
+const GH = new Map(); // compare boards: main's screens above a branch's, not saved anywhere
+const HUD = { labels: new Map(), alabels: new Map(), pins: new Map(), sel: null, hover: null, size: null, handles: [], draft: null };
+let cv, world, hud, wires, boardLayer, noteLayer, rulerH, rulerV;
+const RULER = 20;
+const KEEP_LOADED = 24; // boards of other pages stay loaded so switching back is instant, up to this many
 let pop = null;
 let dirty = true;
 let lastZ = 0;
@@ -44,7 +46,9 @@ export const rt = (id) => {
 };
 export const markDirty = () => (dirty = true);
 export const isDragging = () => !!drag;
-const item = (id) => S.items.get(id);
+const item = (id) => S.items.get(id) || GH.get(id);
+export const isGhost = (id) => GH.has(id);
+const pageBoards = () => [...pageItems("board"), ...GH.values()];
 
 // ---------- coordinates ----------
 function local(e) {
@@ -55,16 +59,16 @@ function local(e) {
 export const toWorld = (p) => ({ x: (p.x - S.cam.x) / S.cam.z, y: (p.y - S.cam.y) / S.cam.z });
 export const toScreen = (w) => ({ x: w.x * S.cam.z + S.cam.x, y: w.y * S.cam.z + S.cam.y });
 
-// the part of the canvas the floating panels don't cover
+// the part of the canvas the rulers, the page banner and the toolbar don't cover
 export function viewRect() {
-  const app = $("frame");
-  const off = app.classList.contains("ui-off") || app.classList.contains("present");
-  return { x0: off ? 0 : 288, y0: 0, x1: cv.clientWidth - (off ? 0 : 328), y1: cv.clientHeight - (app.classList.contains("present") ? 0 : 72) };
+  if ($("frame").classList.contains("present")) return { x0: 0, y0: 0, x1: cv.clientWidth, y1: cv.clientHeight };
+  const banner = $("banner").childElementCount ? 80 : RULER;
+  return { x0: RULER, y0: banner, x1: cv.clientWidth, y1: cv.clientHeight - 72 };
 }
 
 function boardAtPoint(p) {
   const w = toWorld(p);
-  for (const b of [...itemsOf("board")].reverse()) if (w.x >= b.x && w.x <= b.x + b.w && w.y >= b.y && w.y <= b.y + b.h) return b;
+  for (const b of [...pageItems("board")].reverse()) if (w.x >= b.x && w.x <= b.x + b.w && w.y >= b.y && w.y <= b.y + b.h) return b;
   return null;
 }
 function elAt(id, p) {
@@ -90,13 +94,38 @@ function applyCam() {
   saveCam();
 }
 let camT = 0;
+// each page keeps its own view, in this browser
+function cams() {
+  try {
+    const c = JSON.parse(localStorage.getItem("ws-cams") || "{}");
+    return c && typeof c === "object" ? c : {};
+  } catch {
+    return {};
+  }
+}
 function saveCam() {
   clearTimeout(camT);
+  const page = S.page;
+  if (!page || S.presenting) return;
+  const cam = { ...S.cam };
   camT = setTimeout(() => {
     try {
-      localStorage.setItem("ws-cam2", JSON.stringify(S.cam));
+      const c = cams();
+      c[page] = cam;
+      const keys = Object.keys(c);
+      if (keys.length > 200) delete c[keys[0]];
+      localStorage.setItem("ws-cams", JSON.stringify(c));
     } catch {}
   }, 300);
+}
+// the view this page had last time, if any
+export function restoreCam(page) {
+  const c = cams()[page];
+  if (!c || ![c.x, c.y, c.z].every(Number.isFinite)) return false;
+  cancelAnimationFrame(tween);
+  Object.assign(S.cam, { x: c.x, y: c.y, z: clamp(c.z, MINZ, MAXZ) });
+  applyCam();
+  return true;
 }
 let tween = 0;
 function camTo(target, ms = 320) {
@@ -150,78 +179,83 @@ export function fitRect(r, { ms = 320, maxZ = 1, pad = 48 } = {}) {
   camTo({ z, x: v.x0 + pad + (vw - (r.x1 - r.x0) * z) / 2 - r.x0 * z, y: v.y0 + pad + (vh - (r.y1 - r.y0) * z) / 2 - r.y0 * z }, ms);
 }
 export function fit(opts) {
-  const rs = [...visibleEnvs().map((e) => sectionRect(e.id)).filter(Boolean), ...itemsOf("note").map(noteRect), ...itemsOf("box")];
-  fitRect(rectsBounds(rs), opts);
+  fitRect(pageBounds(), { maxZ: 0.6, ...opts });
 }
-export function focusEnv(id, opts) {
-  fitRect(rectsBounds([sectionRect(id)].filter(Boolean)), opts);
+// Notes are counter-scaled so they stay readable when zoomed out: size them for the zoom the boards
+// alone would fit at, or a fit would cut them off.
+export function pageBounds() {
+  const v = viewRect();
+  const zOf = (r) => (r ? clamp(Math.min((v.x1 - v.x0 - 96) / (r.x1 - r.x0 || 1), (v.y1 - v.y0 - 96) / (r.y1 - r.y0 || 1), 0.6), MINZ, MAXZ) : 1);
+  let r = rectsBounds([...pageBoards(), ...pageItems("box")]);
+  if (!pageItems("note").length) return r;
+  for (let i = 0; i < 4; i++) {
+    const k = clamp(10 / (16 * zOf(r)), 1, 4);
+    r = rectsBounds([...pageBoards(), ...pageItems("box"), ...pageItems("note").map((n) => ({ x: n.x, y: n.y, w: n.w * k, h: 140 * k }))]);
+  }
+  return r;
 }
 export function focusItem(id, opts) {
   const it = item(id);
   if (!it) return;
   if (it.type === "arrow") return;
-  fitRect(rectsBounds([it.type === "note" ? noteRect(it) : it]), { maxZ: it.type === "board" ? 1 : 1, ...opts });
+  fitRect(rectsBounds([it.type === "note" ? noteRect(it) : it]), { maxZ: 1, ...opts });
 }
 const noteRect = (n) => ({ x: n.x, y: n.y, w: n.w, h: 140 });
 
-// ---------- sections: one per prototype or branch ----------
-export function envBounds(env) {
-  return rectsBounds(boardsOf(env));
-}
-// Fixed in world units so sections never run into each other; lanes are LANE_GAP apart (server).
-function pads() {
-  return { top: 200, side: 64, bottom: 64 };
-}
-export function sectionRect(env) {
-  const b = envBounds(env);
-  if (!b) return null;
-  const p = pads();
-  return { x: b.x0 - p.side, y: b.y0 - p.top, w: b.x1 - b.x0 + p.side * 2, h: b.y1 - b.y0 + p.top + p.bottom };
+export function isVisible(id) {
+  const it = item(id);
+  if (!it) return false;
+  const v = viewRect(),
+    a = toScreen(it);
+  return a.x < v.x1 && a.y < v.y1 && a.x + (it.w || 0) * S.cam.z > v.x0 && a.y + (it.h || 140) * S.cam.z > v.y0;
 }
 
 // ---------- render ----------
+function buildGhosts() {
+  GH.clear();
+  const env = pageEnv();
+  if (!S.compare || !isBranch(env)) return;
+  for (const b of pageItems("board")) GH.set(`cmp-${b.id}`, { id: `cmp-${b.id}`, type: "board", env: env.parent, screen: b.screen, state: b.state, x: b.x, y: b.y - b.h - 240, w: b.w, h: b.h, ghost: true, of: b.id });
+}
 export function sync() {
-  const envIds = new Set(visibleEnvs().map((e) => e.id));
-  // boards
+  buildGhosts();
+  const want = new Set(pageBoards().map((b) => b.id));
+  // boards: this page's are shown; other pages' stay loaded, hidden, so switching back is instant
   for (const [id, b] of B) {
     const it = item(id);
-    if (!it || !envIds.has(it.env)) {
+    if (!it || (!want.has(id) && (B.size > KEEP_LOADED || id.startsWith("cmp-")))) {
       b.el.remove();
       B.delete(id);
       HUD.labels.get(id)?.remove();
       HUD.labels.delete(id);
+      continue;
     }
+    b.el.hidden = !want.has(id);
   }
-  for (const it of itemsOf("board")) {
-    if (!envIds.has(it.env)) continue;
+  for (const it of pageBoards()) {
     let b = B.get(it.id);
     if (!b) b = makeBoard(it);
+    b.el.hidden = false;
     b.el.style.left = it.x + "px";
     b.el.style.top = it.y + "px";
     b.el.style.width = it.w + "px";
     b.el.style.height = it.h + "px";
     b.frame.title = `${S.envs.get(it.env)?.name || it.env} · ${screenName(it)}`;
-    const want = boardSrc(it);
-    if (b.loaded && b.src !== want && b.srcStale !== want) b.srcStale = want; // takes effect on the next reload
+    const next = boardSrc(it);
+    if (b.loaded && b.src !== next && b.srcStale !== next) b.srcStale = next; // takes effect on the next reload
   }
-  // sections
-  for (const [id, el] of SEC) if (!envIds.has(id) || !boardsOf(id).length) (el.remove(), SEC.delete(id), HUD.heads.get(id)?.remove(), HUD.heads.delete(id));
-  for (const env of visibleEnvs()) {
-    if (!boardsOf(env.id).length) continue;
-    if (!SEC.has(env.id)) {
-      const el = h(`<div class="sect" data-env="${esc(env.id)}"></div>`);
-      secLayer.append(el);
-      SEC.set(env.id, el);
-    }
-  }
-  // notes and boxes
-  for (const [id, el] of NEL) if (!S.items.has(id)) (el.remove(), NEL.delete(id));
-  for (const it of [...itemsOf("note"), ...itemsOf("box")]) {
+  // notes and boxes on this page
+  const anns = [...pageItems("note"), ...pageItems("box")];
+  const live = new Set(anns.map((a) => a.id));
+  for (const [id, el] of NEL) if (!live.has(id)) (el.remove(), NEL.delete(id));
+  const boxes = pageItems("box");
+  for (const it of anns) {
     let el = NEL.get(it.id);
     if (!el) {
       el = it.type === "note" ? h(`<div class="note" data-item="${esc(it.id)}"><div class="tx"></div><div class="by"></div></div>`) : h(`<div class="box" data-item="${esc(it.id)}"><span class="lb"><i></i><span></span></span></div>`);
       noteLayer.append(el);
       NEL.set(it.id, el);
+      lastZ = 0; // counter-scale the new one on the next frame
     }
     el.style.left = it.x + "px";
     el.style.top = it.y + "px";
@@ -234,12 +268,11 @@ export function sync() {
     } else {
       el.style.width = it.w + "px";
       el.style.height = it.h + "px";
-      const n = itemsOf("box").indexOf(it) + 1;
-      el.querySelector(".lb i").textContent = String(n);
+      el.querySelector(".lb i").textContent = String(boxes.indexOf(it) + 1);
       el.querySelector(".lb span").textContent = it.label || "Highlight";
     }
   }
-  $("cvEmpty").hidden = itemsOf("board").length > 0 || S.items.size > 0;
+  $("cvEmpty").hidden = !S.page || pageBoards().length > 0 || anns.length > 0;
   dirty = true;
 }
 
@@ -252,7 +285,7 @@ function boardSrc(it) {
 
 function makeBoard(it) {
   const env = S.envs.get(it.env);
-  const el = h(`<div class="bd" data-item="${esc(it.id)}"><iframe title="${esc(env?.name || it.env)}" allow="clipboard-read; clipboard-write; fullscreen"></iframe><div class="boot">${esc(screenName(it))}</div><div class="hit"></div></div>`);
+  const el = h(`<div class="bd${it.ghost ? " ghost" : ""}" data-item="${esc(it.id)}"><iframe title="${esc(env?.name || it.env)}" allow="clipboard-read; clipboard-write; fullscreen"></iframe><div class="boot">${esc(screenName(it))}</div><div class="hit"></div></div>`);
   const b = { id: it.id, el, frame: el.querySelector("iframe"), hit: el.querySelector(".hit"), ready: false, loaded: false, src: "" };
   b.frame.addEventListener("load", () => b.loaded && onBoardLoad(b));
   boardLayer.append(el);
@@ -265,7 +298,7 @@ function loadVisible() {
   const v = viewRect();
   const m = 600;
   for (const [id, b] of B) {
-    if (b.loaded) continue;
+    if (b.loaded || b.el.hidden) continue;
     const it = item(id);
     if (!it) continue;
     const a = toScreen(it),
@@ -293,7 +326,7 @@ function onBoardLoad(b) {
     }, true);
     d.addEventListener("keyup", onKeyUp, true);
     d.addEventListener("pointerdown", () => {
-      if (S.mode === "prototype" && S.sel?.item !== b.id) selectBoard(b.id, { quiet: true });
+      if (S.mode === "prototype" && S.sel?.item !== b.id && !GH.has(b.id)) selectBoard(b.id, { quiet: true });
     }, true);
   }
   // the page was served with the settings of that moment; they may have changed while it loaded
@@ -407,14 +440,13 @@ function setSel(sel, quiet) {
   pushSelection();
   fire("sel", { quiet });
 }
-export const selectSection = (env, { quiet = false } = {}) => S.envs.has(env) && setSel({ kind: "section", env }, quiet);
 export function selectBoard(id, { quiet = false } = {}) {
   const it = item(id);
-  if (it) setSel({ kind: "board", item: id, env: it.env }, quiet);
+  if (it && !it.ghost) setSel({ kind: "board", item: id, env: it.env }, quiet);
 }
 export function selectEl(id, el, { quiet = false } = {}) {
   const it = item(id);
-  if (!it) return;
+  if (!it || it.ghost) return;
   const info = rt(id)?.describe(el) || { tag: el.localName, label: el.localName, selector: el.localName, exactSelector: el.localName, matches: 1, styles: {}, rect: {} };
   setSel({ kind: "el", item: id, env: it.env, el, info }, quiet);
 }
@@ -451,10 +483,7 @@ export function setMode(m) {
   S.mode = m;
   cv.classList.toggle("mode-design", m === "design");
   cv.classList.toggle("mode-prototype", m === "prototype");
-  for (const b of document.querySelectorAll("#modeSeg button")) {
-    b.classList.toggle("on", b.dataset.mode === m);
-    b.setAttribute("aria-checked", String(b.dataset.mode === m));
-  }
+  $("interactBtn").setAttribute("aria-pressed", String(m === "prototype"));
   if (m === "prototype") {
     setHover(null, null);
     if (S.sel?.kind === "el") selectBoard(S.sel.item, { quiet: true });
@@ -519,7 +548,7 @@ const noteScale = () => clamp(10 / (16 * S.cam.z), 1, 4);
 
 function drawWires() {
   const want = new Set();
-  for (const a of itemsOf("arrow")) {
+  for (const a of pageItems("arrow")) {
     const e = arrowEnds(a);
     if (!e) continue;
     want.add(a.id);
@@ -551,76 +580,89 @@ function drawWires() {
   for (const [id, l] of HUD.alabels) if (!want.has(id)) (l.remove(), HUD.alabels.delete(id));
 }
 
-function drawSections() {
-  const svg = [];
-  const rects = new Map();
-  for (const env of visibleEnvs()) {
-    const r = sectionRect(env.id);
-    const el = SEC.get(env.id);
-    if (!r || !el) continue;
-    rects.set(env.id, r);
-    el.style.left = r.x + "px";
-    el.style.top = r.y + "px";
-    el.style.width = r.w + "px";
-    el.style.height = r.h + "px";
-    const on = (S.sel?.env || item(S.sel?.item)?.env) === env.id;
-    el.className = `sect${isBranch(env) ? " branch" : ""}${on ? " on" : ""}${env.archived ? " merged" : ""}`;
-    // the header: name, lineage and what to do with it
-    let hd = HUD.heads.get(env.id);
-    if (!hd) {
-      hd = h(`<div class="shead" data-env="${esc(env.id)}"><span class="g"></span><b></b><span class="meta"></span><span class="acts"></span></div>`);
-      hud.append(hd);
-      HUD.heads.set(env.id, hd);
+// ---------- rulers ----------
+let rKey = "";
+let rCol = null;
+function rulerColors() {
+  const theme = document.documentElement.getAttribute("data-ltheme");
+  if (rCol?.theme === theme) return rCol;
+  const cs = getComputedStyle(document.documentElement);
+  const v = (n) => cs.getPropertyValue(n).trim();
+  return (rCol = { theme, tick: v("--border-default"), text: v("--text-secondary"), band: v("--accent-subtle"), edge: v("--text-accent") });
+}
+function selWorldRect() {
+  const s = S.sel;
+  if (!s) return null;
+  if (s.kind === "el") {
+    const r = elScreenRect(s.item, s.el);
+    if (!r) return null;
+    const a = toWorld(r);
+    return { x0: a.x, y0: a.y, x1: a.x + r.w / S.cam.z, y1: a.y + r.h / S.cam.z };
+  }
+  const it = item(s.item);
+  if (!it || it.type === "arrow") return null;
+  const r = it.type === "note" ? noteRect(it) : it;
+  return { x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h };
+}
+function drawRulers() {
+  const sr = selWorldRect();
+  const col = rulerColors();
+  const key = [S.cam.x.toFixed(1), S.cam.y.toFixed(1), S.cam.z.toFixed(5), cv.clientWidth, cv.clientHeight, col.theme, sr ? [sr.x0, sr.y0, sr.x1, sr.y1].map(Math.round).join(",") : ""].join("|");
+  if (key === rKey) return;
+  rKey = key;
+  const z = S.cam.z;
+  const step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000].find((x) => x * z >= 64) || 50000;
+  const minor = step * z >= 120 ? step / 10 : step / 5;
+  const dpr = window.devicePixelRatio || 1;
+  for (const [el, horiz] of [
+    [rulerH, true],
+    [rulerV, false],
+  ]) {
+    const w = el.clientWidth,
+      hh = el.clientHeight;
+    if (!w || !hh) continue;
+    if (el.width !== Math.round(w * dpr) || el.height !== Math.round(hh * dpr)) (el.width = Math.round(w * dpr)), (el.height = Math.round(hh * dpr));
+    const c = el.getContext("2d");
+    if (!c) continue;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, w, hh);
+    const off = (horiz ? S.cam.x : S.cam.y) - RULER; // each ruler starts RULER px into the canvas
+    const len = horiz ? w : hh;
+    if (sr) {
+      // the selection's extent, as in a design tool
+      const a = (horiz ? sr.x0 : sr.y0) * z + off,
+        b = (horiz ? sr.x1 : sr.y1) * z + off;
+      c.fillStyle = col.band;
+      horiz ? c.fillRect(a, 0, b - a, hh) : c.fillRect(0, a, w, b - a);
+      c.fillStyle = col.edge;
+      horiz ? (c.fillRect(a, 0, 1, hh), c.fillRect(b - 1, 0, 1, hh)) : (c.fillRect(0, a, w, 1), c.fillRect(0, b - 1, w, 1));
     }
-    const s = screenRect(r);
-    // inside the section's top band when it fits, just above the section when zoomed far out
-    const inside = pads().top * S.cam.z >= 52;
-    hd.style.left = s.x + (inside ? 12 : 0) + "px";
-    hd.style.top = s.y + (inside ? 12 : -40) + "px";
-    hd.style.maxWidth = Math.max(560, s.w - 24) + "px"; // a one-board section still gets a readable header
-    hd.classList.toggle("on", on);
-    const branch = isBranch(env);
-    const parent = branch ? S.envs.get(env.parent) : null;
-    const d = S.diffs.get(env.id);
-    const key = `${env.name}|${branch}|${parent?.name}|${env.archived}|${d ? `${d.changes.length}/${d.conflicts}/${d.behind}` : ""}|${on}`;
-    if (hd._k !== key) {
-      hd._k = key;
-      hd.querySelector(".g").innerHTML = branch ? IC.fork : IC.board;
-      hd.querySelector("b").textContent = env.name;
-      hd.querySelector(".meta").textContent = env.archived && env.mergedAt ? `Merged into ${S.envs.get(env.mergedInto)?.name || "its parent"} · ${timeAgo(env.mergedAt)}` : branch ? `Branch of ${parent.name}${d ? ` · ${d.changes.length ? `${d.changes.length} change${d.changes.length === 1 ? "" : "s"}` : "no changes yet"}${d.conflicts ? ` · ${d.conflicts} conflict${d.conflicts === 1 ? "" : "s"}` : ""}` : ""}` : `${boardsOf(env.id).length} screen${boardsOf(env.id).length === 1 ? "" : "s"}`;
-      const acts = hd.querySelector(".acts");
-      acts.replaceChildren();
-      if (branch && !env.archived) {
-        const rv = h(`<button type="button" class="dbtn sm">Review and merge</button>`);
-        rv.onclick = (e) => (e.stopPropagation(), fire("review", env.id));
-        acts.append(rv);
+    c.font = '500 10px "Geist Mono", ui-monospace, monospace';
+    c.textBaseline = "top";
+    const i0 = Math.floor(-off / z / minor),
+      i1 = Math.ceil((len - off) / z / minor);
+    // Guard: a corrupt camera could ask for millions of ticks; a ruler never needs more than a few hundred.
+    if (!Number.isFinite(i0) || !Number.isFinite(i1) || i1 - i0 > 2000) continue;
+    for (let i = i0; i <= i1; i++) {
+      const v = i * minor;
+      const p = Math.round(v * z + off) + 0.5;
+      const major = Math.abs(v / step - Math.round(v / step)) < 1e-6;
+      c.fillStyle = col.tick;
+      const tl = major ? 8 : 4;
+      horiz ? c.fillRect(p, hh - tl, 1, tl) : c.fillRect(w - tl, p, tl, 1);
+      if (!major) continue;
+      c.fillStyle = col.text;
+      const label = String(Math.round(v));
+      if (horiz) c.fillText(label, p + 4, 4);
+      else {
+        c.save();
+        c.translate(4, p - 4);
+        c.rotate(-Math.PI / 2);
+        c.fillText(label, 0, 0);
+        c.restore();
       }
-      if (!env.archived) {
-        const br = h(`<button type="button" class="ghbtn sm" data-tip="Create branch">${IC.fork}Branch</button>`);
-        br.onclick = (e) => (e.stopPropagation(), fire("branch", env.id));
-        acts.append(br);
-      }
-      const mo = h(`<button type="button" class="ib24" aria-label="More for ${esc(env.name)}" aria-haspopup="menu">${IC.more}</button>`);
-      mo.onclick = (e) => (e.stopPropagation(), fire("env-menu", { anchor: mo, env: env.id }));
-      acts.append(mo);
     }
   }
-  // lineage: an elbow from the parent's section to each branch's
-  for (const env of visibleEnvs()) {
-    if (!isBranch(env) || !rects.has(env.id) || !rects.has(env.parent)) continue;
-    const pr = screenRect(rects.get(env.parent)),
-      cr = screenRect(rects.get(env.id));
-    const off = pads().top * S.cam.z >= 52 ? 28 : -24;
-    const y0 = pr.y + off,
-      y1 = cr.y + off;
-    const x = Math.min(pr.x, cr.x) - 24;
-    const on = [env.id, env.parent].includes(S.sel?.env || item(S.sel?.item)?.env);
-    const r = Math.min(10, Math.abs(y1 - y0) / 2);
-    const dir = y1 > y0 ? 1 : -1;
-    svg.push(`<path class="${on ? "on" : ""}" d="M${pr.x} ${y0} H${x + r} Q${x} ${y0} ${x} ${y0 + r * dir} V${y1 - r * dir} Q${x} ${y1} ${x + r} ${y1} H${cr.x}"/><circle class="${on ? "on" : ""}" cx="${pr.x}" cy="${y0}" r="4"/><circle class="${on ? "on" : ""}" cx="${cr.x}" cy="${y1}" r="4"/>`);
-  }
-  for (const [id, hd] of HUD.heads) if (!rects.has(id)) (hd.remove(), HUD.heads.delete(id));
-  lines.innerHTML = svg.join("");
 }
 
 export function drawHud() {
@@ -633,36 +675,40 @@ export function drawHud() {
       else el.querySelector(".lb").style.transform = `translateY(-100%) scale(${clamp(12 / (14 * S.cam.z), 1, 6)})`;
     }
   }
-  drawSections();
   drawWires();
-  // board labels
+  drawRulers();
+  // frame titles
   const live = new Set();
-  for (const it of itemsOf("board")) {
+  const par = GH.size ? S.envs.get(pageEnv()?.parent) : null;
+  const parentName = par ? (isBranch(par) ? par.name : "Main") : "";
+  for (const it of pageBoards()) {
     if (!B.has(it.id)) continue;
     live.add(it.id);
     let l = HUD.labels.get(it.id);
     if (!l) {
-      l = h(`<div class="blabel" data-item="${esc(it.id)}"><span class="n"></span><span class="m"></span><span class="flash"></span></div>`);
+      l = h(`<div class="blabel" data-item="${esc(it.id)}"><span class="g"></span><span class="n"></span><span class="flash"></span></div>`);
       hud.append(l);
       HUD.labels.set(it.id, l);
     }
     const s = screenRect(it);
     l.style.left = s.x + "px";
     l.style.top = s.y + "px";
-    l.style.maxWidth = Math.max(120, s.w) + "px";
+    l.style.maxWidth = Math.max(80, s.w) + "px";
+    const g = it.ghost ? parentName.toUpperCase().slice(0, 32) : GH.size ? "THIS BRANCH" : "";
+    if (l.querySelector(".g").textContent !== g) l.querySelector(".g").textContent = g;
     const n = `${screenName(it)}${it.state && it.state !== "Default" ? ` · ${it.state}` : ""}`;
     if (l.querySelector(".n").textContent !== n) l.querySelector(".n").textContent = n;
-    const m = `${it.w} × ${it.h}`;
-    if (l.querySelector(".m").textContent !== m) l.querySelector(".m").textContent = m;
     l.classList.toggle("on", S.sel?.item === it.id);
-    l.hidden = s.w < 110;
+    l.classList.toggle("ghost", !!it.ghost);
+    l.hidden = s.w < 64;
   }
   for (const [id, l] of HUD.labels) if (!live.has(id)) (l.remove(), HUD.labels.delete(id));
   // selection
   if (!HUD.sel) {
     HUD.sel = h(`<div class="selbox"><span class="tag"></span></div>`);
     HUD.hover = h(`<div class="selbox hover"></div>`);
-    hud.append(HUD.sel, HUD.hover);
+    HUD.size = h(`<span class="sizetag"></span>`);
+    hud.append(HUD.sel, HUD.hover, HUD.size);
     for (const k of ["e", "s", "se"]) {
       const d = h(`<div class="hdl ${k}" data-h="${k}"></div>`);
       hud.append(d);
@@ -673,15 +719,21 @@ export function drawHud() {
   let selRect = null;
   if (s?.kind === "board" && item(s.item)) {
     selRect = screenRect(item(s.item));
-    HUD.sel.classList.add("board");
     placeBox(HUD.sel, selRect, null);
   } else if (s?.kind === "el" && S.mode === "design") {
     selRect = elScreenRect(s.item, s.el);
-    HUD.sel.classList.remove("board");
     placeBox(HUD.sel, selRect, selRect ? `${s.info?.label || s.el.localName}  ${selRect.rw}×${selRect.rh}` : null);
   } else placeBox(HUD.sel, null);
   for (const [id, el] of NEL) el.classList.toggle("on", s?.item === id);
   const br = s?.kind === "board" ? selRect : null;
+  HUD.size.hidden = !br;
+  if (br) {
+    const bi = item(s.item);
+    HUD.size.style.left = br.x + br.w / 2 + "px";
+    HUD.size.style.top = br.y + br.h + "px";
+    const t = `${bi.w} × ${bi.h}`;
+    if (HUD.size.textContent !== t) HUD.size.textContent = t;
+  }
   for (const d of HUD.handles) {
     d.hidden = !br;
     if (!br) continue;
@@ -694,9 +746,9 @@ export function drawHud() {
   placeBox(HUD.hover, hr, null);
   // comment pins sit on their board
   const pins = new Set();
-  const top = S.comments.filter((c) => !c.parent && S.envs.has(c.env));
+  const top = S.comments.filter((c) => !c.parent && c.env === S.page);
   top.forEach((c, i) => {
-    const b = (c.board && item(c.board)) || boardsOf(c.env)[0];
+    const b = (c.board && S.items.get(c.board)) || pageItems("board")[0];
     if (!b || !B.has(b.id)) return;
     pins.add(c.id);
     let p = HUD.pins.get(c.id);
@@ -777,7 +829,7 @@ function composeComment(boardId, bx, by, selector) {
 export function openThread(id) {
   const c = S.comments.find((x) => x.id === id);
   if (!c) return;
-  const b = (c.board && item(c.board)) || boardsOf(c.env)[0];
+  const b = (c.board && S.items.get(c.board)) || itemsOf("board").find((x) => x.env === c.env);
   if (!b) return;
   closePop();
   const replies = S.comments.filter((r) => r.parent === id);
@@ -918,6 +970,8 @@ export function editNote(id) {
 // ---------- creating and moving things ----------
 async function createItem(body) {
   try {
+    // annotations belong to the page they're made on
+    if (body.type !== "board") body = { ...body, env: S.page };
     const it = await api("canvas/items", { method: "POST", body });
     S.items.set(it.id, it);
     sync();
@@ -936,11 +990,11 @@ function saveItem(id, patch) {
 export async function placeScreen(env, screen, state = null, at = null) {
   const e = S.envs.get(env);
   if (!e) return null;
-  const mine = envBounds(env);
+  const mine = itemsOf("board").filter((b) => b.env === env);
   let x, y;
   if (at) (x = Math.round(at.x / SNAP) * SNAP), (y = Math.round(at.y / SNAP) * SNAP);
-  else if (mine) {
-    const last = boardsOf(env).reduce((a, b) => (b.x + b.w > a.x + a.w ? b : a));
+  else if (mine.length) {
+    const last = mine.reduce((a, b) => (b.x + b.w > a.x + a.w ? b : a));
     x = last.x + last.w + 120;
     y = last.y;
   }
@@ -966,7 +1020,7 @@ async function removeItems(ids) {
   sync();
   fire("items-changed");
   const what = gone.length > 1 ? `${gone.length} items` : gone[0].type === "board" ? `${screenName(gone[0])} board` : gone[0].type;
-  toast(`Removed ${what}`, gone.some((g) => g.type === "board") ? "The prototype and its branch stay; only the board left the canvas" : "", {
+  toast(`Removed ${what}`, gone.some((g) => g.type === "board") ? "The page keeps its files; only the board left the canvas" : "", {
     label: "Undo",
     fn: async () => {
       for (const g of gone) {
@@ -999,7 +1053,7 @@ function itemUnder(t) {
 
 function onDown(e) {
   if (e.button !== 0 && e.button !== 1) return;
-  if (e.target.closest(".pop,.cvempty .in,.shead .acts")) return;
+  if (e.target.closest(".pop,.cvempty .in")) return;
   // pointerdown below calls preventDefault, which keeps focus where it was: let a note or a panel field finish first
   const ae = document.activeElement;
   if (ae && ae !== document.body && !e.target.closest(".note .tx[contenteditable]") && (ae.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))) ae.blur();
@@ -1009,10 +1063,10 @@ function onDown(e) {
   closePop();
   const pan = e.button === 1 || S.tool === "hand" || spaceDown;
   const handle = e.target.closest(".hdl");
-  const head = e.target.closest(".shead");
-  const label = e.target.closest(".blabel");
+  const label = e.target.closest(".blabel:not(.ghost)");
   const alabel = e.target.closest(".alabel");
-  const onBoard = e.target.closest(".bd");
+  const ghost = e.target.closest(".bd.ghost");
+  const onBoard = ghost ? null : e.target.closest(".bd");
   const under = itemUnder(e.target) || alabel?.dataset.item;
   const editingNote = e.target.closest(".note .tx[contenteditable]");
   if (editingNote) return;
@@ -1023,37 +1077,27 @@ function onDown(e) {
     drag = { kind: "pan", p0: p, c0: { ...S.cam } };
     cv.classList.add("grabbing");
   } else if (S.tool === "note") {
-    const it = item(under);
-    const board = onBoard ? item(onBoard.dataset.item) : null;
     createItem({ type: "note", x: Math.round(w.x), y: Math.round(w.y), text: "", tone: "warm" }).then((n) => {
       if (!n) return;
       setTool("move");
       selectItem(n.id);
       requestAnimationFrame(() => editNote(n.id));
     });
-    void it;
-    void board;
     e.preventDefault();
     return;
   } else if (S.tool === "box") {
     drag = { kind: "box", p0: p, w0: w };
   } else if (S.tool === "arrow") {
-    const from = under && item(under)?.type !== "arrow" ? { item: under } : onBoard ? { item: onBoard.dataset.item } : { x: Math.round(w.x), y: Math.round(w.y) };
+    const from = under && S.items.get(under)?.type !== "arrow" ? { item: under } : onBoard ? { item: onBoard.dataset.item } : { x: Math.round(w.x), y: Math.round(w.y) };
     drag = { kind: "arrow", p0: p, from, w0: w };
   } else if (S.tool === "comment") {
+    if (ghost) return toast("That's main's screen", "Comment on it from main's page, or on this branch's screen below");
     const b = onBoard ? item(onBoard.dataset.item) : boardAtPoint(p);
     if (!b) return toast("Comments go on a board", "Click a screen to pin a comment to it");
     const el = elAt(b.id, p);
     composeComment(b.id, Math.round(w.x - b.x), Math.round(w.y - b.y), el ? rt(b.id)?.selectorFor(el, true) || null : null);
     e.preventDefault();
     return;
-  } else if (head) {
-    const env = head.dataset.env;
-    selectSection(env);
-    const r = sectionRect(env);
-    const inside = (i) => r && i.x >= r.x && i.y >= r.y && i.x <= r.x + r.w && i.y <= r.y + r.h;
-    const group = [...boardsOf(env), ...itemsOf("note").filter(inside), ...itemsOf("box").filter(inside)].map((i) => ({ id: i.id, x: i.x, y: i.y }));
-    drag = { kind: "group", p0: p, group, moved: false };
   } else if (label) {
     const id = label.dataset.item;
     selectBoard(id);
@@ -1077,7 +1121,7 @@ function onMove(e) {
   const p = local(e);
   if (!drag) {
     if (S.mode === "design" && S.tool === "move" && !spaceDown) {
-      const onBoard = e.target.closest?.(".bd");
+      const onBoard = e.target.closest?.(".bd:not(.ghost)");
       if (onBoard) setHover(onBoard.dataset.item, elAt(onBoard.dataset.item, p));
       else setHover(null, null);
     }
@@ -1194,7 +1238,7 @@ async function onUp(e) {
     const end = d.w1 || d.w0;
     if (Math.hypot(end.x - d.w0.x, end.y - d.w0.y) * S.cam.z < 12) return toast("Drag to draw an arrow", "From a note, a box or a board to what it's about");
     const t = document.elementFromPoint(e.clientX, e.clientY);
-    const under = t && (itemUnder(t) || t.closest?.(".bd")?.dataset.item);
+    const under = t && (itemUnder(t) || t.closest?.(".bd:not(.ghost)")?.dataset.item);
     const to = under && under !== d.from.item && item(under)?.type !== "arrow" ? { item: under } : { x: Math.round(end.x), y: Math.round(end.y) };
     const it = await createItem({ type: "arrow", from: d.from, to, label: "" });
     if (it) selectItem(it.id);
@@ -1207,17 +1251,17 @@ function onDbl(e) {
   const note = e.target.closest(".note");
   if (note) return editNote(note.dataset.item);
   if (e.target.closest(".box,.alabel,g[data-item]")) return fire("focus-label");
-  const head = e.target.closest(".shead");
-  if (head) return fire("rename", head.dataset.env);
+  const label = e.target.closest(".blabel:not(.ghost)");
+  if (label) return focusItem(label.dataset.item, { maxZ: 0.8 });
   if (S.mode !== "design" || S.tool !== "move") return;
-  const onBoard = e.target.closest(".bd");
+  const onBoard = e.target.closest(".bd:not(.ghost)");
   if (!onBoard) return;
   const el = elAt(onBoard.dataset.item, local(e));
   if (el && editText(onBoard.dataset.item, el)) e.preventDefault();
 }
 
 function onWheel(e) {
-  if (e.target.closest(".tb,.pop,.float")) return;
+  if (e.target.closest(".pop")) return;
   e.preventDefault();
   const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? cv.clientHeight : 1;
   const fr = frScale();
@@ -1256,15 +1300,14 @@ function onKey(e) {
       const d = docOf(S.sel.item);
       if (parent && parent !== d.body && parent !== d.documentElement) selectEl(S.sel.item, parent);
       else selectBoard(S.sel.item);
-    } else if (S.sel?.kind === "board") selectSection(item(S.sel.item).env);
-    else clearSel();
+    } else clearSel();
     return;
   }
   const tools = { v: "move", h: "hand", n: "note", b: "box", a: "arrow", c: "comment" };
   if (tools[k.toLowerCase()] && !e.shiftKey) return setTool(S.tool === tools[k.toLowerCase()] && k.toLowerCase() !== "v" ? "move" : tools[k.toLowerCase()]);
   if (k === "p" || k === "P") return setMode(S.mode === "design" ? "prototype" : "design");
   if (k === "!" || (e.shiftKey && k === "1")) return fit();
-  if (k === "@" || (e.shiftKey && k === "2")) return S.sel && (S.sel.kind === "section" ? focusEnv(S.sel.env) : focusItem(S.sel.item));
+  if (k === "@" || (e.shiftKey && k === "2")) return S.sel && focusItem(S.sel.item);
   if (k === "=" || k === "+") return zoomBy(1.25);
   if (k === "-" || k === "_") return zoomBy(0.8);
   if ((k === "Backspace" || k === "Delete") && S.sel?.item && S.sel.kind !== "el") {
@@ -1299,7 +1342,7 @@ function initDrop() {
       e.preventDefault();
       try {
         const s = JSON.parse(e.dataTransfer.getData("application/x-workshop-screen"));
-        const it = await placeScreen(s.env, s.screen, s.state, w);
+        const it = await placeScreen(S.page || s.env, s.screen, s.state, w);
         if (it) selectBoard(it.id);
       } catch {}
       return;
@@ -1309,16 +1352,15 @@ function initDrop() {
     cv.classList.remove("dropping");
     const files = [...e.dataTransfer.files].filter((f) => /\.html?$/i.test(f.name) || f.type === "text/html");
     if (!files.length) return toast("Drop an HTML file", "Prototypes are .html files — a folder's index.html works too");
+    let last = null;
     for (const f of files) {
       try {
-        const env = await importFile(f);
-        const b = (await api("canvas/items")).find((i) => i.type === "board" && i.env === env.id);
-        if (b) await api(`canvas/items/${b.id}`, { method: "PATCH", body: { x: Math.round(w.x), y: Math.round(w.y) } });
+        last = await importFile(f);
       } catch (er) {
         toast(`Couldn't add ${f.name}`, er.message);
       }
     }
-    fire("reload-workspace");
+    if (last) fire("open-proto", last.id);
   });
 }
 export async function importFile(file, name) {
@@ -1326,7 +1368,7 @@ export async function importFile(file, name) {
   if (file.size > 64 * 1024 * 1024) throw new Error("That file is over 64 MB");
   const html = await file.text();
   const env = await api("envs", { method: "POST", body: { html, name: name || undefined, source: { kind: "upload", path: file.name } } });
-  toast(`Added ${env.name}`, `Saved to envs/${env.id}/index.html`);
+  toast(`Added ${env.name}`, `A new prototype, saved to envs/${env.id}/index.html`);
   return env;
 }
 
@@ -1335,17 +1377,12 @@ export function initCanvas() {
   cv = $("cv");
   world = $("world");
   hud = $("hud");
-  lines = $("lines");
   wires = $("wires");
-  secLayer = $("sections");
   boardLayer = $("boards");
   noteLayer = $("notes");
+  rulerH = $("rulerH");
+  rulerV = $("rulerV");
   window.__workshopCanvas = true; // the runtime in each board checks this to know it is on the canvas
-  let had = false;
-  try {
-    const c = JSON.parse(localStorage.getItem("ws-cam2") || "null");
-    if (c && [c.x, c.y, c.z].every(Number.isFinite)) (Object.assign(S.cam, { x: c.x, y: c.y, z: clamp(c.z, MINZ, MAXZ) }), (had = true));
-  } catch {}
   applyCam();
   cv.addEventListener("pointerdown", onDown);
   cv.addEventListener("pointermove", onMove);
@@ -1365,9 +1402,7 @@ export function initCanvas() {
   document.addEventListener("keyup", onKeyUp);
   window.addEventListener("blur", () => ((spaceDown = false), cv.classList.remove("panning")));
   for (const b of document.querySelectorAll("#tb [data-tool]")) b.addEventListener("click", () => setTool(b.dataset.tool));
-  for (const b of document.querySelectorAll("#modeSeg button")) b.addEventListener("click", () => setMode(b.dataset.mode));
-  $("zIn").onclick = () => zoomBy(1.25);
-  $("zOut").onclick = () => zoomBy(0.8);
+  $("interactBtn").onclick = () => setMode(S.mode === "design" ? "prototype" : "design");
   $("zPct").onclick = () =>
     menu($("zPct"), [
       { label: "Zoom in", kbd: "+", onClick: () => zoomBy(1.25) },
@@ -1375,11 +1410,10 @@ export function initCanvas() {
       "-",
       { label: "Zoom to 100%", kbd: "⌘0", onClick: () => zoomTo(1) },
       { label: "Zoom to fit", kbd: "⇧1", onClick: () => fit() },
-      { label: "Zoom to selection", kbd: "⇧2", disabled: !S.sel, onClick: () => S.sel && (S.sel.kind === "section" ? focusEnv(S.sel.env) : focusItem(S.sel.item)) },
-    ], { up: true, align: "center" });
+      { label: "Zoom to selection", kbd: "⇧2", disabled: !S.sel, onClick: () => S.sel && focusItem(S.sel.item) },
+    ], { align: "right", width: 220 });
   new ResizeObserver(() => (dirty = true)).observe(cv);
   window.addEventListener("resize", () => (dirty = true));
   initDrop();
   requestAnimationFrame(loop);
-  return had;
 }

@@ -29,7 +29,7 @@ export const TOOLS = [
   { name: "review_branch", description: "Lists what a branch changed compared with its parent (settings, styles, files) and which changes conflict with changes made on the parent since.", inputSchema: S({ env: ENV }, ["env"]) },
   { name: "merge_branch", description: "Merges a branch into its parent and archives it. Conflicts go to the branch unless listed in keep_main. The parent's state is saved as a version first.", inputSchema: S({ env: ENV, keep_main: { type: "array", items: { type: "string" }, description: "Change keys (from review_branch) where the parent's value should win" } }, ["env"]) },
   { name: "fork_environment", description: "Makes an independent copy of an environment (optionally from a saved version) — no link back to merge. Prefer create_branch for trying changes.", inputSchema: S({ env: ENV, name: str("Name for the copy"), version: num("Version number to copy from (optional)") }, ["env"]) },
-  { name: "list_canvas", description: "What is on the canvas: boards (an environment at a screen and state), and the designer's annotations — notes, boxes, arrows — with the boards each one sits over. Read the annotations as feedback.", inputSchema: S({ env: str("Only boards and annotations for this environment") }) },
+  { name: "list_canvas", description: "What is on the canvas: boards (an environment at a screen and state), and the designer's annotations — notes, boxes, arrows — on each environment's page, with the boards each one sits over. Read the annotations as feedback.", inputSchema: S({ env: str("Only boards and annotations for this environment") }) },
   { name: "place_screen", description: "Puts a board for one of an environment's screens on the canvas (screens are listed by get_environment under catalog).", inputSchema: S({ env: ENV, screen: str("Screen name, e.g. Chat"), state: str("Screen state, e.g. Empty (optional)") }, ["env", "screen"]) },
   { name: "add_note", description: "Pins a note on the canvas next to an environment's boards, e.g. to explain a change or ask a question.", inputSchema: S({ env: ENV, text: str("The note"), tone: { type: "string", enum: ["warm", "info", "plain"] } }, ["env", "text"]) },
   { name: "update_environment", description: "Changes an environment's settings: name, description, theme (light/dark/system), opening screen, screen state, board size, or variants (an object of variant label → option).", inputSchema: S({ env: ENV, name: str("New name"), description: str("New description"), theme: { type: "string", enum: ["light", "dark", "system"] }, screen: str("Screen to open on, e.g. Chat"), state: str("Screen state, e.g. Empty"), width: num("Board width in px"), height: num("Board height in px"), variants: { type: "object", additionalProperties: { type: "string" } } }, ["env"]) },
@@ -50,7 +50,7 @@ export const TOOLS = [
 const INSTRUCTIONS = `Libra Workshop holds HTML prototypes ("environments") that a designer arranges on a canvas as boards, one per screen.
 Each environment is a folder with index.html; you can edit those files directly or through these tools, and the canvas reloads live.
 - list_environments shows ids, folders and branches. get_selection tells you what the designer is pointing at.
-- list_canvas shows the designer's notes, boxes and arrows: treat them as feedback on the boards they sit over.
+- Each branch is a page of its own on the canvas, laid out like its parent. list_canvas shows the designer's notes, boxes and arrows on each page: treat them as feedback on the boards they sit over.
 - Requests typed on the canvas wait as tasks: take_task, do the work, then update_task with status done and a short reply.
 - Try changes on a branch (create_branch); the designer reviews and merges it. A branch reads its parent's files until checkout_branch copies them.
 - Visual tweaks belong in overrides.css (set_style); structure and behaviour in index.html. save_version before big edits.`;
@@ -124,17 +124,21 @@ export async function callTool(store, name, a = {}, ctx = {}) {
     case "list_canvas": {
       const items = await store.items();
       const boards = items.filter((i) => i.type === "board");
-      const over = (r) => boards.filter((b) => r.x < b.x + b.w && r.x + (r.w || 1) > b.x && r.y < b.y + b.h && r.y + (r.h || 1) > b.y).map((b) => ({ board: b.id, env: b.env, screen: b.screen }));
-      const pick = a.env ? new Set(boards.filter((b) => b.env === a.env).map((b) => b.id)) : null;
+      // Each page (a prototype's main or a branch) is its own canvas, and a branch's boards sit where
+      // its parent's do: an annotation is only over the boards of its own page. Older annotations
+      // without a page go with whatever they overlap.
+      const over = (r) => boards.filter((b) => (!r.env || b.env === r.env) && r.x < b.x + b.w && r.x + (r.w || 1) > b.x && r.y < b.y + b.h && r.y + (r.h || 1) > b.y).map((b) => ({ board: b.id, env: b.env, screen: b.screen }));
       const out = {
         boards: boards.filter((b) => !a.env || b.env === a.env).map((b) => ({ id: b.id, env: b.env, screen: b.screen || "start screen", state: b.state || "Default", x: b.x, y: b.y, w: b.w, h: b.h })),
-        notes: items.filter((i) => i.type === "note").map((n) => ({ id: n.id, text: n.text, author: n.author, over: over({ ...n, h: 120 }) })),
-        boxes: items.filter((i) => i.type === "box").map((x) => ({ id: x.id, label: x.label, author: x.author, over: over(x) })),
-        arrows: items.filter((i) => i.type === "arrow").map((r) => ({ id: r.id, label: r.label, from: r.from, to: r.to })),
+        notes: items.filter((i) => i.type === "note").map((n) => ({ id: n.id, page: n.env || null, text: n.text, author: n.author, over: over({ ...n, h: 120 }) })),
+        boxes: items.filter((i) => i.type === "box").map((x) => ({ id: x.id, page: x.env || null, label: x.label, author: x.author, over: over(x) })),
+        arrows: items.filter((i) => i.type === "arrow").map((r) => ({ id: r.id, page: r.env || null, label: r.label, from: r.from, to: r.to })),
       };
-      if (pick) {
-        out.notes = out.notes.filter((n) => n.over.some((o) => pick.has(o.board)));
-        out.boxes = out.boxes.filter((n) => n.over.some((o) => pick.has(o.board)));
+      if (a.env) {
+        const mine = (n) => (n.page ? n.page === a.env : n.over.some((o) => o.env === a.env));
+        out.notes = out.notes.filter(mine);
+        out.boxes = out.boxes.filter(mine);
+        out.arrows = out.arrows.filter((r) => r.page === a.env);
       }
       return text(out);
     }
@@ -144,7 +148,7 @@ export async function callTool(store, name, a = {}, ctx = {}) {
     }
     case "add_note": {
       const bounds = await store.boundsOf(a.env);
-      const n = await store.addItem({ type: "note", text: a.text, tone: a.tone || "info", x: bounds ? bounds.x1 + 80 : 0, y: bounds ? bounds.y0 : 0 }, who);
+      const n = await store.addItem({ type: "note", env: a.env, text: a.text, tone: a.tone || "info", x: bounds ? bounds.x1 + 80 : 0, y: bounds ? bounds.y0 : 0 }, who);
       return text({ note: n.id });
     }
     case "fork_environment": {

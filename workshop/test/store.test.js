@@ -21,8 +21,7 @@ test("creates, lists and forks an environment with its lineage and canvas spot",
   const items = await s.items();
   const ba = items.find((i) => i.env === a.id),
     bb = items.find((i) => i.env === b.id);
-  assert.ok(bb.y > ba.y + ba.h, "the copy gets its own row below its parent");
-  assert.equal(bb.x, ba.x);
+  assert.deepEqual([bb.x, bb.y], [ba.x, ba.y], "the copy is its own page, laid out like its parent");
   assert.equal((await s.listEnvs()).length, 2);
 });
 
@@ -199,7 +198,8 @@ test("update from main takes what the branch didn't touch", async () => {
 test("canvas items are checked and arrows go with what they point at", async () => {
   const s = await Store.open(await tmp());
   const a = await s.createEnv({ html: HTML });
-  const n = await s.addItem({ type: "note", x: 10, y: 20, text: "Too tight" });
+  const n = await s.addItem({ type: "note", env: a.id, x: 10, y: 20, text: "Too tight" });
+  assert.equal(n.env, a.id, "a note belongs to a page");
   const x = await s.addItem({ type: "box", x: 0, y: 0, w: 300, h: 120, label: "1" });
   const ar = await s.addItem({ type: "arrow", from: { item: n.id }, to: { x: 400, y: 50 } });
   assert.equal(ar.from.item, n.id);

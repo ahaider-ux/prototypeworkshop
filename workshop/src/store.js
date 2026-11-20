@@ -233,6 +233,8 @@ export class Store {
     };
     const str = (v, max, d = "") => (v === undefined ? d : v === null ? null : String(v).slice(0, max));
     const at = { x: num(p.x, -1e6, 1e6, prev.x ?? 0), y: num(p.y, -1e6, 1e6, prev.y ?? 0) };
+    // notes, highlights and arrows belong to one page: a prototype's main or one of its branches
+    const page = p.env === undefined ? prev.env ?? null : p.env === null ? null : assertId(String(p.env));
     if (type === "board") {
       const env = p.env ?? prev.env;
       const e = await this.getEnv(env);
@@ -241,9 +243,9 @@ export class Store {
     if (type === "note") {
       const tone = p.tone ?? prev.tone ?? "warm";
       if (!["warm", "info", "plain"].includes(tone)) throw new StoreError("bad_item", "A note is warm, info or plain");
-      return { ...at, w: num(p.w, 120, 800, prev.w ?? 240), text: str(p.text, LIMITS.commentChars, prev.text ?? ""), tone };
+      return { ...at, env: page, w: num(p.w, 120, 800, prev.w ?? 240), text: str(p.text, LIMITS.commentChars, prev.text ?? ""), tone };
     }
-    if (type === "box") return { ...at, w: num(p.w, 8, 20000, prev.w ?? 320), h: num(p.h, 8, 20000, prev.h ?? 200), label: str(p.label, 200, prev.label ?? "") };
+    if (type === "box") return { ...at, env: page, w: num(p.w, 8, 20000, prev.w ?? 320), h: num(p.h, 8, 20000, prev.h ?? 200), label: str(p.label, 200, prev.label ?? "") };
     if (type === "arrow") {
       const end = (e, d) => {
         if (e === undefined) return d;
@@ -251,7 +253,7 @@ export class Store {
         if (e && typeof e === "object") return { x: num(e.x, -1e6, 1e6, 0), y: num(e.y, -1e6, 1e6, 0) };
         throw new StoreError("bad_item", "An arrow end is a point or an item");
       };
-      return { from: end(p.from, prev.from ?? { x: 0, y: 0 }), to: end(p.to, prev.to ?? { x: 100, y: 0 }), label: str(p.label, 200, prev.label ?? "") };
+      return { env: page, from: end(p.from, prev.from ?? { x: 0, y: 0 }), to: end(p.to, prev.to ?? { x: 100, y: 0 }), label: str(p.label, 200, prev.label ?? "") };
     }
     throw new StoreError("bad_item", "Boards, notes, boxes and arrows go on the canvas");
   }
@@ -278,8 +280,8 @@ export class Store {
     return it;
   }
 
-  // Where things sit: an environment's boards form a row; branches go in a row of their own below.
-  static LANE_GAP = 520; // room for a section's header band between rows (the canvas pads sections 200 above, 64 below)
+  // Where things sit: each page (a prototype's main, or one of its branches) is its own canvas, and
+  // its boards form a row from the origin.
   static BOARD_GAP = 120;
 
   async boundsOf(env, items) {
@@ -288,17 +290,7 @@ export class Store {
     return { x0: Math.min(...bs.map((b) => b.x)), y0: Math.min(...bs.map((b) => b.y)), x1: Math.max(...bs.map((b) => b.x + b.w)), y1: Math.max(...bs.map((b) => b.y + b.h)), boards: bs };
   }
 
-  async freeRowBelow(y, x0, x1, items) {
-    let top = y + Store.LANE_GAP;
-    for (let guard = 0; guard < 200; guard++) {
-      const hit = items.find((i) => i.type === "board" && i.y + i.h + Store.LANE_GAP > top && i.y < top + 200 && i.x < x1 && i.x + i.w > x0);
-      if (!hit) return top;
-      top = hit.y + hit.h + Store.LANE_GAP;
-    }
-    return top;
-  }
-
-  async addBoard(env, { screen = null, state = null, below = null, author = null, x, y } = {}) {
+  async addBoard(env, { screen = null, state = null, author = null, x, y } = {}) {
     const e = await this.getEnv(env);
     const items = await this.items();
     const mine = await this.boundsOf(env, items);
@@ -309,9 +301,8 @@ export class Store {
       px = last.x + last.w + Store.BOARD_GAP;
       py = last.y;
     } else {
-      const ref = (below && (await this.boundsOf(below, items))) || (await this.boundsOf(null, items));
-      px = ref ? ref.x0 : 0;
-      py = ref ? await this.freeRowBelow(ref.y1, ref.x0, ref.x0 + e.device.w, items) : 0;
+      px = 0;
+      py = 0;
     }
     return this.addItem({ type: "board", env, screen, state, x: px, y: py, w: e.device.w, h: e.device.h }, author);
   }
@@ -469,14 +460,12 @@ export class Store {
     return this.getEnv(nid);
   }
 
-  // A new row for `to` below `from`'s boards, with the same screens.
+  // The same screens for `to`, in the same places: a branch is its own page, laid out like its parent.
   async copyBoards(from, to, author = null) {
-    const items = await this.items();
-    const src = await this.boundsOf(from, items);
-    if (!src) return [await this.addBoard(to, { below: from, author })];
-    const top = await this.freeRowBelow(src.y1, src.x0, src.x1, items);
+    const src = (await this.items()).filter((i) => i.type === "board" && i.env === from);
+    if (!src.length) return [await this.addBoard(to, { author, x: 0, y: 0 })];
     const out = [];
-    for (const b of src.boards) out.push(await this.addItem({ type: "board", env: to, screen: b.screen, state: b.state, x: b.x, y: top + (b.y - src.y0), w: b.w, h: b.h }, author));
+    for (const b of src) out.push(await this.addItem({ type: "board", env: to, screen: b.screen, state: b.state, x: b.x, y: b.y, w: b.w, h: b.h }, author));
     return out;
   }
 
@@ -626,7 +615,7 @@ export class Store {
     if (users.length) throw new StoreError("in_use", `${users.map((e) => e.name).join(", ")} still use${users.length === 1 ? "s" : ""} this prototype's files. Delete or merge ${users.length === 1 ? "that branch" : "those branches"} first.`, 409);
     const key = `${id}--${Date.now().toString(36)}`;
     await fsp.rename(this.envDir(id), path.join(this.metaDir, "trash", key));
-    const boards = (await this.items()).filter((i) => i.type === "board" && i.env === id);
+    const boards = (await this.items()).filter((i) => i.env === id);
     for (const b of boards) await fsp.rm(path.join(this.canvasDir, `${b.id}.json`), { force: true });
     await writeJson(path.join(this.metaDir, "trash", `${key}.json`), { id, boards, at: now() });
     return { trash: key };

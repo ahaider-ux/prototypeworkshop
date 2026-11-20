@@ -1,11 +1,13 @@
-// Panels around the canvas.
-// Left: Branches (a calm git graph), Screens (every screen and flow, ready to place) and Layers
-// (landmarks only). Right: Design (whatever is selected), Notes (every annotation and comment) and
-// Chat (requests to an agent, which can work on a branch of their own).
+// Panels around the canvas, as in a design tool.
+// Left, a rail of panels: File (the prototype's branches — its pages — and this page's layers),
+// Screens (everything the prototype offers, ready to place), Agents (ask for a change; from main it
+// happens on a branch), Notes (annotations and comments) and History (versions, merged branches).
+// Right: Design (whatever is selected, or the page) and Prototype (how the page runs). The banner
+// across the canvas says which page this is and what to do with it.
 
-import { S, on, fire, envList, visibleEnvs, boardsOf, itemsOf, selEnv, selEnvId, isBranch, rootOf, screenName } from "./state.js";
-import { $, h, esc, api, toast, IC, menu, dropdown, segmented, copyText, timeAgo } from "./lib.js";
-import { rt, docOf, selectSection, selectBoard, selectEl, selectItem, setHover, focusEnv, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, openThread, sync, reloadBoard } from "./canvas.js";
+import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, familyOf, pageEnv, protoId, pageItems, pageOf, nearestBoard, screenName, plural } from "./state.js";
+import { $, h, esc, api, toast, IC, dropdown, segmented, copyText, timeAgo } from "./lib.js";
+import { rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, setMode, docOf } from "./canvas.js";
 
 // ---------- Libra tokens offered by the inspector ----------
 const FILL = [
@@ -110,16 +112,26 @@ export async function undoStyle() {
   return true;
 }
 
-export async function loadDiff(id) {
+const diffing = new Map();
+const diffFailed = new Map(); // id → when it last failed
+export function loadDiff(id) {
   const e = S.envs.get(id);
-  if (!isBranch(e) || e.archived || !e.branch) return null;
-  try {
-    S.diffs.set(id, await api(`envs/${id}/diff`));
-  } catch {
-    S.diffs.delete(id);
-  }
-  markDirty();
-  return S.diffs.get(id);
+  if (!isBranch(e) || e.archived || !e.branch) return Promise.resolve(null);
+  if (diffing.has(id)) return diffing.get(id);
+  // Guard: panels ask for a missing diff while they render, and a failed one re-renders them; without
+  // a pause after a failure that would ask again in a loop.
+  if (Date.now() - (diffFailed.get(id) || 0) < 10000) return Promise.resolve(null);
+  const p = api(`envs/${id}/diff`)
+    .then((d) => (S.diffs.set(id, d), diffFailed.delete(id)))
+    .catch(() => (S.diffs.delete(id), diffFailed.set(id, Date.now())))
+    .then(() => {
+      diffing.delete(id);
+      markDirty();
+      fire("diff", id);
+      return S.diffs.get(id) || null;
+    });
+  diffing.set(id, p);
+  return p;
 }
 export async function loadVersions(id) {
   try {
@@ -127,148 +139,139 @@ export async function loadVersions(id) {
   } catch {
     S.versions.set(id, []);
   }
-  if (selEnvId() === id) renderDesign();
+  if (S.page === id && S.leftTab === "history") renderLeft();
 }
 
 // ======================= LEFT PANEL =======================
+const LEFT = { screens: "Screens", agents: "Agents", notes: "Notes", history: "History" };
 export function renderLeft() {
-  const body = $("lBody"),
+  const head = $("lHead"),
+    body = $("lBody"),
     foot = $("lFoot");
+  for (const b of document.querySelectorAll("#rail [data-t]")) {
+    const on = b.dataset.t === S.leftTab;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-selected", String(on));
+  }
+  railBadges();
+  const env = pageEnv();
+  const st = body.scrollTop;
   foot.replaceChildren();
-  if (S.leftTab === "branches") renderBranches(body, foot);
-  else if (S.leftTab === "screens") renderScreens(body, foot);
-  else renderLayers(body, foot);
+  body.replaceChildren();
+  head.replaceChildren();
+  if (!env) return;
+  if (S.leftTab === "file") renderFile(head, body);
+  else {
+    const sub = { screens: `To place on ${pageName(env)}`, agents: agentLine(), notes: S.notesAll ? `Everywhere in ${rootOf(env.id)?.name || ""}` : `On ${pageName(env)}`, history: `Versions of ${pageName(env)}` }[S.leftTab];
+    head.append(h(`<div class="ttl"><b>${LEFT[S.leftTab]}</b><span>${esc(sub)}</span></div>`));
+    if (S.leftTab === "screens") renderScreens(body, foot, env);
+    else if (S.leftTab === "agents") renderChat(body, foot, env);
+    else if (S.leftTab === "notes") renderNotes(head, body, env);
+    else renderHistory(head, body, env);
+  }
+  if (S.leftTab !== "agents") body.scrollTop = st;
+}
+function railBadges() {
+  const set = (t, n) => {
+    const b = document.querySelector(`#rail [data-t="${t}"]`);
+    if (!b) return;
+    let c = b.querySelector(".tct");
+    if (!n) return c?.remove();
+    if (!c) (c = h(`<span class="tct"></span>`)), b.append(c);
+    c.textContent = String(n);
+  };
+  const fam = new Set(familyOf(protoId()).map((x) => x.env.id));
+  set("agents", S.tasks.filter((t) => fam.has(t.env) && (t.status === "queued" || t.status === "working")).length);
+  set("notes", S.comments.filter((c) => !c.parent && !c.resolved && c.env === S.page).length);
+}
+const pageName = (e) => (e ? (isBranch(e) ? e.name : "Main") : "");
+function agentLine() {
+  const ws = S.ws;
+  const hs = ws?.harnesses || [];
+  return hs.length ? `${hs[0].client} is connected` : ws?.agent ? `Requests run with ${ws.agent.name}` : "No agent connected";
 }
 
-function branchStatus(e) {
+function pageMeta(e) {
   if (e.archived && e.mergedAt) return { t: "MERGED", cls: "" };
   if (e.archived) return { t: "ARCHIVED", cls: "" };
-  if (!boardsOf(e.id).length) return { t: "NOT ON THE CANVAS", cls: "" };
-  if (!isBranch(e)) return { t: `MAIN · ${boardsOf(e.id).length} SCREEN${boardsOf(e.id).length === 1 ? "" : "S"}`, cls: "" };
+  if (!isBranch(e)) return { t: plural(boardsOf(e.id).length, "SCREEN", "SCREENS"), cls: "" };
   const d = S.diffs.get(e.id);
-  if (!d) return { t: "BRANCH", cls: "" };
-  if (d.conflicts) return { t: `${d.changes.length} CHANGES · ${d.conflicts} CONFLICT${d.conflicts === 1 ? "" : "S"}`, cls: "warn" };
-  return { t: d.changes.length ? `${d.changes.length} CHANGE${d.changes.length === 1 ? "" : "S"}` : "NO CHANGES YET", cls: d.changes.length ? "warn" : "" };
+  if (!d) return { t: "", cls: "" };
+  if (d.conflicts) return { t: plural(d.conflicts, "CONFLICT", "CONFLICTS"), cls: "cf" };
+  return { t: d.changes.length ? plural(d.changes.length, "CHANGE", "CHANGES") : "NO CHANGES", cls: d.changes.length ? "ch" : "" };
 }
 
-function renderBranches(body, foot) {
-  const envs = envList().filter((e) => S.showArchived || !e.archived);
-  if (!envs.length) {
-    body.innerHTML = `<div class="pempty"><b>No prototypes yet</b>Import an HTML file or drop one on the canvas. Each prototype gets a section; branches you make from it get their own, joined by a line.</div>`;
-  } else {
-    const ids = new Set(envs.map((e) => e.id));
-    const kids = new Map();
-    for (const e of envs) {
-      const p = e.parent && ids.has(e.parent) && S.envs.has(e.parent) ? e.parent : null;
-      if (!kids.has(p)) kids.set(p, []);
-      kids.get(p).push(e);
-    }
-    const tree = h(`<div class="btree" role="tree" aria-label="Branches"></div>`);
-    const active = selEnvId();
-    const add = (e, depth, isLast) => {
-      const st = branchStatus(e);
-      const main = !e.parent || !ids.has(e.parent);
-      const row = h(`<div class="brow${main ? " main" : ""}${active === e.id ? " on" : ""}${e.archived ? " archived" : ""}" role="treeitem" tabindex="0" style="padding-left:${depth * 16}px"><span class="rail ${main ? "only" : isLast ? "last" : ""}">${main ? "" : '<span class="elbow"></span>'}<span class="dot"></span></span><span class="tx"><b title="${esc(e.name)}">${esc(e.name)}</b><span class="${st.cls}">${esc(st.t)}</span></span><button type="button" class="ib24 rmore" aria-label="More for ${esc(e.name)}" aria-haspopup="menu">${IC.more}</button></div>`);
-      row.addEventListener("click", async (ev) => {
-        if (ev.target.closest(".rmore")) return;
-        if (!boardsOf(e.id).length) {
-          const it = await placeScreen(e.id, e.screen || null);
-          if (it) setTimeout(() => focusEnv(e.id), 60);
-          return;
-        }
-        selectSection(e.id);
-        focusEnv(e.id);
-      });
-      row.addEventListener("keydown", (ev) => ev.key === "Enter" && row.click());
-      row.querySelector(".rmore").addEventListener("click", (ev) => (ev.stopPropagation(), fire("env-menu", { anchor: ev.currentTarget, env: e.id })));
-      tree.append(row);
-      const ks = kids.get(e.id) || [];
-      ks.forEach((k, i) => add(k, depth + 1, i === ks.length - 1));
-    };
-    for (const e of kids.get(null) || []) add(e, 0, true);
-    body.replaceChildren(tree);
+// ----- file: the prototype's branches (its pages) and this page's layers -----
+function renderFile(head, body) {
+  const env = pageEnv();
+  const root = rootOf(env.id);
+  const fb = h(`<button type="button" class="file" aria-haspopup="menu" aria-expanded="false"><span class="ttl"><b title="${esc(root.name)}">${esc(root.name)}</b><span>${isBranch(env) ? `Branch · ${esc(env.name)}` : "Main"}</span></span>${IC.chev}</button>`);
+  fb.onclick = () => fire("env-menu", { anchor: fb, env: root.id });
+  head.append(fb);
+  // branches, like pages
+  const fam = familyOf(root.id);
+  const open = fam.filter((x) => S.showArchived || !x.env.archived);
+  const nBr = fam.filter((x) => isBranch(x.env) && !x.env.archived).length;
+  const sh = h(`<div class="shd"><span>Branches</span><span class="n">${nBr || ""}</span><span class="sp"></span><button type="button" class="ib24" aria-label="Create a branch of ${esc(pageName(env))}" data-tip="Create branch">${IC.plus}</button></div>`);
+  sh.querySelector("button").onclick = () => fire("branch", S.page);
+  body.append(sh);
+  const list = h(`<div class="pgs" role="listbox" aria-label="Branches"></div>`);
+  for (const { env: e, depth } of open) {
+    const m = pageMeta(e);
+    const main = !isBranch(e);
+    const r = h(`<div class="pg${e.id === S.page ? " on" : ""}${e.archived ? " archived" : ""}" role="option" aria-selected="${e.id === S.page}" tabindex="0" style="padding-left:${8 + Math.max(0, depth - 1) * 16}px">${main ? IC.board : IC.fork}<span class="t" title="${esc(e.name)}">${main ? "Main" : esc(e.name)}</span><span class="m ${m.cls}">${esc(m.t)}</span><button type="button" class="ib24" aria-label="More for ${esc(main ? "main" : e.name)}" aria-haspopup="menu">${IC.more}</button></div>`);
+    r.onclick = (ev) => !ev.target.closest(".ib24") && fire("go", e.id);
+    r.onkeydown = (ev) => ev.key === "Enter" && fire("go", e.id);
+    r.querySelector(".ib24").onclick = (ev) => (ev.stopPropagation(), fire("env-menu", { anchor: ev.currentTarget, env: e.id }));
+    list.append(r);
   }
-  const imp = h(`<button type="button" class="dbtn sm">${IC.upload}Import HTML</button>`);
-  imp.onclick = () => fire("import");
-  foot.append(imp, h(`<span class="sp"></span>`));
-  const archived = envList().filter((e) => e.archived).length;
+  body.append(list);
+  const archived = fam.filter((x) => x.env.archived).length;
   if (archived) {
-    const tg = h(`<button type="button" class="ghbtn sm">${S.showArchived ? "Hide" : "Show"} merged · ${archived}</button>`);
-    tg.onclick = () => {
-      S.showArchived = !S.showArchived;
-      sync();
+    const tg = h(`<button type="button" class="ghbtn sm" style="margin:0 8px 4px;color:var(--text-secondary)">${S.showArchived ? "Hide merged" : `Show merged · ${archived}`}</button>`);
+    tg.onclick = () => ((S.showArchived = !S.showArchived), renderLeft());
+    body.append(tg);
+  }
+  body.append(h(`<div class="pdiv"></div>`));
+  // layers: this page's frames (open one to reach its live page) and its annotations
+  const boards = pageItems("board").sort((a, b) => a.y - b.y || a.x - b.x);
+  const anns = [...pageItems("box"), ...pageItems("note"), ...pageItems("arrow")];
+  body.append(h(`<div class="shd"><span>Layers</span><span class="n">${boards.length + anns.length || ""}</span></div>`));
+  const tree = h(`<div class="ltree" role="tree" aria-label="Layers"></div>`);
+  const s = S.sel;
+  if (s?.kind === "el") EXP.add(s.item);
+  for (const b of boards) {
+    const d = docOf(b.id);
+    const canOpen = !!d?.body;
+    const open = canOpen && EXP.has(b.id);
+    const r = h(`<div class="lrow frame${s?.item === b.id && s.kind === "board" ? " on" : ""}" role="treeitem" aria-expanded="${open}" tabindex="0" style="padding-left:4px"><span class="tw${canOpen ? (open ? " open" : "") : " none"}">${IC.chevr}</span>${IC.frame}<span class="t">${esc(screenName(b))}${b.state && b.state !== "Default" ? ` · ${esc(b.state)}` : ""}</span></div>`);
+    r.querySelector(".tw").onclick = (e) => {
+      e.stopPropagation();
+      EXP.has(b.id) ? EXP.delete(b.id) : EXP.add(b.id);
       renderLeft();
     };
-    foot.append(tg);
+    r.onclick = () => (selectBoard(b.id), !isVisible(b.id) && focusItem(b.id, { maxZ: 0.6 }));
+    r.onkeydown = (e) => e.key === "Enter" && r.click();
+    tree.append(r);
+    if (open) landmarkRows(tree, b.id, d);
   }
-}
-
-// ----- screens: everything a prototype offers, ready to place -----
-let screensEnv = null;
-function renderScreens(body, foot) {
-  const envs = visibleEnvs().filter((e) => !e.archived);
-  const env = S.envs.get(selEnvId()) || S.envs.get(screensEnv) || envs[0];
-  body.replaceChildren();
-  if (!env) {
-    body.innerHTML = `<div class="pempty"><b>No prototypes yet</b>Import one first; its screens and flows show here.</div>`;
-    return;
-  }
-  screensEnv = env.id;
-  const head = h(`<div class="sstate"></div>`);
-  head.append(dropdown({ value: env.id, options: envs.map((e) => ({ label: `${isBranch(e) ? "⑂ " : ""}${e.name}`, value: e.id })), full: true, label: "Prototype", onChange: (v) => ((screensEnv = v), selectSection(v), focusEnv(v)) }));
-  body.append(head);
-  const cat = env.catalog;
-  const states = cat?.states?.length ? ["Default", ...cat.states.filter((x) => x !== "Default")] : [];
-  if (states.length) {
-    const st = h(`<div class="sstate"><span>New boards show</span></div>`);
-    st.append(dropdown({ value: S.placeState, options: states, full: true, label: "State for new boards", onChange: (v) => ((S.placeState = v), renderLeft()) }));
-    body.append(st);
-  }
-  if (!cat?.screens?.length) {
-    body.append(h(`<div class="pempty"><b>${cat ? "This prototype doesn't list its screens" : "Open one of its boards first"}</b>${cat ? "Place more boards and pick their screen in Design, or describe the screens with window.workshopEnv (see the README)." : "Its screens, states and flows appear here once a board of it has loaded."}</div>`));
-  } else {
-    const groups = new Map();
-    for (const s of cat.screens) {
-      if (!groups.has(s.group)) groups.set(s.group, []);
-      groups.get(s.group).push(s);
-    }
-    const placed = (name) => boardsOf(env.id).filter((b) => (b.screen || null) === name && (b.state || "Default") === (S.placeState || "Default"));
-    for (const [g, list] of groups) {
-      const grp = h(`<div class="sgrp"><div class="sgh"><span>${esc(g.toUpperCase())}</span><span class="sp"></span><button type="button">Place all</button></div></div>`);
-      grp.querySelector("button").onclick = async () => {
-        let n = 0;
-        for (const s of list) if (!placed(s.name).length && (await placeScreen(env.id, s.name, S.placeState))) n++;
-        toast(n ? `Placed ${n} screen${n === 1 ? "" : "s"}` : "They're all on the canvas", n ? `${g} · ${env.name}` : "");
-        if (n) setTimeout(() => focusEnv(env.id), 80);
-      };
-      for (const s of list) {
-        const n = placed(s.name).length;
-        const flow = g === "Flows";
-        const r = h(`<div class="srow" role="button" tabindex="0" draggable="true" title="${esc(s.name)}">${flow ? IC.play : IC.board}<span class="t">${esc(s.name.replace(/^Settings › /, ""))}</span>${n ? `<span class="tct" title="On the canvas">${n}</span>` : ""}<button type="button" class="ib24 add" aria-label="Place ${esc(s.name)}">${IC.plus}</button></div>`);
-        const place = async () => {
-          const it = await placeScreen(env.id, s.name, S.placeState);
-          if (it) (selectBoard(it.id), setTimeout(() => focusItem(it.id, { maxZ: 0.6 }), 60));
-        };
-        r.querySelector(".add").onclick = (e) => (e.stopPropagation(), place());
-        r.onclick = () => {
-          const there = placed(s.name)[0];
-          if (there) (selectBoard(there.id), focusItem(there.id, { maxZ: 0.6 }));
-          else place();
-        };
-        r.onkeydown = (e) => e.key === "Enter" && r.click();
-        r.ondragstart = (e) => {
-          e.dataTransfer.setData("application/x-workshop-screen", JSON.stringify({ env: env.id, screen: s.name, state: S.placeState }));
-          e.dataTransfer.effectAllowed = "copy";
-        };
-        grp.append(r);
-      }
-      body.append(grp);
+  if (anns.length) {
+    const kind = { note: ["Note", IC.note], box: ["Highlight", IC.box], arrow: ["Arrow", IC.arrow] };
+    for (const a of anns) {
+      const [k, ic] = kind[a.type];
+      const r = h(`<div class="lrow${s?.item === a.id ? " on" : ""}" role="treeitem" tabindex="0" style="padding-left:4px"><span class="tw none"></span>${ic}<span class="t">${esc(a.text || a.label || k)}</span></div>`);
+      r.onclick = () => (selectItem(a.id), a.type !== "arrow" && !isVisible(a.id) && focusItem(a.id, { maxZ: 0.8 }));
+      r.onkeydown = (e) => e.key === "Enter" && r.click();
+      tree.append(r);
     }
   }
-  foot.append(h(`<span style="font-size:12px;color:var(--text-secondary);padding:0 4px">Drag a screen onto the canvas, or click to place it.</span>`));
+  if (!boards.length && !anns.length) tree.append(h(`<div class="hint2">Nothing on this page yet. Place screens from the Screens panel.</div>`));
+  body.append(tree);
+  tree.querySelector(".lrow.on")?.scrollIntoView({ block: "nearest" });
 }
 
-// ----- layers: the page's landmarks, folded -----
+// landmarks of one live page, folded: the sidebar, the content, panels and sections
+const EXP = new Set(); // boards opened in Layers
 const OPEN = new WeakSet();
 const LAND = new Set(["header", "nav", "main", "aside", "section", "footer", "form", "dialog", "article", "table"]);
 const STRUCT = /(sidebar|content|crumb|panel|toolbar|modal|menu|card|header|footer|stage|grid|list)/i;
@@ -298,25 +301,19 @@ function lname(el) {
   const cls = [...el.classList].find((c) => !/^(on|open|active|ws-)/.test(c));
   return el.id ? `#${el.id}` : cls ? `${el.localName}.${cls}` : el.localName;
 }
-function renderLayers(body, foot) {
+function landmarkRows(box, bid, d) {
   const s = S.sel;
-  const bid = s?.item && S.items.get(s.item)?.type === "board" ? s.item : null;
-  const d = bid ? docOf(bid) : null;
-  if (!bid || !d?.body) {
-    body.innerHTML = `<div class="pempty"><b>Select a board</b>Its layers are the live page. Only landmarks show here — the sidebar, the content, panels and sections — so the list stays short.</div>`;
-    return;
-  }
-  const tree = landmarks(d.body, 0, { n: 300 });
-  // open the path to what's selected
-  if (s.kind === "el") for (let el = s.el; el && el !== d.body; el = el.parentElement) OPEN.add(el);
-  const near = s.kind === "el" ? (() => {
-    for (let el = s.el; el && el !== d.body; el = el.parentElement) if (isLandmark(el)) return el;
-    return null;
-  })() : null;
-  const box = h(`<div class="ltree" role="tree" aria-label="Layers"></div>`);
+  const mine = s?.kind === "el" && s.item === bid;
+  if (mine) for (let el = s.el; el && el !== d.body; el = el.parentElement) OPEN.add(el);
+  const near = mine
+    ? (() => {
+        for (let el = s.el; el && el !== d.body; el = el.parentElement) if (isLandmark(el)) return el;
+        return null;
+      })()
+    : null;
   const add = (n, depth) => {
     const open = OPEN.has(n.el);
-    const r = h(`<div class="lrow${near === n.el ? " on" : ""}" role="treeitem" tabindex="0" style="padding-left:${4 + depth * 14}px"><span class="tw${n.kids.length ? (open ? " open" : "") : " none"}">${IC.chevr}</span><span class="t">${esc(lname(n.el))}</span>${n.kids.length ? `<span class="x">${n.kids.length}</span>` : ""}</div>`);
+    const r = h(`<div class="lrow${near === n.el ? " on" : ""}" role="treeitem" tabindex="0" style="padding-left:${4 + depth * 12}px"><span class="tw${n.kids.length ? (open ? " open" : "") : " none"}">${IC.chevr}</span><span class="t">${esc(lname(n.el))}</span>${n.kids.length ? `<span class="x">${n.kids.length}</span>` : ""}</div>`);
     r.querySelector(".tw").onclick = (e) => {
       e.stopPropagation();
       open ? OPEN.delete(n.el) : OPEN.add(n.el);
@@ -328,11 +325,164 @@ function renderLayers(body, foot) {
     box.append(r);
     if (open) for (const k of n.kids) add(k, depth + 1);
   };
-  for (const n of tree) add(n, 0);
-  if (!tree.length) box.append(h(`<div class="pempty">This page has no landmarks to list. Click into the board to select elements directly.</div>`));
-  body.replaceChildren(box);
-  box.querySelector(".lrow.on")?.scrollIntoView({ block: "nearest" });
-  foot.append(h(`<span style="font-size:12px;color:var(--text-secondary);padding:0 4px">Click inside a board to reach any element.</span>`));
+  const tree = landmarks(d.body, 0, { n: 300 });
+  for (const n of tree) add(n, 1);
+  if (!tree.length) box.append(h(`<div class="hint2">No landmarks to list. Click into the board to select elements directly.</div>`));
+}
+
+// ----- screens: everything the prototype offers, ready to place on this page -----
+function renderScreens(body, foot, env) {
+  const cat = env.catalog?.screens?.length ? env.catalog : rootOf(env.id)?.catalog;
+  const states = cat?.states?.length ? ["Default", ...cat.states.filter((x) => x !== "Default")] : [];
+  if (states.length) {
+    const st = h(`<div class="sstate"><span>Show as</span></div>`);
+    st.append(dropdown({ value: S.placeState, options: states, full: true, label: "State for new boards", onChange: (v) => ((S.placeState = v), renderLeft()) }));
+    body.append(st);
+  }
+  if (!cat?.screens?.length) {
+    body.append(h(`<div class="pempty"><b>${cat ? "This prototype doesn't list its screens" : "Its screens show once a board has loaded"}</b>${cat ? "Pick a board's screen in Design, or describe the screens with window.workshopEnv (see the README)." : "Open a page with a board of it; the Workshop reads the screens, states and flows the prototype offers."}</div>`));
+    return;
+  }
+  const groups = new Map();
+  for (const s of cat.screens) {
+    if (!groups.has(s.group)) groups.set(s.group, []);
+    groups.get(s.group).push(s);
+  }
+  const placed = (name) => boardsOf(env.id).filter((b) => (b.screen || null) === name && (b.state || "Default") === (S.placeState || "Default"));
+  for (const [g, list] of groups) {
+    const grp = h(`<div class="sgrp"><div class="sgh"><span>${esc(g.toUpperCase())}</span><span class="sp"></span><button type="button">Place all</button></div></div>`);
+    grp.querySelector("button").onclick = async () => {
+      let n = 0;
+      for (const s of list) if (!placed(s.name).length && (await placeScreen(env.id, s.name, S.placeState))) n++;
+      toast(n ? `Placed ${plural(n, "screen")}` : "They're all on this page", n ? `${g} · ${pageName(env)}` : "");
+      if (n) setTimeout(() => fit(), 80);
+    };
+    for (const s of list) {
+      const n = placed(s.name).length;
+      const r = h(`<div class="srow" role="button" tabindex="0" draggable="true" title="${esc(s.name)}">${g === "Flows" ? IC.play : IC.frame}<span class="t">${esc(s.name.replace(/^Settings › /, ""))}</span>${n ? `<span class="tct" title="On this page">${n}</span>` : ""}<button type="button" class="ib24 add" aria-label="Place ${esc(s.name)}">${IC.plus}</button></div>`);
+      const place = async () => {
+        const it = await placeScreen(env.id, s.name, S.placeState);
+        if (it) (selectBoard(it.id), setTimeout(() => focusItem(it.id, { maxZ: 0.6 }), 60));
+      };
+      r.querySelector(".add").onclick = (e) => (e.stopPropagation(), place());
+      r.onclick = () => {
+        const there = placed(s.name)[0];
+        if (there) (selectBoard(there.id), focusItem(there.id, { maxZ: 0.6 }));
+        else place();
+      };
+      r.onkeydown = (e) => e.key === "Enter" && r.click();
+      r.ondragstart = (e) => {
+        e.dataTransfer.setData("application/x-workshop-screen", JSON.stringify({ env: env.id, screen: s.name, state: S.placeState }));
+        e.dataTransfer.effectAllowed = "copy";
+      };
+      grp.append(r);
+    }
+    body.append(grp);
+  }
+  foot.append(h(`<div class="hint2" style="border-top:1px solid var(--border-subtle)">Click a screen to place it, or drag it onto the canvas.</div>`));
+}
+
+// ----- notes: every annotation and comment on this page -----
+function renderNotes(head, body, env) {
+  const tg = segmented([{ label: "This page", value: false }, { label: "All", value: true }], S.notesAll, (v) => ((S.notesAll = v), renderLeft()), { label: "Which notes" });
+  head.append(tg);
+  const fam = new Set(familyOf(rootOf(env.id)?.id).map((x) => x.env.id));
+  const where = (pg) => (S.notesAll ? fam.has(pg) : pg === env.id);
+  const list = [];
+  for (const c of S.comments.filter((c) => !c.parent && (S.showResolved || !c.resolved) && where(c.env))) list.push({ kind: "cmt", at: c.createdAt, page: c.env, text: c.text, who: c.author, done: c.resolved, go: () => fire("open-thread", c.id), n: S.comments.filter((r) => r.parent === c.id).length });
+  for (const n of itemsOf("note").filter((n) => where(pageOf(n)))) list.push({ kind: "note", at: n.createdAt, page: pageOf(n), text: n.text || "Empty note", who: n.author, go: () => fire("go-item", n.id) });
+  for (const x of itemsOf("box").filter((x) => where(pageOf(x)))) list.push({ kind: "box", at: x.createdAt, page: pageOf(x), text: x.label || "Highlight", who: x.author, go: () => fire("go-item", x.id) });
+  list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  if (!list.length) body.append(h(`<div class="pempty"><b>No notes ${S.notesAll ? "yet" : "on this page"}</b>Pin a note (N), draw a highlight around something (B), connect things with an arrow (A) or comment on a board (C). Agents read all of them.</div>`));
+  else {
+    const feed = h(`<div class="feed"></div>`);
+    for (const x of list) {
+      const icon = x.kind === "cmt" ? IC.cmt : x.kind === "box" ? IC.box : IC.note;
+      const f = h(`<div class="fi${x.done ? " done" : ""}" role="button" tabindex="0"><span class="k ${x.kind}">${icon}</span><span class="tx"><p>${esc(x.text)}</p><span>${esc(x.who || "You")} · ${esc(timeAgo(x.at))}${S.notesAll && x.page ? ` · ${esc(pageName(S.envs.get(x.page)))}` : ""}${x.n ? ` · ${plural(x.n, "reply", "replies")}` : ""}${x.done ? " · resolved" : ""}</span></span></div>`);
+      f.onclick = x.go;
+      f.onkeydown = (e) => e.key === "Enter" && x.go();
+      feed.append(f);
+    }
+    body.append(feed);
+  }
+  const rs = S.comments.filter((c) => !c.parent && c.resolved && where(c.env)).length;
+  if (rs || S.showResolved) {
+    const b = h(`<button type="button" class="ghbtn sm" style="margin:8px">${S.showResolved ? "Hide resolved" : `Show resolved · ${rs}`}</button>`);
+    b.onclick = () => ((S.showResolved = !S.showResolved), markDirty(), renderLeft());
+    body.append(b);
+  }
+}
+
+// ----- history: versions of this page, and branches merged into the prototype -----
+function renderHistory(head, body, env) {
+  const sv = h(`<button type="button" class="dbtn sm">${IC.version}Save</button>`);
+  sv.onclick = () => fire("save-version", env.id);
+  head.append(sv);
+  const vs = S.versions.get(env.id);
+  if (!vs) loadVersions(env.id);
+  const v = h(`<div class="isec" style="border-bottom:0"></div>`);
+  if (vs && !vs.length) v.append(h(`<span class="lineage">No versions yet. Merges and agents save one before they change anything.</span>`));
+  for (const x of vs || []) {
+    const vr = h(`<div class="vrow"><span class="n">V${x.n}</span><span class="tx"><b title="${esc(x.label)}">${esc(x.label)}</b><span>${esc(x.author || "You")} · ${esc(timeAgo(x.at))}</span></span><span class="va"><button type="button" class="ib24" aria-label="Restore version ${x.n}" data-tip="Restore">${IC.restore}</button><button type="button" class="ib24" aria-label="Copy version ${x.n}" data-tip="Copy as a new prototype">${IC.copy}</button></span></div>`);
+    const [rb, fb] = vr.querySelectorAll(".ib24");
+    rb.onclick = () => fire("restore-version", { id: env.id, n: x.n });
+    fb.onclick = () => fire("fork-version", { id: env.id, n: x.n });
+    v.append(vr);
+  }
+  body.append(v);
+  const merged = familyOf(rootOf(env.id)?.id).map((x) => x.env).filter((e) => e.archived);
+  if (merged.length) {
+    body.append(h(`<div class="pdiv"></div>`), h(`<div class="shd"><span>Merged and archived</span><span class="n">${merged.length}</span></div>`));
+    const list = h(`<div class="pgs"></div>`);
+    for (const e of merged) {
+      const r = h(`<div class="pg archived" role="button" tabindex="0">${IC.fork}<span class="t">${esc(e.name)}</span><span class="m">${e.mergedAt ? esc(timeAgo(e.mergedAt).toUpperCase()) : "ARCHIVED"}</span></div>`);
+      r.onclick = () => fire("go", e.id);
+      list.append(r);
+    }
+    body.append(list);
+  }
+}
+
+// ======================= PAGE BANNER =======================
+export function renderBanner() {
+  const b = $("banner");
+  const env = pageEnv();
+  b.replaceChildren();
+  b.className = "banner";
+  if (!env || S.view !== "proto") return markDirty();
+  const parent = isBranch(env) ? S.envs.get(env.parent) : null;
+  const add = (html, fn) => {
+    const x = h(html);
+    if (fn) x.onclick = fn;
+    b.querySelector(".acts").append(x);
+    return x;
+  };
+  if (env.archived) {
+    b.classList.add("branch");
+    b.append(h(IC.fork), h(`<b>${esc(env.name)}</b>`), h(`<span class="meta">${env.mergedAt ? `Merged into ${esc(S.envs.get(env.mergedInto)?.name ? pageName(S.envs.get(env.mergedInto)) : "its parent")} · ${esc(timeAgo(env.mergedAt))}` : "Archived"}</span>`), h(`<span class="vsep"></span>`), h(`<span class="acts"></span>`));
+    add(`<button type="button" class="dbtn sm">Unarchive</button>`, () => fire("unarchive", env.id));
+    if (parent) add(`<button type="button" class="ghbtn sm">Open ${esc(pageName(parent))}</button>`, () => fire("go", parent.id));
+  } else if (parent) {
+    b.classList.add("branch");
+    const d = S.diffs.get(env.id);
+    const parts = [`Branch of ${esc(pageName(parent))}`];
+    if (d) {
+      parts.push(d.changes.length ? `<span class="ch">${plural(d.changes.length, "change")}</span>` : "no changes yet");
+      if (d.conflicts) parts.push(`<span class="cf">${plural(d.conflicts, "conflict")}</span>`);
+      if (d.behind) parts.push(`${d.behind} behind`);
+    }
+    b.append(h(IC.fork), h(`<b title="${esc(env.name)}">${esc(env.name)}</b>`), h(`<span class="meta">${parts.join(" · ")}</span>`), h(`<span class="vsep"></span>`), h(`<span class="acts"></span>`));
+    const cmp = add(`<button type="button" class="ghbtn sm" aria-pressed="${S.compare}">${IC.compare}${S.compare ? "Hide compare" : `Compare with ${esc(pageName(parent))}`}</button>`, () => fire("compare"));
+    cmp.title = `Show ${pageName(parent)}'s screens above this branch's`;
+    if (d?.behind) add(`<button type="button" class="dbtn sm">Update from ${esc(pageName(parent))}</button>`, () => fire("update-from-main", env.id));
+    const rv = add(`<button type="button" class="createbtn sm">Review and merge</button>`, () => fire("review", env.id));
+    rv.disabled = !!d && !d.changes.length;
+  } else {
+    const kids = envList().filter((e) => e.parent === env.id && !e.archived).length;
+    b.append(h(IC.board), h(`<b>Main</b>`), h(`<span class="meta">${esc(env.name)} · ${plural(boardsOf(env.id).length, "screen")}${kids ? ` · ${plural(kids, "open branch", "open branches")}` : ""}</span>`), h(`<span class="vsep"></span>`), h(`<span class="acts"></span>`));
+    add(`<button type="button" class="dbtn sm">${IC.fork}Create branch</button>`, () => fire("branch", env.id));
+  }
+  markDirty();
 }
 
 // ======================= RIGHT PANEL =======================
@@ -346,51 +496,26 @@ const row = (k, v, stack = false) => {
 
 export function renderRight() {
   const body = $("rBody");
-  $("rFoot").replaceChildren();
+  for (const x of document.querySelectorAll("#rTabs button")) {
+    x.classList.toggle("on", x.dataset.t === S.rightTab);
+    x.setAttribute("aria-selected", String(x.dataset.t === S.rightTab));
+  }
   const st = body.scrollTop;
   body.replaceChildren();
+  if (!pageEnv()) return;
   if (S.rightTab === "design") renderDesignInto(body);
-  else if (S.rightTab === "comments") renderNotes(body);
-  else renderChat(body);
+  else renderProto(body);
   body.scrollTop = st;
-  const active = S.tasks.filter((t) => t.status === "queued" || t.status === "working").length;
-  $("rChatN").textContent = active || "";
-  $("rNotesN").textContent = S.comments.filter((c) => !c.parent && !c.resolved).length + itemsOf("note").length + itemsOf("box").length || "";
 }
 export function renderDesign() {
   if (S.rightTab === "design") renderRight();
 }
 function renderDesignInto(body) {
   const s = S.sel;
-  if (!s) return designCanvas(body);
-  if (s.kind === "section") return designSection(body, s.env);
+  if (!s) return designPage(body, pageEnv());
   if (s.kind === "board") return designBoard(body, s.item);
   if (s.kind === "el") return designEl(body, s);
   return designAnnotation(body, s.item);
-}
-
-function designCanvas(body) {
-  const ws = S.ws;
-  const branches = envList().filter((e) => isBranch(e) && !e.archived).length;
-  const a = sec("This canvas");
-  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-  const notes = itemsOf("note").length + itemsOf("box").length + S.comments.filter((c) => !c.parent).length;
-  a.append(h(`<span style="color:var(--text-secondary)">${plural(envList().filter((e) => !isBranch(e)).length, "prototype", "prototypes")} · ${plural(branches, "open branch", "open branches")} · ${plural(itemsOf("board").length, "board", "boards")} · ${plural(notes, "note", "notes")}</span>`));
-  a.append(h(`<div class="legend">
-    <span class="sw2" style="background:var(--bg-input);box-shadow:0 0 0 .5px var(--border-subtle)"></span><span>A prototype's main section: one board per screen</span>
-    <span class="sw2" style="background:var(--bg-warm);box-shadow:0 0 0 .5px var(--border-subtle)"></span><span>A branch, joined to what it came from by a line</span>
-    <span class="sw2" style="background:var(--bg-warm);box-shadow:var(--sh-md)"></span><span>A note — <b>N</b></span>
-    <span class="sw2" style="border:2px dashed var(--text-accent)"></span><span>A highlight — <b>B</b>, and arrows — <b>A</b></span>
-  </div>`));
-  body.append(a);
-  const b = sec("Agent");
-  const hs = ws.harnesses || [];
-  b.append(h(`<div class="ahar"><span class="hdot${hs.length || ws.agent ? " on" : ""}"></span><span>${hs.length ? `<b>${esc(hs[0].client)}</b> is connected` : ws.agent ? `Requests run with <b>${esc(ws.agent.name)}</b>` : "No agent connected"}</span><span class="sp"></span><button type="button">${hs.length || ws.agent ? "Settings" : "Connect"}</button></div>`));
-  b.querySelector("button").onclick = () => fire("connect");
-  body.append(b);
-  const c = sec("Shortcuts");
-  c.append(h(`<div class="kbdl"><span>Select · Hand</span><kbd>V · H</kbd><span>Note · Highlight · Arrow</span><kbd>N · B · A</kbd><span>Comment</span><kbd>C</kbd><span>Design or Prototype</span><kbd>P</kbd><span>Zoom to fit</span><kbd>⇧1</kbd><span>Duplicate</span><kbd>⌘D</kbd><span>Search</span><kbd>⌘K</kbd><span>Hide panels</span><kbd>⌘\\</kbd></div>`));
-  body.append(c);
 }
 
 async function patchEnv(id, patch) {
@@ -406,57 +531,12 @@ async function patchEnv(id, patch) {
   }
 }
 
-function envSettings(body, env) {
-  const cat = env.catalog;
-  const e1 = sec("Prototype settings", cat?.adapter ? `<span class="tagro" title="Screens, states and variants come from the prototype's own tools">${esc(cat.adapter.toUpperCase())}</span>` : "");
-  e1.append(h(`<span style="font-size:12px;color:var(--text-secondary);margin-top:-4px">Every board of ${esc(env.name)} shows these.</span>`));
-  e1.append(row("Theme", segmented([{ label: "Light", value: "light" }, { label: "Dark", value: "dark" }, { label: "System", value: "system" }], env.theme, async (v) => {
-    for (const r of boardsLive(env.id)) r.setTheme(v);
-    await patchEnv(env.id, { theme: v });
-  }, { full: true, label: "Theme" })));
-  const live = boardsLive(env.id)[0];
-  const variants = (() => {
-    try {
-      return live?.adapter()?.variants || null;
-    } catch {
-      return null;
-    }
-  })() || cat?.variants?.map((v) => ({ ...v, value: env.variants?.[v.label] || v.options[0] })) || [];
-  for (const x of variants) {
-    e1.append(row(x.label, dropdown({ value: env.variants?.[x.label] || x.value, options: x.options, full: true, label: x.label, onChange: async (o) => {
-      for (const r of boardsLive(env.id)) r.setVariant(x.label, o);
-      await patchEnv(env.id, { variants: { [x.label]: o } });
-      setTimeout(renderDesign, 60);
-    } }), true));
-  }
-  if (variants.length && !isBranch(env)) e1.append(h(`<span style="font-size:12px;color:var(--text-secondary)">To compare a variant, create a branch and change it there.</span>`));
-  body.append(e1);
-}
-
-function history(body, env) {
-  const vs = S.versions.get(env.id) || [];
-  const v = sec("History", `<span class="tct">${vs.length || ""}</span>`);
-  const sv = h(`<button type="button" class="dbtn sm">${IC.version}Save version</button>`);
-  v.querySelector(".ih").append(sv);
-  sv.onclick = () => fire("save-version", env.id);
-  if (!vs.length) v.append(h(`<span style="color:var(--text-secondary)">No versions yet. Merges and agents save one before they change anything.</span>`));
-  for (const x of vs.slice(0, 6)) {
-    const vr = h(`<div class="vrow"><span class="n">V${x.n}</span><span class="tx"><b title="${esc(x.label)}">${esc(x.label)}</b><span>${esc(x.author || "You")} · ${esc(timeAgo(x.at))}</span></span><span class="va"><button type="button" class="ib24" aria-label="Restore version ${x.n}" data-tip="Restore">${IC.restore}</button><button type="button" class="ib24" aria-label="Copy version ${x.n}" data-tip="Copy as a new prototype">${IC.copy}</button></span></div>`);
-    const [rb, fb] = vr.querySelectorAll(".ib24");
-    rb.onclick = () => fire("restore-version", { id: env.id, n: x.n });
-    fb.onclick = () => fire("fork-version", { id: env.id, n: x.n });
-    v.append(vr);
-  }
-  body.append(v);
-  if (!S.versions.has(env.id)) loadVersions(env.id);
-}
-
-function designSection(body, id) {
-  const env = S.envs.get(id);
-  if (!env) return;
+const fmt = (v, key = "") => (v === null || v === undefined || v === "" ? (key.startsWith("variant:") ? "default" : key.startsWith("text:") ? "original text" : "none") : String(v));
+function designPage(body, env) {
+  const id = env.id;
   const branch = isBranch(env);
   const parent = branch ? S.envs.get(env.parent) : null;
-  const t = h(`<div class="isec"><div class="ititle"><div class="afld-in"><input aria-label="Name" value="${esc(env.name)}" maxlength="120"></div><span class="pth"><span title="envs/${esc(id)}/">envs/${esc(id)}/</span><button type="button" class="ib24" aria-label="Copy folder path" data-tip="Copy path">${IC.copy}</button></span></div></div>`);
+  const t = h(`<div class="isec"><div class="ih"><b>Page</b><span class="tagro${branch ? " info" : ""}">${branch ? "BRANCH" : "MAIN"}</span></div><div class="ititle"><div class="afld-in"><input aria-label="Name" value="${esc(env.name)}" maxlength="120"></div><span class="pth"><span title="envs/${esc(id)}/">envs/${esc(id)}/</span><button type="button" class="ib24" aria-label="Copy folder path" data-tip="Copy path">${IC.copy}</button></span></div></div>`);
   const inp = t.querySelector("input");
   inp.addEventListener("keydown", (e) => (e.key === "Enter" && inp.blur(), e.key === "Escape" && ((inp.value = env.name), inp.blur())));
   inp.addEventListener("blur", async () => {
@@ -466,59 +546,63 @@ function designSection(body, id) {
   });
   t.querySelector(".ib24").onclick = () => copyText(`${S.ws.root}/envs/${id}`);
   body.append(t);
-  // lineage and status
-  const L = sec(branch ? "Branch" : "Main");
   if (branch) {
-    L.append(h(`<div class="lineage"><span>Branch of <b>${esc(parent.name)}</b>, made ${esc(timeAgo(env.branch?.at || env.created))}${env.author ? ` by ${esc(env.author)}` : ""}.</span>${env.base ? `<span>It reads ${esc(S.envs.get(env.base)?.name || env.base)}'s files until it changes them.</span>` : ""}</div>`));
+    const L = sec("Changes on this branch");
+    L.append(h(`<div class="lineage"><span>Branch of <b>${esc(pageName(parent))}</b>, made ${esc(timeAgo(env.branch?.at || env.created))}${env.author ? ` by ${esc(env.author)}` : ""}. It reads ${esc(pageName(parent))}'s files until it changes them.</span></div>`));
     if (env.archived) {
-      L.append(h(`<div class="shnote">${IC.info}<div><b>${env.mergedAt ? `Merged into ${esc(S.envs.get(env.mergedInto)?.name || "its parent")}` : "Archived"}</b><br><span>${env.mergedAt ? esc(timeAgo(env.mergedAt)) : "It's hidden from the canvas."}</span></div></div>`));
+      L.append(h(`<div class="shnote">${IC.info}<div><b>${env.mergedAt ? `Merged into ${esc(pageName(S.envs.get(env.mergedInto)) || "its parent")}` : "Archived"}</b><br><span>${env.mergedAt ? esc(timeAgo(env.mergedAt)) : "Hidden from the branch list."}</span></div></div>`));
       const un = h(`<button type="button" class="dbtn sm" style="align-self:flex-start">Unarchive</button>`);
-      un.onclick = () => patchEnv(id, { archived: false }).then(() => (sync(), renderLeft()));
+      un.onclick = () => fire("unarchive", id);
       L.append(un);
     } else {
       const d = S.diffs.get(id);
-      if (!d) loadDiff(id).then(() => selEnvId() === id && renderDesign());
-      L.append(h(`<div class="status">${d ? `<span class="tagro${d.changes.length ? " info" : ""}">${d.changes.length} CHANGE${d.changes.length === 1 ? "" : "S"}</span>${d.conflicts ? `<span class="tagro err">${d.conflicts} CONFLICT${d.conflicts === 1 ? "" : "S"}</span>` : ""}${d.behind ? `<span class="tagro">${d.behind} BEHIND ${esc(parent.name.toUpperCase().slice(0, 24))}</span>` : ""}` : `<span class="tagro">CHECKING</span>`}</div>`));
+      if (!d) loadDiff(id);
+      L.querySelector(".ih").append(h(`<span class="tct">${d ? d.changes.length : ""}</span>`));
+      if (d?.changes.length) {
+        const ch = h(`<div class="chg"></div>`);
+        for (const c of d.changes.slice(0, 12)) ch.append(h(`<div class="r${c.conflict ? " cf" : ""}"><b>${esc(c.label)}</b><span>${c.kind === "file" ? "Changed on the branch" : `<del>${esc(fmt(c.main, c.key))}</del> → <ins>${esc(fmt(c.branch, c.key))}</ins>`}</span></div>`));
+        if (d.changes.length > 12) ch.append(h(`<div class="r"><span>and ${d.changes.length - 12} more</span></div>`));
+        L.append(ch);
+      } else if (d) L.append(h(`<span class="lineage">Nothing yet. Change a token, a variant, some text or a file here, or ask an agent, and it shows up to review.</span>`));
       const acts = h(`<div style="display:flex;gap:8px;flex-wrap:wrap"></div>`);
       const rv = h(`<button type="button" class="createbtn sm" ${d && d.changes.length ? "" : "disabled"}>Review and merge</button>`);
       rv.onclick = () => fire("review", id);
-      const up = h(`<button type="button" class="dbtn sm" ${d && d.behind ? "" : "disabled"}>Update from ${esc(parent.name.length > 18 ? "main" : parent.name)}</button>`);
-      up.onclick = () => fire("update-from-main", id);
-      acts.append(rv, up);
+      const cmp = h(`<button type="button" class="dbtn sm">${IC.compare}${S.compare ? "Hide compare" : "Compare"}</button>`);
+      cmp.onclick = () => fire("compare");
+      acts.append(rv, cmp);
+      if (d?.behind) {
+        const up = h(`<button type="button" class="dbtn sm">Update from ${esc(pageName(parent))}</button>`);
+        up.onclick = () => fire("update-from-main", id);
+        acts.append(up);
+      }
       L.append(acts);
-      if (d && !d.changes.length) L.append(h(`<span style="font-size:12px;color:var(--text-secondary)">Change something on this branch — a token, a variant, a file — and it shows up here to review.</span>`));
     }
+    body.append(L);
   } else {
     const kids = envList().filter((e) => e.parent === id && !e.archived);
-    L.append(h(`<div class="lineage"><span>${boardsOf(id).length} screen${boardsOf(id).length === 1 ? "" : "s"} on the canvas${kids.length ? ` · ${kids.length} open branch${kids.length === 1 ? "" : "es"}` : ""}.</span></div>`));
+    const L = sec("Branches", `<span class="tct">${kids.length || ""}</span>`);
+    L.append(h(`<span class="lineage">Main only changes when you merge a branch. Try ideas on branches; agents work on them too.</span>`));
+    for (const k of kids) {
+      const m = pageMeta(k);
+      const r = h(`<div class="pg" role="button" tabindex="0" style="margin:0 -8px">${IC.fork}<span class="t">${esc(k.name)}</span><span class="m ${m.cls}">${esc(m.t)}</span></div>`);
+      r.onclick = () => fire("go", k.id);
+      L.append(r);
+      if (!S.diffs.has(k.id)) loadDiff(k.id);
+    }
     const br = h(`<button type="button" class="dbtn sm" style="align-self:flex-start">${IC.fork}Create branch</button>`);
     br.onclick = () => fire("branch", id);
     L.append(br);
+    body.append(L);
   }
-  body.append(L);
-  if (!env.archived) envSettings(body, env);
-  // its screens
-  const bs = boardsOf(id);
-  const sc = sec("Screens", `<span class="tct">${bs.length || ""}</span>`);
-  for (const b of bs) {
-    const r = h(`<div class="vrow" role="button" tabindex="0" style="cursor:pointer"><span class="tx"><b>${esc(screenName(b))}${b.state && b.state !== "Default" ? ` · ${esc(b.state)}` : ""}</b><span>${b.w} × ${b.h}</span></span></div>`);
-    r.onclick = () => (selectBoard(b.id), focusItem(b.id, { maxZ: 0.6 }));
-    sc.append(r);
-  }
-  const more = h(`<button type="button" class="ghbtn sm" style="align-self:flex-start">${IC.plus}Place a screen</button>`);
-  more.onclick = () => fire("left-tab", "screens");
-  sc.append(more);
-  body.append(sc);
-  history(body, env);
-  const a = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="present">${IC.play}Present</button><button type="button" class="dbtn sm" data-a="share">${IC.share}Share</button><button type="button" class="dbtn sm" data-a="chat">${IC.agent}Ask agent</button></div></div>`);
-  a.querySelector('[data-a="present"]').onclick = () => fire("present", bs[0]?.id);
-  a.querySelector('[data-a="share"]').onclick = () => fire("share", id);
-  a.querySelector('[data-a="chat"]').onclick = () => fire("ask-agent", {});
-  body.append(a);
-  const del = h(`<div class="isec" style="display:flex;flex-direction:row;gap:8px">${branch && !env.archived ? `<button type="button" class="dbtn sm" data-a="arch">Archive branch</button>` : ""}<button type="button" class="dbtn sm err" data-a="del">${IC.trash}Delete ${branch ? "branch" : "prototype"}</button></div>`);
+  const counts = sec("On this page");
+  const nNotes = pageItems("note").length + pageItems("box").length + pageItems("arrow").length;
+  const nCm = S.comments.filter((c) => !c.parent && !c.resolved && c.env === id).length;
+  counts.append(h(`<div class="xyrow"><span class="xy"><i>Screens</i>${boardsOf(id).length}</span><span class="xy"><i>Notes</i>${nNotes + nCm}</span></div>`));
+  body.append(counts);
+  const del = h(`<div class="isec" style="display:flex;flex-direction:row;flex-wrap:wrap;gap:8px">${branch && !env.archived ? `<button type="button" class="dbtn sm" data-a="arch">Archive</button>` : ""}<button type="button" class="dbtn sm err" data-a="del">${IC.trash}Delete ${branch ? "branch" : "prototype"}</button></div>`);
   del.querySelector('[data-a="del"]').onclick = () => fire("delete", id);
   const ar = del.querySelector('[data-a="arch"]');
-  if (ar) ar.onclick = () => patchEnv(id, { archived: true }).then(() => (sync(), renderLeft(), toast(`Archived ${env.name}`, "Show merged branches from the Branches panel", { label: "Undo", fn: () => patchEnv(id, { archived: false }).then(() => (sync(), renderLeft())) })));
+  if (ar) ar.onclick = () => fire("archive", id);
   body.append(del);
 }
 
@@ -534,45 +618,100 @@ function designBoard(body, bid) {
       return null;
     }
   })();
-  const t = h(`<div class="isec"><div class="ititle"><span class="nm">${esc(screenName(b))}</span><span class="pth"><span>${esc(env.name)}${isBranch(env) ? " · branch" : ""}</span><button type="button" class="ib24" aria-label="Open in a new tab" data-tip="Open in a new tab">${IC.ext}</button></span></div></div>`);
+  const t = h(`<div class="isec"><div class="ih"><b>Frame</b><button type="button" class="ib24" aria-label="Open in a new tab" data-tip="Open in a new tab">${IC.ext}</button></div><div class="ititle"><span class="nm">${esc(screenName(b))}</span></div></div>`);
   t.querySelector(".ib24").onclick = () => window.open(`/env/${b.env}/?ws-screen=${encodeURIComponent(b.screen || "")}`, "_blank", "noopener");
-  body.append(t);
-  const B1 = sec("Board");
-  const screens = ad?.screens?.length ? ad.screens : env.catalog?.screens || [];
+  const screens = ad?.screens?.length ? ad.screens : env.catalog?.screens || rootOf(env.id)?.catalog?.screens || [];
   if (screens.length) {
     const opts = [{ label: "Its start screen", value: "" }, ...screens.map((x) => ({ group: x.group, label: x.name.replace("Settings › ", ""), value: x.name }))];
-    B1.append(row("Screen", dropdown({ value: b.screen || "", options: opts, full: true, label: "Screen", onChange: async (v) => {
+    t.append(row("Screen", dropdown({ value: b.screen || "", options: opts, full: true, label: "Screen", onChange: async (v) => {
       const next = await api(`canvas/items/${bid}`, { method: "PATCH", body: { screen: v || null } }).catch((e) => toast("Couldn't change the screen", e.message));
-      if (next) (S.items.set(bid, next), reloadBoard(bid), markDirty(), renderDesign());
+      if (next) (S.items.set(bid, next), reloadBoard(bid), markDirty(), renderDesign(), renderLeft());
     } })));
   }
   const states = ad?.states?.length ? ad.states : env.catalog?.states || [];
   if (states.length) {
-    B1.append(row("State", dropdown({ value: b.state || "Default", options: states, full: true, label: "State", onChange: async (v) => {
+    t.append(row("State", dropdown({ value: b.state || "Default", options: states, full: true, label: "State", onChange: async (v) => {
       const next = await api(`canvas/items/${bid}`, { method: "PATCH", body: { state: v === "Default" ? null : v } }).catch((e) => toast("Couldn't change the state", e.message));
-      if (next) (S.items.set(bid, next), reloadBoard(bid), markDirty(), renderDesign());
+      if (next) (S.items.set(bid, next), reloadBoard(bid), markDirty(), renderDesign(), renderLeft());
     } })));
   }
+  body.append(t);
+  const L = sec("Layout");
   const cur = DEVICES.find((d) => d.w === b.w && d.h === b.h);
-  B1.append(row("Size", dropdown({ value: cur ? `${cur.w}x${cur.h}` : "custom", options: [...DEVICES.map((d) => ({ label: d.label, value: `${d.w}x${d.h}` })), ...(cur ? [] : [{ label: `Custom · ${b.w} × ${b.h}`, value: "custom" }])], full: true, label: "Size", onChange: async (v) => {
+  L.append(row("Size", dropdown({ value: cur ? `${cur.w}x${cur.h}` : "custom", options: [...DEVICES.map((d) => ({ label: d.label, value: `${d.w}x${d.h}` })), ...(cur ? [] : [{ label: `Custom · ${b.w} × ${b.h}`, value: "custom" }])], full: true, label: "Size", onChange: async (v) => {
     if (v === "custom") return;
     const [w, hh] = v.split("x").map(Number);
     const next = await api(`canvas/items/${bid}`, { method: "PATCH", body: { w, h: hh } }).catch((e) => toast("Couldn't resize", e.message));
     if (next) (S.items.set(bid, next), sync(), renderDesign());
   } })));
-  if (ad?.screen) B1.append(h(`<span style="font-size:12px;color:var(--text-secondary)">Showing ${esc(ad.screen)} now. Switch to Prototype (P) to click through it.</span>`));
-  body.append(B1);
-  const L = sec(isBranch(env) ? "Branch" : "Prototype");
-  const go = h(`<div class="prow" role="button" tabindex="0" style="display:flex;align-items:center;gap:8px;height:32px;cursor:pointer;margin:0 -8px;padding:0 8px;border-radius:8px">${isBranch(env) ? IC.fork : IC.board}<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(env.name)}</span>${IC.chevr}</div>`);
-  go.onclick = () => selectSection(env.id);
-  L.append(go);
-  const acts = h(`<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="dup">${IC.copy}Duplicate board</button><button type="button" class="dbtn sm" data-a="br">${IC.fork}Branch from here</button><button type="button" class="dbtn sm" data-a="pr">${IC.play}Present</button></div>`);
-  acts.querySelector('[data-a="dup"]').onclick = () => placeScreen(b.env, b.screen, b.state).then((it) => it && selectBoard(it.id));
-  acts.querySelector('[data-a="br"]').onclick = () => fire("branch", b.env);
-  acts.querySelector('[data-a="pr"]').onclick = () => fire("present", bid);
-  L.append(acts);
+  L.append(h(`<div class="xyrow"><span class="xy"><i>X</i>${b.x}</span><span class="xy"><i>Y</i>${b.y}</span><span class="xy"><i>W</i>${b.w}</span><span class="xy"><i>H</i>${b.h}</span></div>`));
   body.append(L);
+  if (ad?.screen) body.append(h(`<div class="isec"><span class="lineage">Showing ${esc(ad.screen)} now. Turn on Interact (P) to click through it.</span></div>`));
+  const acts = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="pr">${IC.play}Present</button><button type="button" class="dbtn sm" data-a="dup">${IC.copy}Duplicate</button><button type="button" class="dbtn sm" data-a="agent">${IC.spark}Ask</button></div></div>`);
+  acts.querySelector('[data-a="dup"]').onclick = () => placeScreen(b.env, b.screen, b.state).then((it) => it && selectBoard(it.id));
+  acts.querySelector('[data-a="pr"]').onclick = () => fire("present", bid);
+  acts.querySelector('[data-a="agent"]').onclick = () => fire("ask-agent", {});
+  body.append(acts);
+}
+
+// ----- prototype: how this page runs -----
+function renderProto(body) {
+  const env = pageEnv();
   envSettings(body, env);
+  const cat = env.catalog?.screens?.length ? env.catalog : rootOf(env.id)?.catalog;
+  const flows = (cat?.screens || []).filter((s) => s.group === "Flows");
+  if (flows.length) {
+    const F = sec("Flows", `<span class="tct">${flows.length}</span>`);
+    for (const f of flows) {
+      const r = h(`<div class="vrow"><span class="tx"><b>${esc(f.name)}</b><span>Starts the flow from its first step</span></span><span class="va" style="opacity:1;pointer-events:auto"><button type="button" class="ib24" aria-label="Place ${esc(f.name)}" data-tip="Place on the canvas">${IC.plus}</button><button type="button" class="ib24" aria-label="Play ${esc(f.name)}" data-tip="Play in a new tab">${IC.play}</button></span></div>`);
+      const [pl, play] = r.querySelectorAll(".ib24");
+      pl.onclick = () => placeScreen(env.id, f.name).then((it) => it && (selectBoard(it.id), focusItem(it.id, { maxZ: 0.6 })));
+      play.onclick = () => window.open(`/present/${env.id}/?screen=${encodeURIComponent(f.name)}`, "_blank", "noopener");
+      F.append(r);
+    }
+    body.append(F);
+  }
+  const I = sec("Interact");
+  const sw = h(`<div class="setrow"><div class="tx"><span style="font-size:12px;line-height:1.5">Use the prototype on the canvas: clicks and typing go to the page. <b style="font-weight:500">P</b> switches.</span></div><button type="button" class="sw" role="switch" aria-checked="${S.mode === "prototype"}" aria-label="Interact"><i></i></button></div>`);
+  sw.querySelector(".sw").onclick = () => setMode(S.mode === "design" ? "prototype" : "design");
+  I.append(sw);
+  body.append(I);
+  const P = sec("Present and share");
+  const acts = h(`<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="pr">${IC.play}Present</button><button type="button" class="dbtn sm" data-a="sh">${IC.share}Share</button><button type="button" class="dbtn sm" data-a="tab">${IC.ext}New tab</button></div>`);
+  acts.querySelector('[data-a="pr"]').onclick = () => fire("present", S.sel?.kind === "board" ? S.sel.item : pageItems("board")[0]?.id);
+  acts.querySelector('[data-a="sh"]').onclick = () => fire("share", env.id);
+  acts.querySelector('[data-a="tab"]').onclick = () => window.open(`/present/${env.id}/`, "_blank", "noopener");
+  P.append(acts);
+  body.append(P);
+}
+
+function envSettings(body, env) {
+  const cat = env.catalog?.variants?.length ? env.catalog : rootOf(env.id)?.catalog || env.catalog;
+  const e1 = sec("Theme and variants");
+  e1.append(h(`<span class="lineage" style="margin-top:-4px">Every screen on ${esc(pageName(env))} shows these.${!isBranch(env) ? " To compare one, create a branch and change it there." : ""}</span>`));
+  e1.append(row("Theme", segmented([{ label: "Light", value: "light" }, { label: "Dark", value: "dark" }, { label: "System", value: "system" }], env.theme, async (v) => {
+    for (const r of boardsLive(env.id)) r.setTheme(v);
+    await patchEnv(env.id, { theme: v });
+  }, { full: true, label: "Theme" })));
+  const live = boardsLive(env.id)[0];
+  const variants =
+    (() => {
+      try {
+        return live?.adapter()?.variants || null;
+      } catch {
+        return null;
+      }
+    })() ||
+    cat?.variants?.map((v) => ({ ...v, value: env.variants?.[v.label] || v.options[0] })) ||
+    [];
+  for (const x of variants) {
+    e1.append(row(x.label, dropdown({ value: env.variants?.[x.label] || x.value, options: x.options, full: true, label: x.label, onChange: async (o) => {
+      for (const r of boardsLive(env.id)) r.setVariant(x.label, o);
+      await patchEnv(env.id, { variants: { [x.label]: o } });
+      setTimeout(renderRight, 60);
+    } }), true));
+  }
+  body.append(e1);
 }
 
 function swatches(set, current, onPick) {
@@ -655,7 +794,7 @@ function designEl(body, s) {
   const css = OV.get(s.env);
   if (css === undefined) loadOverrides(s.env).then(() => S.sel === s && renderDesign());
   const mine = parseRules(css || "").filter((ru) => norm(ru.selector) === norm(i.selector) || norm(ru.selector) === norm(i.exactSelector));
-  const a = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="agent">${IC.agent}Ask an agent about this</button>${mine.length ? `<button type="button" class="ghbtn sm" data-a="reset">${IC.restore}Reset this element</button>` : ""}</div></div>`);
+  const a = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="agent">${IC.spark}Ask an agent about this</button>${mine.length ? `<button type="button" class="ghbtn sm" data-a="reset">${IC.restore}Reset this element</button>` : ""}</div></div>`);
   a.querySelector('[data-a="agent"]').onclick = () => fire("ask-agent", {});
   const rs = a.querySelector('[data-a="reset"]');
   if (rs)
@@ -709,108 +848,62 @@ function designAnnotation(body, id) {
     }
   }
   body.append(t);
-  const a = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="agent">${IC.agent}Send to an agent</button><button type="button" class="dbtn sm err" data-a="del">${IC.trash}Remove</button></div></div>`);
+  const a = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="agent">${IC.spark}Send to an agent</button><button type="button" class="dbtn sm err" data-a="del">${IC.trash}Remove</button></div></div>`);
   a.querySelector('[data-a="agent"]').onclick = () => {
-    const near = boardUnder(it);
+    const near = nearestBoard(it, S.page);
     if (near) selectBoard(near.id);
     fire("ask-agent", { prompt: it.text || it.label || "" });
   };
   a.querySelector('[data-a="del"]').onclick = () => fire("remove-item", id);
   body.append(a);
 }
-function boardUnder(it) {
-  const r = it.type === "note" ? { x: it.x, y: it.y, w: it.w, h: 120 } : it.type === "box" ? it : null;
-  if (!r) return null;
-  const cx = r.x + r.w / 2,
-    cy = r.y + r.h / 2;
-  let best = null,
-    bd = Infinity;
-  for (const b of itemsOf("board")) {
-    const dx = Math.max(b.x - cx, 0, cx - (b.x + b.w)),
-      dy = Math.max(b.y - cy, 0, cy - (b.y + b.h));
-    const d = Math.hypot(dx, dy);
-    if (d < bd) (bd = d), (best = b);
-  }
-  return best;
-}
 
-// ----- notes: every annotation and comment in one feed -----
-function renderNotes(body) {
-  const env = selEnvId();
-  const list = [];
-  for (const c of S.comments.filter((c) => !c.parent && (S.showResolved || !c.resolved))) list.push({ kind: "cmt", at: c.createdAt, env: c.env, text: c.text, who: c.author, done: c.resolved, go: () => fire("open-thread", c.id), n: S.comments.filter((r) => r.parent === c.id).length });
-  for (const n of itemsOf("note")) list.push({ kind: "note", at: n.createdAt, env: boardUnder(n)?.env, text: n.text || "Empty note", who: n.author, go: () => (selectItem(n.id), focusItem(n.id, { maxZ: 0.8 })) });
-  for (const x of itemsOf("box")) list.push({ kind: "box", at: x.createdAt, env: boardUnder(x)?.env, text: x.label || "Highlight", who: x.author, go: () => (selectItem(x.id), focusItem(x.id, { maxZ: 0.8 })) });
-  const shown = list.filter((x) => !env || x.env === env).sort((a, b) => String(b.at).localeCompare(String(a.at)));
-  const head = h(`<div class="sstate" style="padding-bottom:8px"><span>${env ? `On ${esc(S.envs.get(env)?.name || "")}` : "Everything on the canvas"}</span><span style="flex:1"></span></div>`);
-  const tg = h(`<button type="button" class="ghbtn sm">${S.showResolved ? "Hide resolved" : "Show resolved"}</button>`);
-  tg.onclick = () => ((S.showResolved = !S.showResolved), markDirty(), renderRight());
-  head.append(tg);
-  body.append(head);
-  if (!shown.length) {
-    body.append(h(`<div class="pempty"><b>No notes yet</b>Pin a note (N), draw a highlight around something (B), connect things with an arrow (A) or comment on a board (C). Agents can read all of them.</div>`));
-    return;
-  }
-  const feed = h(`<div class="feed"></div>`);
-  for (const x of shown) {
-    const icon = x.kind === "cmt" ? IC.cmt : x.kind === "box" ? `<svg class="ic" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="2" stroke-dasharray="2 2"/></svg>` : `<svg class="ic" viewBox="0 0 16 16"><path d="M3 3.5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1V10l-3.5 3.5H4a1 1 0 0 1-1-1Z"/></svg>`;
-    const f = h(`<div class="fi${x.done ? " done" : ""}" role="button" tabindex="0"><span class="k ${x.kind}">${icon}</span><span class="tx"><p>${esc(x.text)}</p><span>${esc(x.who || "You")} · ${esc(timeAgo(x.at))}${x.env && !env ? ` · ${esc(S.envs.get(x.env)?.name || "")}` : ""}${x.n ? ` · ${x.n} repl${x.n === 1 ? "y" : "ies"}` : ""}${x.done ? " · resolved" : ""}</span></span></div>`);
-    f.onclick = x.go;
-    f.onkeydown = (e) => e.key === "Enter" && x.go();
-    feed.append(f);
-  }
-  body.append(feed);
-}
-
-// ----- chat: Claude-style turns; a request can open a branch for the agent -----
+// ----- agents: Claude-style turns; from main, a request opens a branch for the agent -----
 let draft = "";
 const STATUS = { queued: ["QUEUED", ""], working: ["WORKING", "info"], done: ["DONE", "ok"], failed: ["FAILED", "err"], cancelled: ["STOPPED", ""] };
 const openLogs = new Set();
-function renderChat(body) {
-  const env = selEnv();
+function renderChat(body, foot, env) {
   const ws = S.ws;
   const hs = ws.harnesses || [];
   const agentName = ws.agent?.name || hs[0]?.client || "Agent";
-  const thread = h(`<div class="athread" aria-live="polite" style="padding:16px"></div>`);
-  thread.append(h(`<div class="ahar"><span class="hdot${hs.length || ws.agent ? " on" : ""}"></span><span>${ws.agent ? `Requests run with <b>${esc(ws.agent.name)}</b>` : hs.length ? `<b>${esc(hs[0].client)}</b> is connected` : "No agent connected — requests wait"}</span><span class="sp"></span><button type="button">${ws.agent || hs.length ? "Settings" : "Connect"}</button></div>`));
+  const thread = h(`<div class="athread" aria-live="polite"></div>`);
+  thread.append(h(`<div class="ahar"><span class="hdot${hs.length || ws.agent ? " on" : ""}"></span><span>${ws.agent ? `Requests run with <b>${esc(ws.agent.name)}</b>` : hs.length ? `<b>${esc(hs[0].client)}</b> is connected` : "No agent yet — requests wait"}</span><span class="sp"></span><button type="button">${ws.agent || hs.length ? "Settings" : "Connect"}</button></div>`));
   thread.querySelector(".ahar button").onclick = () => fire("connect");
-  const fam = env ? new Set([env.id, ...envList().filter((e) => e.parent === env.id).map((e) => e.id)]) : null;
-  const tasks = S.tasks.filter((t) => !fam || fam.has(t.env)).slice(-30);
+  const fam = new Set(familyOf(rootOf(env.id)?.id).map((x) => x.env.id));
+  const tasks = S.tasks.filter((t) => fam.has(t.env)).slice(-30);
+  const onMain = !isBranch(env);
   if (!tasks.length) {
-    const sug = h(`<div class="asug"><span class="h">${env ? `Ask for a change to ${esc(env.name)}. ${!isBranch(env) ? "It happens on a new branch, so main only changes when you merge." : "It happens on this branch."}` : "Select a prototype, a board or an element, then ask for a change."}</span></div>`);
-    if (env)
-      for (const p of ["Make the sidebar rows denser", "Try a warmer surface for the content card", "Add an empty state to this screen"]) {
-        const b = h(`<button type="button">${esc(p)}</button>`);
-        b.onclick = () => {
-          draft = p;
-          const ta = $("rFoot").querySelector("textarea");
-          if (ta) ((ta.value = p), ta.focus(), ta.dispatchEvent(new Event("input")));
-        };
-        sug.append(b);
-      }
+    const sug = h(`<div class="asug"><span class="h">Ask for a change to ${esc(pageName(env))}. ${onMain ? "It happens on a new branch, so main only changes when you merge." : "It happens on this branch."} Select a board or an element first to point at it.</span></div>`);
+    for (const p of ["Make the sidebar rows denser", "Try a warmer surface for the content card", "Add an empty state to this screen"]) {
+      const b = h(`<button type="button">${esc(p)}</button>`);
+      b.onclick = () => {
+        draft = p;
+        const ta = $("lFoot").querySelector("textarea");
+        if (ta) (ta.value = p), ta.focus(), ta.dispatchEvent(new Event("input"));
+      };
+      sug.append(b);
+    }
     thread.append(sug);
   }
   for (const t of tasks) thread.append(turnView(t, agentName));
   body.append(thread);
   // composer
   const s = S.sel;
-  const onBranch = env && !isBranch(env);
-  const comp = h(`<div class="acomp"><div class="abar chips"></div><textarea rows="2" aria-label="Request" placeholder="${env ? `Ask for a change to ${esc(env.name)}` : "Select something on the canvas first"}" ${env ? "" : "disabled"}></textarea><div class="abar">${onBranch ? `<label class="ctog"><button type="button" class="sw" role="switch" aria-checked="${S.chatOnBranch}" aria-label="Work on a new branch"><i></i></button>On a new branch</label>` : ""}<span class="sp"></span><button type="button" class="sendb" aria-label="Send request" disabled>${IC.send}</button></div></div>`);
+  const comp = h(`<div class="acomp"><div class="abar chips"></div><textarea rows="2" aria-label="Request" placeholder="Ask for a change to ${esc(pageName(env))}"></textarea><div class="abar">${onMain ? `<label class="ctog"><button type="button" class="sw" role="switch" aria-checked="${S.chatOnBranch}" aria-label="Work on a new branch"><i></i></button>On a new branch</label>` : ""}<span class="sp"></span><button type="button" class="sendb" aria-label="Send request" disabled>${IC.send}</button></div></div>`);
   const chips = comp.querySelector(".chips");
-  if (env) chips.append(h(`<span class="chip"><span class="l">${isBranch(env) ? "⑂ " : ""}${esc(env.name)}</span></span>`));
+  chips.append(h(`<span class="chip"><span class="l">${onMain ? "Main" : `⑂ ${esc(env.name)}`}</span></span>`));
   if (s?.kind === "board" || s?.kind === "el") chips.append(h(`<span class="chip"><span class="l">${esc(screenName(S.items.get(s.item)))}</span></span>`));
   if (s?.kind === "el" && S.draftSel) {
     const c = h(`<span class="chip" title="${esc(s.info?.selector)}"><span class="l">${esc(s.info?.label || "element")}</span><button type="button" aria-label="Don't attach the selection">${IC.x}</button></span>`);
-    c.querySelector("button").onclick = () => ((S.draftSel = false), renderRight());
+    c.querySelector("button").onclick = () => ((S.draftSel = false), renderLeft());
     chips.append(c);
   }
-  chips.hidden = !chips.children.length;
   const sw = comp.querySelector(".sw");
   if (sw) sw.onclick = () => ((S.chatOnBranch = !S.chatOnBranch), sw.setAttribute("aria-checked", String(S.chatOnBranch)));
   const ta = comp.querySelector("textarea");
   const send = comp.querySelector(".sendb");
   ta.value = draft;
-  const syncSend = () => (send.disabled = !env || !ta.value.trim());
+  const syncSend = () => (send.disabled = !ta.value.trim());
   ta.addEventListener("input", () => {
     draft = ta.value;
     syncSend();
@@ -820,12 +913,12 @@ function renderChat(body) {
   let busy = false;
   const go = async () => {
     const prompt = ta.value.trim();
-    if (!prompt || !env || busy) return;
+    if (!prompt || busy) return;
     busy = true;
     send.disabled = true;
     const selection = s?.kind === "el" && S.draftSel && s.info ? { selector: S.scope === "exact" ? s.info.exactSelector : s.info.selector, label: s.info.label, html: s.info.html, text: s.info.text, styles: s.info.styles } : null;
     try {
-      const t = await api("tasks", { method: "POST", body: { env: env.id, prompt, selection, branch: !!(onBranch && S.chatOnBranch) } });
+      const t = await api("tasks", { method: "POST", body: { env: env.id, prompt, selection, branch: !!(onMain && S.chatOnBranch) } });
       draft = "";
       S.draftSel = true;
       fire("tasks-changed", { created: t });
@@ -838,7 +931,7 @@ function renderChat(body) {
   send.onclick = go;
   ta.addEventListener("keydown", (e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), go()));
   syncSend();
-  $("rFoot").replaceChildren(comp);
+  foot.replaceChildren(comp);
   requestAnimationFrame(() => (body.scrollTop = body.scrollHeight));
   if (renderChat.focus) (renderChat.focus = false), ta.focus();
 }
@@ -853,15 +946,16 @@ function turnView(t, agentName) {
   const waiting = t.status === "queued" && !ws.agent && !(ws.harnesses || []).length;
   const turn = h(`<div class="turn"><span class="av agent" style="background:var(--bg-primary);color:var(--bg-layer)">${esc(who[0] || "A")}</span><div class="body"></div></div>`);
   const b = turn.querySelector(".body");
-  b.append(h(`<div class="st" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary)"><b style="color:var(--text-primary);font-weight:500">${esc(who)}</b><span class="tagro ${cls}">${lab}</span>${t.status === "working" ? '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>' : ""}<span style="flex:1"></span><span>${esc(timeAgo(t.updatedAt))}</span></div>`));
-  if (env && isBranch(env)) {
-    const tag = h(`<span class="brtag">${IC.fork}${esc(env.name)}</span>`);
-    tag.onclick = () => (selectSection(env.id), focusEnv(env.id));
+  b.append(h(`<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary)"><b style="color:var(--text-primary);font-weight:500">${esc(who)}</b><span class="tagro ${cls}">${lab}</span>${t.status === "working" ? '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>' : ""}<span class="sp"></span><span>${esc(timeAgo(t.updatedAt))}</span></div>`));
+  if (env) {
+    const d = isBranch(env) ? S.diffs.get(env.id) : null;
+    const tag = h(`<span class="brtag">${isBranch(env) ? IC.fork : IC.board}${esc(pageName(env))}${d?.changes.length ? ` <span class="n">${d.changes.length}</span>` : ""}</span>`);
+    tag.onclick = () => fire("go", env.id);
     b.append(tag);
   }
-  if (t.reply) b.append(h(`<div class="rep" style="font-size:14px;line-height:1.45;white-space:pre-wrap">${esc(t.reply)}</div>`));
-  else if (t.status === "queued") b.append(h(`<div style="font-size:14px;color:var(--text-secondary)">${waiting ? "Waiting for an agent. Connect one, or ask Claude Code to take the next Workshop task." : "Waiting for the agent to pick this up."}</div>`));
-  if (t.changed?.length) b.append(h(`<div class="files" style="display:flex;flex-wrap:wrap;gap:4px">${t.changed.slice(0, 6).map((f) => `<span class="tagro">${esc(f)}</span>`).join("")}</div>`));
+  if (t.reply) b.append(h(`<div class="rep" style="font-size:12px;line-height:1.5;white-space:pre-wrap">${esc(t.reply)}</div>`));
+  else if (t.status === "queued") b.append(h(`<div style="font-size:12px;line-height:1.5;color:var(--text-secondary)">${waiting ? "Waiting for an agent. Connect one, or ask Claude Code to take the next Workshop task." : "Waiting for the agent to pick this up."}</div>`));
+  if (t.changed?.length) b.append(h(`<div style="display:flex;flex-wrap:wrap;gap:4px">${t.changed.slice(0, 6).map((f) => `<span class="tagro">${esc(f)}</span>`).join("")}</div>`));
   const acts = h(`<div style="display:flex;gap:8px;flex-wrap:wrap"></div>`);
   if (waiting) {
     const c = h(`<button type="button" class="dbtn sm">Connect an agent</button>`);
@@ -875,7 +969,7 @@ function turnView(t, agentName) {
   }
   if (t.log?.length) {
     const lb = h(`<button type="button" class="ghbtn sm">${openLogs.has(t.id) ? "Hide log" : "Show log"}</button>`);
-    lb.onclick = () => (openLogs.has(t.id) ? openLogs.delete(t.id) : openLogs.add(t.id), renderRight());
+    lb.onclick = () => (openLogs.has(t.id) ? openLogs.delete(t.id) : openLogs.add(t.id), renderLeft());
     acts.append(lb);
   }
   if (t.status === "working" || t.status === "queued") {
@@ -889,44 +983,44 @@ function turnView(t, agentName) {
     acts.append(ub);
   }
   if (acts.children.length) b.append(acts);
-  if (openLogs.has(t.id) && t.log?.length) b.append(h(`<div class="log" style="max-height:180px;overflow:auto;background:var(--bg-base);border:.5px solid var(--border-subtle);border-radius:8px;padding:8px 12px;font:400 12px/1.5 var(--mono);color:var(--text-secondary);white-space:pre-wrap">${t.log.map((l) => `<span class="${l.kind}">${esc(l.text)}</span>`).join("\n")}</div>`));
+  if (openLogs.has(t.id) && t.log?.length) b.append(h(`<div style="max-height:180px;overflow:auto;background:var(--bg-base);border:.5px solid var(--border-subtle);border-radius:8px;padding:8px 12px;font:400 12px/1.5 var(--mono);color:var(--text-secondary);white-space:pre-wrap">${t.log.map((l) => `<span class="${esc(l.kind)}">${esc(l.text)}</span>`).join("\n")}</div>`));
   w.append(turn);
   return w;
 }
 
 // ---------- wiring ----------
-function setTab(group, t) {
-  for (const x of document.querySelectorAll(`#${group} button`)) {
-    x.classList.toggle("on", x.dataset.t === t);
-    x.setAttribute("aria-selected", String(x.dataset.t === t));
-  }
-}
 export function initPanels() {
-  for (const b of document.querySelectorAll("#lTabs button")) b.addEventListener("click", () => ((S.leftTab = b.dataset.t), setTab("lTabs", S.leftTab), renderLeft()));
-  for (const b of document.querySelectorAll("#rTabs button")) b.addEventListener("click", () => ((S.rightTab = b.dataset.t), setTab("rTabs", S.rightTab), renderRight()));
-  on("left-tab", (t) => ((S.leftTab = t), setTab("lTabs", t), renderLeft()));
+  for (const b of document.querySelectorAll("#rail [data-t]")) b.addEventListener("click", () => ((S.leftTab = b.dataset.t), $("frame").classList.remove("ui-off"), renderLeft()));
+  for (const b of document.querySelectorAll("#rTabs button")) b.addEventListener("click", () => ((S.rightTab = b.dataset.t), renderRight()));
+  on("left-tab", (t) => ((S.leftTab = t), renderLeft()));
   on("sel", () => {
     renderLeft();
     renderRight();
-    const e = selEnvId();
-    if (e && isBranch(S.envs.get(e)) && !S.diffs.has(e)) loadDiff(e).then(() => (renderLeft(), selEnvId() === e && renderRight()));
   });
-  on("board-ready", (id) => S.sel?.item === id && (renderLeft(), renderRight()));
-  on("catalog", () => S.leftTab === "screens" && renderLeft());
+  on("board-ready", (id) => {
+    if (S.leftTab === "file") renderLeft();
+    if (S.sel?.item === id) renderRight();
+  });
+  on("catalog", () => (S.leftTab === "screens" && renderLeft(), S.rightTab === "prototype" && renderRight()));
   on("env-meta", (id) => {
     OV.delete(id);
     S.diffs.delete(id);
-    if (selEnvId() === id) renderRight();
+    if (id === S.page) (renderRight(), renderBanner(), loadDiff(id));
     renderLeft();
     markDirty();
   });
-  on("focus-label", () => ((renderDesign.focusLabel = true), S.rightTab !== "design" && ((S.rightTab = "design"), setTab("rTabs", "design")), renderRight()));
+  on("diff", (id) => {
+    if (id === S.page) renderBanner();
+    if (S.leftTab === "file" || S.leftTab === "agents") renderLeft();
+    if (!S.sel && (id === S.page || S.envs.get(id)?.parent === S.page)) renderRight();
+  });
+  on("focus-label", () => ((renderDesign.focusLabel = true), (S.rightTab = "design"), renderRight()));
   on("ask-agent", ({ prompt } = {}) => {
-    S.rightTab = "chat";
+    S.leftTab = "agents";
     S.draftSel = true;
     if (prompt) draft = prompt;
-    setTab("rTabs", "chat");
     renderChat.focus = true;
-    renderRight();
+    $("frame").classList.remove("ui-off");
+    renderLeft();
   });
 }

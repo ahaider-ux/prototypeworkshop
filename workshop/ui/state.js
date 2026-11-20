@@ -1,8 +1,9 @@
-// One state object for the canvas UI, and a tiny event bus between its parts.
+// One state object for the Workshop UI, and a tiny event bus between its parts.
 //
-// The canvas holds items: boards (a prototype environment at one screen), notes, boxes and arrows.
-// Each environment's boards form a section; a branch is an environment with a parent, drawn as its
-// own section joined to the parent's by a lineage line.
+// Home lists the prototypes; each opens in a tab, like a file. Inside a prototype every branch is a
+// page, as in a design tool: main is the first page, and each branch has a canvas of its own with
+// the same screens, ready to change. The canvas shows one page at a time: its boards (the prototype
+// at one screen each) and the notes, highlights, arrows and comments made on that page.
 
 export const S = {
   ws: null, // workspace payload from /api/workspace
@@ -12,17 +13,22 @@ export const S = {
   tasks: [],
   versions: new Map(), // env id → [versions]
   diffs: new Map(), // branch id → review summary
-  // what's selected: {kind:"section", env} | {kind:"board", item, env} | {kind:"el", item, env, el, info}
-  //                  | {kind:"note"|"box"|"arrow", item}
+  view: "home", // "home" | "proto"
+  tabs: [], // open prototypes (root env ids), in tab order
+  page: null, // the env shown on the canvas: a prototype's main or one of its branches
+  compare: false, // show main's screens above the branch's
+  // what's selected: {kind:"board", item, env} | {kind:"el", item, env, el, info} | {kind:"note"|"box"|"arrow", item}
   sel: null,
   hover: null, // {item, el}
   tool: "move", // move | hand | note | box | arrow | comment
-  mode: "design", // design | prototype
+  mode: "design", // design | prototype ("Interact": the pointer goes to the page)
   cam: { x: 320, y: 120, z: 0.25 }, // screen = world * z + (x, y)
-  leftTab: "branches",
-  rightTab: "design",
+  leftTab: "file", // file | screens | agents | notes | history
+  rightTab: "design", // design | prototype
   scope: "class", // inspector edits: "class" (all matches) or "exact" (this element)
   showArchived: false,
+  showResolved: false,
+  notesAll: false,
   placeState: "Default",
   chatOnBranch: true,
   draftSel: true,
@@ -46,15 +52,60 @@ export function fire(evt, data) {
 }
 
 export const envList = () => [...S.envs.values()].sort((a, b) => String(a.created || "").localeCompare(String(b.created || "")) || a.id.localeCompare(b.id));
-export const visibleEnvs = () => envList().filter((e) => S.showArchived || !e.archived);
 export const boardsOf = (env) => [...S.items.values()].filter((i) => i.type === "board" && i.env === env);
 export const itemsOf = (type) => [...S.items.values()].filter((i) => i.type === type);
-export const selEnvId = () => S.sel?.env || (S.sel?.item && S.items.get(S.sel.item)?.env) || null;
-export const selEnv = () => S.envs.get(selEnvId()) || null;
+export const isBranch = (e) => !!(e && e.parent && S.envs.has(e.parent));
 export const rootOf = (id) => {
   let e = S.envs.get(id);
   for (let i = 0; e && e.parent && S.envs.has(e.parent) && i < 20; i++) e = S.envs.get(e.parent);
   return e || null;
 };
-export const isBranch = (e) => !!(e && e.parent && S.envs.has(e.parent));
+export const roots = () => envList().filter((e) => !isBranch(e));
+// a prototype and all its branches, main first, each branch after its parent
+export function familyOf(rootId) {
+  const all = envList().filter((e) => rootOf(e.id)?.id === rootId);
+  const out = [];
+  const add = (e, depth) => {
+    out.push({ env: e, depth });
+    for (const k of all.filter((x) => x.parent === e.id)) add(k, depth + 1);
+  };
+  const r = S.envs.get(rootId);
+  if (r) add(r, 0);
+  return out;
+}
+export const pageEnv = () => S.envs.get(S.page) || null;
+export const protoId = () => rootOf(S.page)?.id || null;
+export const selEnvId = () => S.sel?.env || (S.sel?.item && S.items.get(S.sel.item)?.env) || S.page || null;
+export const selEnv = () => S.envs.get(selEnvId()) || null;
 export const screenName = (b) => (b?.screen ? b.screen.replace(/^Settings › /, "Settings · ") : "Start screen");
+export const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+// The page an item belongs to. Boards belong to their prototype; annotations carry the page they
+// were made on. Older annotations without one go with the board they sit over.
+export function pageOf(it) {
+  if (!it) return null;
+  if (it.type === "board" || it.env) return it.env || null;
+  if (it.type === "arrow") {
+    for (const end of [it.from, it.to]) if (end?.item && end.item !== it.id) return pageOf(S.items.get(end.item));
+    return null;
+  }
+  return nearestBoard(it)?.env || null;
+}
+export function nearestBoard(it, env = null) {
+  const r = it.type === "note" ? { x: it.x, y: it.y, w: it.w, h: 120 } : it.type === "box" ? it : null;
+  if (!r) return null;
+  const cx = r.x + r.w / 2,
+    cy = r.y + r.h / 2;
+  let best = null,
+    bd = Infinity;
+  for (const b of itemsOf("board")) {
+    if (env && b.env !== env) continue;
+    const dx = Math.max(b.x - cx, 0, cx - (b.x + b.w)),
+      dy = Math.max(b.y - cy, 0, cy - (b.y + b.h));
+    const d = Math.hypot(dx, dy);
+    if (d < bd) (bd = d), (best = b);
+  }
+  return best;
+}
+export const onPage = (it, page = S.page) => !!it && pageOf(it) === page;
+export const pageItems = (type, page = S.page) => itemsOf(type).filter((i) => onPage(i, page));

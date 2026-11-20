@@ -2,10 +2,11 @@
   "id": "n-mwnsi09j-1524e0",
   "type": "note",
   "x": 1928,
-  "y": 3394,
+  "y": 120,
   "w": 320,
   "text": "Cards get 32 px between them here. Is 24 enough on smaller screens? Compare with main before merging.",
   "tone": "info",
   "author": "You",
-  "createdAt": "2026-11-19T16:53:56.311Z"
+  "createdAt": "2026-11-19T16:53:56.311Z",
+  "env": "roomier-project-cards"
 }

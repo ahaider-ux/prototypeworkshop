@@ -76,3 +76,19 @@ test("MCP: a harness lists, forks, styles and takes canvas requests", async () =
   }
   assert.equal((await store.harnesses()).length, 0, "the heartbeat goes when the harness disconnects");
 });
+
+test("MCP: list_canvas keeps each page's notes on that page", async () => {
+  const { callTool } = await import("../src/mcp.js");
+  const ws = await fsp.mkdtemp(path.join(os.tmpdir(), "workshop-"));
+  const store = await Store.open(ws);
+  const main = await store.createEnv({ html: HTML });
+  const br = await store.branchEnv(main.id, { name: "Try" });
+  // a branch's boards sit where main's do, on a page of their own
+  await store.addItem({ type: "note", env: main.id, x: 10, y: 10, text: "On main" });
+  await store.addItem({ type: "note", env: br.id, x: 10, y: 10, text: "On the branch" });
+  const list = async (env) => JSON.parse((await callTool(store, "list_canvas", { env })).content[0].text);
+  const onBranch = await list(br.id);
+  assert.deepEqual(onBranch.notes.map((n) => n.text), ["On the branch"]);
+  assert.ok(onBranch.notes[0].over.length && onBranch.notes[0].over.every((o) => o.env === br.id), "a note is over its own page's boards only");
+  assert.deepEqual((await list(main.id)).notes.map((n) => n.text), ["On main"]);
+});

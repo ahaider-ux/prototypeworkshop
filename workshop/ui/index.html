@@ -11,43 +11,56 @@
 <body>
 <div class="app" id="frame">
 
-  <div class="cv mode-design tool-move" id="cv" tabindex="0" aria-label="Canvas">
-    <div class="world" id="world"><div id="sections"></div><div id="boards"></div><svg class="wires" id="wires" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0 0 10 5 0 10Z" fill="currentColor"/></marker></defs></svg><div id="notes"></div></div>
-    <div class="hud" id="hud"><svg class="lines" id="lines" aria-hidden="true"></svg></div>
-    <div class="cvempty" id="cvEmpty" hidden><div class="in"><b>Nothing on the canvas yet</b><span>Drop an HTML file here or import one. Each prototype gets a section; its branches get sections of their own.</span><button class="dbtn" id="cvImport">Import HTML</button></div></div>
-  </div>
+  <header class="top" id="top">
+    <button type="button" class="tlogo" id="wsBtn" aria-haspopup="menu" aria-expanded="false" aria-label="Workspace menu"><span class="lm gx" style="width:24px;height:24px" role="img" aria-label="Libra"><img class="lmono" style="left:14.58%;top:25%;width:70.84%;height:27.08%" src="data:image/svg+xml;base64,PHN2ZyBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBvdmVyZmxvdz0idmlzaWJsZSIgc3R5bGU9ImRpc3BsYXk6IGJsb2NrOyIgdmlld0JveD0iMCAwIDIyLjY2NjcgOC42NjY2NyIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggaWQ9IlZlY3RvciA0IChTdHJva2UpIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGNsaXAtcnVsZT0iZXZlbm9kZCIgZD0iTTguNjE4MDUgNC4zNzU0NEM3Ljg1MjQzIDUuMzExNTIgNy4zNDI3MSA2LjQ5MzgyIDcuMDk5MzUgNy4zNTI0M0M2Ljg4NTUxIDguMTA2ODUgNi4yMDY1MyA4LjY2NjY3IDUuMzkwMTQgOC42NjY2N0gwVjUuNzc3NzhINC42MjgzMkM0Ljk5ODc1IDQuNzYxNzUgNS41OTE1NCAzLjU2NTEzIDYuNDQyMDYgMi41MjUyNEM3LjUzMDE4IDEuMTk0ODQgOS4xNTEyNSAwIDExLjMzMzMgMEMxMy41MTU0IDAgMTUuMTM2NSAxLjE5NDg0IDE2LjIyNDYgMi41MjUyNEMxNy4wNzUxIDMuNTY1MTMgMTcuNjY3OSA0Ljc2MTc1IDE4LjAzODMgNS43Nzc3OEgyMi42NjY3VjguNjY2NjdIMTcuMjc2NUMxNi40NjAxIDguNjY2NjcgMTUuNzgxMSA4LjEwNjg1IDE1LjU2NzMgNy4zNTI0M0MxNS4zMjQgNi40OTM4MiAxNC44MTQyIDUuMzExNTIgMTQuMDQ4NiA0LjM3NTQ0QzEzLjI5MjMgMy40NTA3NSAxMi4zOTg0IDIuODg4ODkgMTEuMzMzMyAyLjg4ODg5QzEwLjI2ODIgMi44ODg4OSA5LjM3NDM0IDMuNDUwNzUgOC42MTgwNSA0LjM3NTQ0WiIgZmlsbD0iIzE2MUExQiIvPgo8L3N2Zz4K" alt=""><img class="lmono" style="left:14.58%;top:60.42%;width:70.84%;height:9.37%" src="data:image/svg+xml;base64,PHN2ZyBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBvdmVyZmxvdz0idmlzaWJsZSIgc3R5bGU9ImRpc3BsYXk6IGJsb2NrOyIgdmlld0JveD0iMCAwIDIyLjY2NjcgMyIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggaWQ9IlZlY3RvciAzIChTdHJva2UpIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGNsaXAtcnVsZT0iZXZlbm9kZCIgZD0iTTIyLjY2NjcgM0gwVjBIMjIuNjY2N1YzWiIgZmlsbD0iIzE2MUExQiIvPgo8L3N2Zz4K" alt=""></span><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.7 6.6 8 9.9l3.3-3.3"/></svg></button>
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Open prototypes"></nav>
+    <span class="sp"></span>
+    <button type="button" class="agst" id="agentBtn" aria-label="Agent connection"><span class="hdot" id="agentDot"></span><span id="agentTxt">No agent connected</span></button>
+  </header>
 
-  <aside class="lp float" id="lp" aria-label="Branches, screens and layers">
-    <div class="phd">
-      <div class="ws" id="wsBtn" role="button" tabindex="0" aria-haspopup="menu" aria-expanded="false"><span class="lm gx" style="width:24px;height:24px" role="img" aria-label="Libra"><img class="lmono" style="left:14.58%;top:25%;width:70.84%;height:27.08%" src="data:image/svg+xml;base64,PHN2ZyBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBvdmVyZmxvdz0idmlzaWJsZSIgc3R5bGU9ImRpc3BsYXk6IGJsb2NrOyIgdmlld0JveD0iMCAwIDIyLjY2NjcgOC42NjY2NyIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggaWQ9IlZlY3RvciA0IChTdHJva2UpIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGNsaXAtcnVsZT0iZXZlbm9kZCIgZD0iTTguNjE4MDUgNC4zNzU0NEM3Ljg1MjQzIDUuMzExNTIgNy4zNDI3MSA2LjQ5MzgyIDcuMDk5MzUgNy4zNTI0M0M2Ljg4NTUxIDguMTA2ODUgNi4yMDY1MyA4LjY2NjY3IDUuMzkwMTQgOC42NjY2N0gwVjUuNzc3NzhINC42MjgzMkM0Ljk5ODc1IDQuNzYxNzUgNS41OTE1NCAzLjU2NTEzIDYuNDQyMDYgMi41MjUyNEM3LjUzMDE4IDEuMTk0ODQgOS4xNTEyNSAwIDExLjMzMzMgMEMxMy41MTU0IDAgMTUuMTM2NSAxLjE5NDg0IDE2LjIyNDYgMi41MjUyNEMxNy4wNzUxIDMuNTY1MTMgMTcuNjY3OSA0Ljc2MTc1IDE4LjAzODMgNS43Nzc3OEgyMi42NjY3VjguNjY2NjdIMTcuMjc2NUMxNi40NjAxIDguNjY2NjcgMTUuNzgxMSA4LjEwNjg1IDE1LjU2NzMgNy4zNTI0M0MxNS4zMjQgNi40OTM4MiAxNC44MTQyIDUuMzExNTIgMTQuMDQ4NiA0LjM3NTQ0QzEzLjI5MjMgMy40NTA3NSAxMi4zOTg0IDIuODg4ODkgMTEuMzMzMyAyLjg4ODg5QzEwLjI2ODIgMi44ODg4OSA5LjM3NDM0IDMuNDUwNzUgOC42MTgwNSA0LjM3NTQ0WiIgZmlsbD0iIzE2MUExQiIvPgo8L3N2Zz4K" alt=""><img class="lmono" style="left:14.58%;top:60.42%;width:70.84%;height:9.37%" src="data:image/svg+xml;base64,PHN2ZyBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBvdmVyZmxvdz0idmlzaWJsZSIgc3R5bGU9ImRpc3BsYXk6IGJsb2NrOyIgdmlld0JveD0iMCAwIDIyLjY2NjcgMyIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggaWQ9IlZlY3RvciAzIChTdHJva2UpIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGNsaXAtcnVsZT0iZXZlbm9kZCIgZD0iTTIyLjY2NjcgM0gwVjBIMjIuNjY2N1YzWiIgZmlsbD0iIzE2MUExQiIvPgo8L3N2Zz4K" alt=""></span><b id="wsName">Prototype workshop</b><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.7 6.6 8 9.9l3.3-3.3"/></svg></div>
-      <button class="ib32" id="uiToggle" aria-label="Hide panels (⌘\)" data-tip="Hide panels · ⌘\"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg></button>
-    </div>
-    <div class="ptabs"><div class="segds full" id="lTabs" role="tablist" aria-label="Left panel"><button class="on" data-t="branches" role="tab" aria-selected="true">Branches</button><button data-t="screens" role="tab" aria-selected="false">Screens</button><button data-t="layers" role="tab" aria-selected="false">Layers</button></div></div>
-    <div class="pbody" id="lBody"></div>
-    <div class="pfoot" id="lFoot"></div>
-  </aside>
+  <main class="home" id="home" hidden aria-label="Home"></main>
 
-  <aside class="rp float" id="rp" aria-label="Inspector, comments and chat">
-    <div class="phd"><div class="who" id="who"></div><button class="dbtn sm" id="shareBtn">Share</button><button class="createbtn sm" id="presentBtn"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 4.2v7.6a.5.5 0 0 0 .76.43l6.1-3.8a.5.5 0 0 0 0-.86l-6.1-3.8a.5.5 0 0 0-.76.43Z"/></svg>Present</button></div>
-    <div class="ptabs"><div class="segds full" id="rTabs" role="tablist" aria-label="Right panel"><button class="on" data-t="design" role="tab" aria-selected="true">Design</button><button data-t="comments" role="tab" aria-selected="false">Notes <span class="tct" id="rNotesN"></span></button><button data-t="chat" role="tab" aria-selected="false">Chat <span class="tct" id="rChatN"></span></button></div></div>
-    <div class="pbody" id="rBody"></div>
-    <div id="rFoot" style="flex-shrink:0"></div>
-  </aside>
+  <div class="work" id="work" hidden>
+    <nav class="rail" id="rail" role="tablist" aria-label="Panels" aria-orientation="vertical">
+      <button type="button" data-t="file" role="tab" aria-selected="true" class="on"><i><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="m8 2.5 5.5 3L8 8.5l-5.5-3Z"/><path d="m2.5 8 5.5 3 5.5-3M2.5 10.5l5.5 3 5.5-3"/></svg></i><span>File</span></button><button type="button" data-t="screens" role="tab" aria-selected="false" class=""><i><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></svg></i><span>Screens</span></button><button type="button" data-t="agents" role="tab" aria-selected="false" class=""><i><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5c.4 2.6 1.4 3.6 4 4-2.6.4-3.6 1.4-4 4-.4-2.6-1.4-3.6-4-4 2.6-.4 3.6-1.4 4-4Z"/><path d="M12.5 10.5c.2 1 .5 1.3 1.5 1.5-1 .2-1.3.5-1.5 1.5-.2-1-.5-1.3-1.5-1.5 1-.2 1.3-.5 1.5-1.5Z"/></svg></i><span>Agents</span></button><button type="button" data-t="notes" role="tab" aria-selected="false" class=""><i><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3.5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1V10l-3.5 3.5H4a1 1 0 0 1-1-1Z"/><path d="M9.5 13.5V11a1 1 0 0 1 1-1H13"/></svg></i><span>Notes</span></button><button type="button" data-t="history" role="tab" aria-selected="false" class=""><i><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.5"/></svg></i><span>History</span></button>
+      <span class="sp"></span>
+      <button type="button" class="ib32" id="uiToggle" aria-label="Hide panels · ⌘\" data-tip="Hide panels · ⌘\"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg></button>
+    </nav>
 
-  <div class="tb float" id="tb" role="toolbar" aria-label="Canvas tools">
-    <button class="ib32 on" data-tool="move" aria-label="Select · V" data-tip="Select · V" data-tip-up><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 2.5 12.5 7l-4 1.2-1.6 4.3Z"/></svg></button><button class="ib32" data-tool="hand" aria-label="Hand · H" data-tip="Hand · H" data-tip-up><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 8V3.8a1 1 0 0 1 2 0V7.5M7.5 7V2.8a1 1 0 0 1 2 0V7M9.5 7V3.8a1 1 0 0 1 2 0v5.4c0 2.6-1.8 4.3-4.2 4.3-1.6 0-2.6-.7-3.5-2L2.6 9.3a1 1 0 0 1 1.5-1.3L5.5 9.4"/></svg></button><span class="vsep"></span><button class="ib32" data-tool="note" aria-label="Note · N" data-tip="Note · N" data-tip-up><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3.5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1V10l-3.5 3.5H4a1 1 0 0 1-1-1Z"/><path d="M9.5 13.5V11a1 1 0 0 1 1-1H13"/></svg></button><button class="ib32" data-tool="box" aria-label="Highlight · B" data-tip="Highlight · B" data-tip-up><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 5V3.5a1 1 0 0 1 1-1H5M11 2.5h1.5a1 1 0 0 1 1 1V5M13.5 11v1.5a1 1 0 0 1-1 1H11M5 13.5H3.5a1 1 0 0 1-1-1V11M7.5 2.5h1M7.5 13.5h1M2.5 7.5v1M13.5 7.5v1"/></svg></button><button class="ib32" data-tool="arrow" aria-label="Arrow · A" data-tip="Arrow · A" data-tip-up><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 13 3M7 3h6v6"/></svg></button><button class="ib32" data-tool="comment" aria-label="Comment · C" data-tip="Comment · C" data-tip-up><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3.5h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H7l-3 2.5v-2.5H3a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1Z"/></svg></button>
-    <span class="vsep"></span>
-    <div class="segds" id="modeSeg" role="radiogroup" aria-label="Mode"><button class="on" data-mode="design" role="radio" aria-checked="true" data-tip="Select and change · P" data-tip-up>Design</button><button data-mode="prototype" role="radio" aria-checked="false" data-tip="Use the prototype · P" data-tip-up>Prototype</button></div>
-    <span class="vsep"></span>
-    <button class="ib32" id="zOut" aria-label="Zoom out" data-tip="Zoom out · −" data-tip-up><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 8h8"/></svg></button>
-    <button class="zm" id="zPct" aria-haspopup="menu" aria-label="Zoom">100%</button>
-    <button class="ib32" id="zIn" aria-label="Zoom in" data-tip="Zoom in · +" data-tip-up><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 4v8M4 8h8"/></svg></button>
+    <aside class="lp" id="lp" aria-label="Left panel">
+      <div class="lhd" id="lHead"></div>
+      <div class="pbody" id="lBody"></div>
+      <div class="lfoot" id="lFoot"></div>
+    </aside>
+
+    <section class="stage" id="stage">
+      <div class="cv mode-design tool-move" id="cv" tabindex="0" aria-label="Canvas">
+        <div class="world" id="world"><div id="boards"></div><svg class="wires" id="wires" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0 0 10 5 0 10Z" fill="currentColor"/></marker></defs></svg><div id="notes"></div></div>
+        <div class="hud" id="hud"></div>
+        <div class="cvempty" id="cvEmpty" hidden><div class="in"><b>This page is empty</b><span>Place a screen from the Screens panel, or drop an HTML file here to add a prototype.</span><button type="button" class="dbtn sm" id="cvScreens">Show screens</button></div></div>
+      </div>
+      <canvas class="ruler rh" id="rulerH" aria-hidden="true"></canvas>
+      <canvas class="ruler rv" id="rulerV" aria-hidden="true"></canvas>
+      <span class="rcorner" aria-hidden="true"></span>
+      <div class="banner" id="banner" role="region" aria-label="Page"></div>
+      <div class="tb" id="tb" role="toolbar" aria-label="Canvas tools">
+        <button class="ib32" data-tool="move" aria-label="Select · V" data-tip="Select · V" data-tip-up><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 2.5 12.5 7l-4 1.2-1.6 4.3Z"/></svg></button><button class="ib32" data-tool="hand" aria-label="Hand · H" data-tip="Hand · H" data-tip-up><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 8V3.8a1 1 0 0 1 2 0V7.5M7.5 7V2.8a1 1 0 0 1 2 0V7M9.5 7V3.8a1 1 0 0 1 2 0v5.4c0 2.6-1.8 4.3-4.2 4.3-1.6 0-2.6-.7-3.5-2L2.6 9.3a1 1 0 0 1 1.5-1.3L5.5 9.4"/></svg></button><span class="vsep"></span><button class="ib32" data-tool="note" aria-label="Note · N" data-tip="Note · N" data-tip-up><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3.5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1V10l-3.5 3.5H4a1 1 0 0 1-1-1Z"/><path d="M9.5 13.5V11a1 1 0 0 1 1-1H13"/></svg></button><button class="ib32" data-tool="box" aria-label="Highlight · B" data-tip="Highlight · B" data-tip-up><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 5V3.5a1 1 0 0 1 1-1H5M11 2.5h1.5a1 1 0 0 1 1 1V5M13.5 11v1.5a1 1 0 0 1-1 1H11M5 13.5H3.5a1 1 0 0 1-1-1V11M7.5 2.5h1M7.5 13.5h1M2.5 7.5v1M13.5 7.5v1"/></svg></button><button class="ib32" data-tool="arrow" aria-label="Arrow · A" data-tip="Arrow · A" data-tip-up><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 13 3M7 3h6v6"/></svg></button><button class="ib32" data-tool="comment" aria-label="Comment · C" data-tip="Comment · C" data-tip-up><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3.5h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H7l-3 2.5v-2.5H3a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1Z"/></svg></button><span class="vsep"></span>
+        <button type="button" class="tbtx" id="interactBtn" aria-pressed="false" data-tip="Use the prototype on the canvas · P" data-tip-up><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2.5" width="12" height="9" rx="1.5"/><path d="m8.5 8 4.5 1.8-1.9.7-.8 2Z"/></svg>Interact</button>
+        <button type="button" class="tbtx" id="askBtn" data-tip="Ask an agent for a change" data-tip-up><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5c.4 2.6 1.4 3.6 4 4-2.6.4-3.6 1.4-4 4-.4-2.6-1.4-3.6-4-4 2.6-.4 3.6-1.4 4-4Z"/><path d="M12.5 10.5c.2 1 .5 1.3 1.5 1.5-1 .2-1.3.5-1.5 1.5-.2-1-.5-1.3-1.5-1.5 1-.2 1.3-.5 1.5-1.5Z"/></svg>Ask</button>
+      </div>
+    </section>
+
+    <aside class="rp" id="rp" aria-label="Right panel">
+      <div class="rhd"><div class="who" id="who"></div><button type="button" class="ib32" id="presentBtn" aria-label="Present" data-tip="Present"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 4.2v7.6a.5.5 0 0 0 .76.43l6.1-3.8a.5.5 0 0 0 0-.86l-6.1-3.8a.5.5 0 0 0-.76.43Z"/></svg></button><button type="button" class="createbtn sm" id="shareBtn">Share</button></div>
+      <div class="rtabs"><div class="ttabs" id="rTabs" role="tablist" aria-label="Right panel"><button type="button" class="on" data-t="design" role="tab" aria-selected="true">Design</button><button type="button" data-t="prototype" role="tab" aria-selected="false">Prototype</button></div><span class="sp"></span><button type="button" class="zm" id="zPct" aria-haspopup="menu" aria-label="Zoom">100%</button></div>
+      <div class="pbody" id="rBody"></div>
+    </aside>
   </div>
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
   <div class="winov" id="modal" role="dialog" aria-modal="true"></div>
   <div class="pal" id="pal" role="dialog" aria-label="Search">
-    <div class="pin2"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><input id="palIn" placeholder="Search branches, screens and actions" autocomplete="off" aria-label="Search"></div>
+    <div class="pin2"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><input id="palIn" placeholder="Search pages, screens and actions" autocomplete="off" aria-label="Search"></div>
     <div class="rs" id="palRs" role="listbox"></div>
   </div>
 </div>
