@@ -7,6 +7,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { Store, StoreError, assertId } from "./store.js";
 import { AgentRunner } from "./agent.js";
@@ -122,6 +123,21 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
     if (!quiet) console.error(e);
     return json(res, 500, { error: "internal", message: "Something went wrong on the server" });
   };
+  // a binary upload (a board snapshot), capped well below MAX_BODY
+  const raw = (req, cap) =>
+    new Promise((resolve, reject) => {
+      const parts = [];
+      let n = 0;
+      req.on("data", (c) => {
+        n += c.length;
+        if (n > cap) {
+          reject(new StoreError("too_big", "That upload is too big", 413));
+          req.destroy();
+        } else parts.push(c);
+      });
+      req.on("end", () => resolve(Buffer.concat(parts)));
+      req.on("error", reject);
+    });
   const body = (req) =>
     new Promise((resolve, reject) => {
       const parts = [];
@@ -402,6 +418,17 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
       if (req.headers["x-workshop"] !== "1") return json(res, 403, { error: "forbidden", message: "Missing the x-workshop header" });
       return json(res, 200, await listFolder(url.searchParams.get("path")));
     }
+    if (a === "snapshots" && b) {
+      if (m === "PUT") return json(res, 201, await store.writeSnapshot(b, await raw(req, 24 * 1024 * 1024)));
+      if (m === "GET") {
+        // 204 when there's none yet, so a miss isn't an error in the console; named by what's in it,
+        // so the browser may keep it as long as it likes
+        const gz = await store.readSnapshot(b);
+        if (!gz) return send(res, 204, "");
+        if (/\bgzip\b/.test(String(req.headers["accept-encoding"] || ""))) return send(res, 200, gz, { "content-type": "image/svg+xml", "content-encoding": "gzip", "cache-control": "private, max-age=31536000, immutable" });
+        return send(res, 200, zlib.gunzipSync(gz), { "content-type": "image/svg+xml", "cache-control": "private, max-age=31536000, immutable" });
+      }
+    }
     if (a === "selection") {
       if (m === "GET") return json(res, 200, await store.selection());
       if (m === "PUT") return json(res, 200, await store.setSelection((await body(req)).selection ?? null));
@@ -444,6 +471,7 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
         return await api(req, res, p.slice(5).split("/").filter(Boolean), url);
       }
       if (p === "/_workshop/runtime.js") return serveFile(res, RUNTIME);
+
       const envm = /^\/env\/([a-z0-9][a-z0-9-]{0,63})(?:\/(.*))?$/.exec(p);
       if (envm) {
         if (envm[2] === undefined) return send(res, 301, "", { location: `/env/${envm[1]}/` });
@@ -549,6 +577,7 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
         const file = rel.slice(1).join("/");
         if (file.endsWith(".tmp") || /\.(restore|old)-[0-9a-f]+/.test(id)) return; // atomic-write temp files: the rename that follows is the real change
         if (!file) return queue("envs", { kind: "envs" });
+        store.changed();
         queue(`env:${id}`, { kind: "env", id, files: [file] });
       }),
     );
@@ -566,6 +595,7 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
       watchers.push(
         watchTree(link.dir, (name) => {
           if (!name || String(name).endsWith(".tmp") || String(name).split("/").some((seg) => seg.startsWith("."))) return;
+          store.changed();
           queue(`env:${id}`, { kind: "env", id, files: [name] });
         }, { maxDepth: link.dir === store.home ? 0 : 6 }),
       );

@@ -1010,7 +1010,10 @@ async function onEvent(ev) {
     }
     S.diffs.delete(ev.id);
     for (const e of envList()) if (e.parent === ev.id) S.diffs.delete(e.id);
+    // branches that still read this prototype's files look different now too
+    await Promise.all(envList().filter((e) => e.base === ev.id).map(async (e) => S.envs.set(e.id, await api(`envs/${e.id}`).catch(() => e))));
     reloadEnv(ev.id, ev.files || []);
+    for (const e of envList()) if (e.base === ev.id) reloadEnv(e.id, ev.files || []);
     if (S.view === "home") return renderHome();
     const fam = new Set(familyOf(protoId()).map((x) => x.env.id));
     if (fam.has(ev.id)) {

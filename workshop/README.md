@@ -129,6 +129,14 @@ are live — the one you selected, the one under the pointer, and the few in vie
 close — so they're ready to click into, edit or use, and a live board hands back a fresh picture
 when you leave it. Any change to a prototype's files or settings redraws its pictures.
 
+Pictures are saved on this computer (`.workshop/snapshots`, the newest 600) and named by what the
+board shows: a hash of the prototype's files, overrides and look settings, plus the screen, state
+and size. Opening a page again draws from them without loading the prototype, and a branch nobody
+has changed yet (an agent's new branch, say) shares its parent's pictures. When a picture is made,
+hidden parts of the page are left out and the wait ends as soon as the page has reached its
+screen. What's saved is the drawing (an SVG of the page, gzipped), because browsers don't let a
+page read back the pixels of such a drawing.
+
 ## Editing elements
 
 Elements inside a board are edited like frames in a design tool, and every edit is saved as CSS in

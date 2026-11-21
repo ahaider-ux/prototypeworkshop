@@ -20,6 +20,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import zlib from "node:zlib";
 import { parseCss, mergeRule, rulesOf, normSel, checkSelector, OVERRIDES_HEAD } from "./css.js";
 
 export { parseCss, mergeRule, rulesOf } from "./css.js";
@@ -40,6 +41,8 @@ export const LIMITS = {
   linkFiles: 3000,
   linkBytes: 200 * 1024 * 1024,
   scanAdds: 60, // prototypes one "look for prototypes" adds at most
+  snapshots: 600, // saved board pictures kept on this computer
+  snapshotBytes: 24 * 1024 * 1024,
 };
 
 // Atelier's own files for a prototype; for a linked prototype they live in .atelier, never in its folder
@@ -104,7 +107,12 @@ async function readJson(file, fallback) {
 }
 
 // Atomic write: a reader (the other process, the watcher) never sees half a file.
+// Bumped by every write outside .workshop/ (this computer's own records): a prototype's files,
+// overrides or settings changed, so its look is worked out again (Store.fingerprint).
+let WRITES = 0;
+export const noteWrite = () => WRITES++;
 async function writeAtomic(file, data) {
+  if (!String(file).includes(`${path.sep}.workshop${path.sep}`)) WRITES++;
   await fsp.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${crypto.randomBytes(3).toString("hex")}.tmp`;
   await fsp.writeFile(tmp, data);
@@ -193,16 +201,18 @@ export class Store {
     // <folder>/.atelier and links to the prototypes beside it; otherwise it is the workspace itself.
     this.home = path.basename(this.root) === ".atelier" ? path.dirname(this.root) : this.root;
     this.links = new Map(); // env id → {dir, entry} for prototypes whose files live in the space's folder
+    this.fps = new Map(); // env id → what its boards look like, as a hash (see fingerprint)
     this.envsDir = path.join(this.root, "envs");
     this.metaDir = path.join(this.root, ".workshop");
     this.canvasDir = path.join(this.root, "canvas");
     this.recipesDir = path.join(this.root, "recipes");
+    this.snapDir = path.join(this.metaDir, "snapshots"); // saved board pictures, this computer only
   }
 
   static async open(root) {
     const s = new Store(root);
     await fsp.mkdir(s.envsDir, { recursive: true });
-    for (const d of ["versions", "trash", "tasks", "comments", "shares", "harness"]) await fsp.mkdir(path.join(s.metaDir, d), { recursive: true });
+    for (const d of ["versions", "trash", "tasks", "comments", "shares", "harness", "snapshots"]) await fsp.mkdir(path.join(s.metaDir, d), { recursive: true });
     await fsp.mkdir(s.canvasDir, { recursive: true });
     if (!(await exists(s.recipesDir))) {
       await fsp.mkdir(s.recipesDir, { recursive: true });
@@ -241,6 +251,52 @@ export class Store {
 
   envDir(id) {
     return path.join(this.envsDir, assertId(id));
+  }
+
+  // ----- what a board looks like, for saved snapshots -----
+
+  // Something on disk changed: every board's look is worked out again when asked (cheap, and a
+  // branch's look depends on its parent's files).
+  changed() {
+    this.fps.clear();
+    WRITES++;
+  }
+  // A hash of everything that decides how an environment's boards look: its files (a branch's
+  // inherited ones included), its overrides and its look settings — not its name, notes or history.
+  // A branch nobody has changed looks exactly like its parent, so it shares its parent's snapshots.
+  async fingerprint(id) {
+    const hit = this.fps.get(id);
+    if (hit && hit.gen === WRITES) return hit.fp;
+    const meta = await readJson(path.join(this.envDir(id), "env.json"), {});
+    const files = (await this.listFiles(id)).filter((f) => !META_FILES.has(f.path)).map((f) => `${f.path}:${f.bytes}:${Math.round(f.mtime)}`).sort();
+    const look = { theme: meta.theme, variants: meta.variants, patches: meta.patches, device: meta.device, entry: meta.entry || null };
+    const fp = crypto.createHash("sha1").update(JSON.stringify([files, await this.getOverrides(id), look])).digest("hex").slice(0, 20);
+    this.fps.set(id, { fp, gen: WRITES });
+    return fp;
+  }
+  snapPath(key) {
+    // Guard: a snapshot is named by a hash, so a request can only ever name a file in its folder
+    if (!/^[0-9a-f]{40}$/.test(String(key))) throw new StoreError("bad_key", "Not a snapshot key");
+    return path.join(this.snapDir, `${key}.svg.gz`);
+  }
+  // A snapshot is the board drawn as an SVG (the page and its styles, with scripts taken out), kept
+  // gzipped. The browser can't hand over the pixels of such a drawing, but it redraws the SVG far
+  // faster than loading and settling the prototype again.
+  async readSnapshot(key) {
+    return fsp.readFile(this.snapPath(key)).catch(() => null);
+  }
+  async writeSnapshot(key, buf) {
+    // Guard: only an SVG drawing, and not a huge one (a 5 MB prototype draws to ~1-3 MB)
+    if (!Buffer.isBuffer(buf) || buf.length > LIMITS.snapshotBytes || !/^\s*<svg[\s>]/.test(buf.toString("utf8", 0, 200))) throw new StoreError("bad_snapshot", "That isn't a board snapshot");
+    await writeAtomic(this.snapPath(key), zlib.gzipSync(buf, { level: 6 }));
+    // keep the folder bounded: the least recently written go first
+    const names = (await fsp.readdir(this.snapDir).catch(() => [])).filter((n) => n.endsWith(".svg.gz"));
+    if (names.length > LIMITS.snapshots) {
+      const st = await Promise.all(names.map(async (n) => [n, (await fsp.stat(path.join(this.snapDir, n)).catch(() => null))?.mtimeMs || 0]));
+      st.sort((a, b) => a[1] - b[1]);
+      for (const [n] of st.slice(0, names.length - LIMITS.snapshots)) await fsp.rm(path.join(this.snapDir, n), { force: true });
+    }
+    return { key, bytes: buf.length };
   }
 
   // ----- linked prototypes: files in the space's own folder, edited in place -----
@@ -531,7 +587,7 @@ export class Store {
       } catch {}
     }
     const overrides = await this.getOverrides(id);
-    return { ...meta, updatedAt: new Date(updated).toISOString(), bytes: st.size, versions: (await this.listVersions(id)).length, overrides: rulesOf(overrides).length, ownIndex: index === this.pathFor(id, "index.html"), folder: this.filesDir(id), linked: this.links.has(id) };
+    return { ...meta, updatedAt: new Date(updated).toISOString(), bytes: st.size, versions: (await this.listVersions(id)).length, overrides: rulesOf(overrides).length, ownIndex: index === this.pathFor(id, "index.html"), folder: this.filesDir(id), linked: this.links.has(id), look: await this.fingerprint(id) };
   }
 
   async listEnvs() {
@@ -554,7 +610,8 @@ export class Store {
   }
 
   async writeMeta(id, meta) {
-    const { versions, overrides, updatedAt, bytes, ownIndex, folder, linked, ...keep } = meta;
+    this.changed();
+    const { versions, overrides, updatedAt, bytes, ownIndex, folder, linked, look, ...keep } = meta;
     await writeJson(path.join(this.envDir(id), "env.json"), { ...keep, id });
     this.setLink(id, keep);
   }
@@ -712,6 +769,7 @@ export class Store {
 
   // Gives a branch its own copy of every file, so an editor or agent can open them in its folder.
   async checkout(id) {
+    this.changed();
     const env = await this.getEnv(id);
     let n = 0;
     for (const f of await this.listFiles(id)) {
@@ -757,6 +815,7 @@ export class Store {
   }
 
   async mergeEnv(id, { take = {}, author = null, note = "" } = {}) {
+    this.changed();
     const env = await this.getEnv(id);
     const d = await this.diffEnv(id);
     const before = await this.saveVersion(d.parent, { label: `Before merging ${env.name}`, author, kind: "auto" });
@@ -820,6 +879,7 @@ export class Store {
   }
 
   async deleteEnv(id) {
+    this.changed();
     await this.getEnv(id);
     // Guard: a branch without its own copy reads its files from here; deleting it would break the branch.
     const users = (await this.listEnvs()).filter((e) => e.base === id);
@@ -889,6 +949,7 @@ export class Store {
   }
 
   async writeFile(id, rel, content) {
+    this.changed();
     await this.getEnv(id);
     const buf = Buffer.isBuffer(content) ? content : Buffer.from(String(content));
     if (buf.length > LIMITS.fileBytes) throw new StoreError("too_big", "That file is too big");
@@ -911,6 +972,7 @@ export class Store {
   }
 
   async setStyle(id, selector, props) {
+    this.changed();
     const env = await this.getEnv(id);
     const cur = (await this.getOverrides(id)) || OVERRIDES_HEAD(env.name);
     const next = mergeRule(cur, selector, props);
@@ -921,6 +983,7 @@ export class Store {
   // Several rules in one write, so a drag that touches many elements (reordering siblings) lands
   // whole or not at all, and undoes in one step.
   async setStyles(id, rules) {
+    this.changed();
     // Guard: one request edits at most this many rules, so a runaway client can't grind the file.
     if (!Array.isArray(rules) || !rules.length || rules.length > 100) throw new StoreError("bad_rules", "Send between 1 and 100 rules");
     const env = await this.getEnv(id);
@@ -931,6 +994,7 @@ export class Store {
   }
 
   async clearStyles(id, selector) {
+    this.changed();
     const css = await this.getOverrides(id);
     const keep = parseCss(css).filter((c) => !(c.kind === "rule" && (!selector || normSel(c.selector) === normSel(checkSelector(selector)))));
     const next = keep.map((c) => c.text).join("").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
@@ -987,6 +1051,7 @@ export class Store {
   }
 
   async restoreVersion(id, n, { author = null } = {}) {
+    this.changed();
     const dir = path.join(this.versionDir(id, n), "files");
     if (!(await exists(dir))) throw new StoreError("not_found", `No version ${n} of ${id}`, 404);
     const before = await this.saveVersion(id, { label: `Before restoring version ${n}`, author, kind: "auto" });

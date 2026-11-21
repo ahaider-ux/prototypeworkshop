@@ -2589,6 +2589,7 @@ export function initCanvas() {
   S.ink = loadInk();
   G.initGfx($("gfx"), $("bgFrames"), {
     ready: () => (gfxDirty = true),
+    look: (env) => S.envs.get(env)?.look || null,
     frame: async (win, it) => {
       captureCatalog(win, it);
       if (ensureScreen(win, it)) await new Promise((r) => setTimeout(r, it.state ? 1100 : 700));

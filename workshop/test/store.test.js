@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import zlib from "node:zlib";
 import { Store, mergeRule, rulesOf, parseCss, slug } from "../src/store.js";
 
 const tmp = () => fsp.mkdtemp(path.join(os.tmpdir(), "workshop-"));
@@ -372,4 +373,24 @@ test("a connected folder: prototypes are found and edited in place, Atelier's da
   // and reopening the space remembers the links
   const again = await Store.open(path.join(home, ".atelier"));
   assert.equal((await again.getEnv(page.id)).folder, home);
+});
+
+test("a board's look: shared by a branch nobody changed, new when anything it shows changes", async () => {
+  const s = await Store.open(await tmp());
+  const a = await s.createEnv({ html: HTML });
+  const main = await s.fingerprint(a.id);
+  const b = await s.branchEnv(a.id, { name: "Same" });
+  assert.equal(await s.fingerprint(b.id), main, "an untouched branch reuses its parent's snapshots");
+  await s.updateEnv(b.id, { name: "Renamed", brief: "Notes don't change how it looks" });
+  assert.equal(await s.fingerprint(b.id), main);
+  await s.setStyle(b.id, ".b", { color: "red" });
+  assert.notEqual(await s.fingerprint(b.id), main, "a style change is a new look");
+  await s.writeFile(a.id, "index.html", HTML.replace("Go", "Start"));
+  assert.notEqual(await s.fingerprint(a.id), main, "so is a file change");
+  // snapshots: only SVG drawings, named by a hash
+  const key = "f".repeat(40);
+  await s.writeSnapshot(key, Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>'));
+  assert.match(zlib.gunzipSync(await s.readSnapshot(key)).toString(), /^<svg/);
+  await assert.rejects(() => s.writeSnapshot(key, Buffer.from("<script>")), /board snapshot/);
+  await assert.rejects(() => s.writeSnapshot("../x", Buffer.from("<svg></svg>")), /snapshot key/);
 });
