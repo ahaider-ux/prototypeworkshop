@@ -36,7 +36,16 @@ export const LIMITS = {
   recipes: 100,
   versionsPerEnv: 200,
   envs: 500,
+  // a linked folder is versioned whole on every agent run and merge, so it has to stay prototype-sized
+  linkFiles: 3000,
+  linkBytes: 200 * 1024 * 1024,
+  scanAdds: 60, // prototypes one "look for prototypes" adds at most
 };
+
+// Atelier's own files for a prototype; for a linked prototype they live in .atelier, never in its folder
+const META_FILES = new Set(["env.json", "overrides.css"]);
+// Guard: folders that are never part of a prototype and can hold huge trees
+const skipEntry = (name) => name.startsWith(".") || name === "node_modules";
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const RECORD_RE = /^[a-z0-9][a-z0-9-]{0,80}$/;
@@ -114,10 +123,11 @@ async function dirSize(dir) {
   return total;
 }
 
-async function listFilesRec(dir, base = dir, out = []) {
+async function listFilesRec(dir, base = dir, out = [], max = 20000) {
   for (const e of await fsp.readdir(dir, { withFileTypes: true })) {
+    if (skipEntry(e.name) || out.length >= max) continue;
     const p = path.join(dir, e.name);
-    if (e.isDirectory()) await listFilesRec(p, base, out);
+    if (e.isDirectory()) await listFilesRec(p, base, out, max);
     else if (e.isFile()) {
       const st = await fsp.stat(p);
       out.push({ path: path.relative(base, p).split(path.sep).join("/"), bytes: st.size, mtime: st.mtimeMs });
@@ -179,6 +189,10 @@ function cleanPrompt(text, emptyMsg) {
 export class Store {
   constructor(root) {
     this.root = path.resolve(root);
+    // The folder a space shows. For a folder connected in place, Atelier keeps its data in
+    // <folder>/.atelier and links to the prototypes beside it; otherwise it is the workspace itself.
+    this.home = path.basename(this.root) === ".atelier" ? path.dirname(this.root) : this.root;
+    this.links = new Map(); // env id → {dir, entry} for prototypes whose files live in the space's folder
     this.envsDir = path.join(this.root, "envs");
     this.metaDir = path.join(this.root, ".workshop");
     this.canvasDir = path.join(this.root, "canvas");
@@ -195,9 +209,13 @@ export class Store {
       for (const r of STARTER_RECIPES) await s.addRecipe(r, "Atelier");
     }
     if (!(await exists(s.file("workshop.json")))) {
-      await writeJson(s.file("workshop.json"), { name: path.basename(s.root) === "workspace" ? "Prototype workshop" : path.basename(s.root), agent: null });
+      await writeJson(s.file("workshop.json"), { name: path.basename(s.home) === "workspace" ? "Prototype workshop" : path.basename(s.home), agent: null });
     }
+    // a connected folder's .atelier can be committed to share branches and notes; this computer's
+    // own state (versions, trash, tasks) never should be
+    if (s.root !== s.home && !(await exists(s.file(".gitignore")))) await writeAtomic(s.file(".gitignore"), "# this computer's own state: versions, trash, tasks, comments\n.workshop/\n");
     await s.migrateBoards();
+    for (const id of await s.ids()) s.setLink(id, await readJson(path.join(s.envDir(id), "env.json"), {}));
     return s;
   }
 
@@ -223,6 +241,106 @@ export class Store {
 
   envDir(id) {
     return path.join(this.envsDir, assertId(id));
+  }
+
+  // ----- linked prototypes: files in the space's own folder, edited in place -----
+
+  // Guard: a link stays inside the space's folder, outside Atelier's own data, and off dot folders.
+  linkDir(rel) {
+    const clean = String(rel || "").replace(/\\/g, "/");
+    if (path.isAbsolute(clean) || clean.split("/").some((seg) => seg === ".." || (seg.startsWith(".") && seg !== "."))) throw new StoreError("bad_path", "That folder isn't in this space");
+    const p = path.resolve(this.home, clean || ".");
+    const inside = (dir) => p === dir || p.startsWith(dir + path.sep);
+    const ours = this.root === this.home ? [this.envsDir, this.metaDir, this.canvasDir, this.recipesDir] : [this.root];
+    if (!inside(this.home) || ours.some(inside)) throw new StoreError("bad_path", "That folder isn't in this space");
+    return p;
+  }
+  setLink(id, meta) {
+    let link = null;
+    try {
+      if (meta?.link) link = { dir: this.linkDir(meta.link), entry: typeof meta.entry === "string" && /^[^/\\.][^/\\]*\.html?$/i.test(meta.entry) ? meta.entry : null };
+    } catch {}
+    if (link) this.links.set(id, link);
+    else this.links.delete(id);
+  }
+  filesDir(id) {
+    return this.links.get(id)?.dir || this.envDir(id);
+  }
+  // A linked single-file prototype (a loose page.html) is still "index.html" to everyone else.
+  realRel(id, rel) {
+    const entry = this.links.get(id)?.entry;
+    return entry && rel === "index.html" ? entry : rel;
+  }
+  // where a file of this environment lives on disk (whether or not it exists yet)
+  pathFor(id, rel) {
+    const r = this.realRel(id, String(rel || ""));
+    return this.safeJoin(META_FILES.has(r) ? this.envDir(id) : this.filesDir(id), r);
+  }
+  // Copies an environment's files (and Atelier's own) into dest, e.g. for a version or a copy.
+  async copyFiles(id, dest, { asIndex = false } = {}) {
+    await fsp.mkdir(dest, { recursive: true });
+    const link = this.links.get(id);
+    if (!link) return fsp.cp(this.envDir(id), dest, { recursive: true });
+    // file by file from the listing, which skips dot folders: a page at the top of a connected
+    // folder links to the folder that also holds .atelier
+    for (const f of await listFilesRec(link.dir, link.dir, [], LIMITS.linkFiles)) {
+      const to = path.join(dest, ...f.path.split("/"));
+      await fsp.mkdir(path.dirname(to), { recursive: true });
+      await fsp.copyFile(path.join(link.dir, ...f.path.split("/")), to);
+    }
+    for (const f of META_FILES) await fsp.cp(path.join(this.envDir(id), f), path.join(dest, f)).catch(() => {});
+    if (asIndex && link.entry && !(await exists(path.join(dest, "index.html")))) await fsp.rename(path.join(dest, link.entry), path.join(dest, "index.html"));
+  }
+
+  // Makes a prototype of a folder (or one HTML file in it) in this space, without copying anything.
+  async linkEnv(rel, { name = null, entry = null, author = null } = {}) {
+    const dir = this.linkDir(rel);
+    const file = entry || "index.html";
+    if (!/^[^/\\.][^/\\]*\.html?$/i.test(file) || !(await exists(path.join(dir, file)))) throw new StoreError("bad_folder", `${rel || "That folder"} has no ${file}`);
+    const files = await listFilesRec(dir, dir, [], LIMITS.linkFiles + 1);
+    const bytes = files.reduce((n, f) => n + f.bytes, 0);
+    if (files.length > LIMITS.linkFiles || bytes > LIMITS.linkBytes) throw new StoreError("too_big", `${rel || "That folder"} is too big to version (${files.length > LIMITS.linkFiles ? `over ${LIMITS.linkFiles} files` : `${Math.round(bytes / 1048576)} MB`}). Connect the folder that holds just the prototype.`);
+    if ((await this.ids()).length >= LIMITS.envs) throw new StoreError("too_many", "This space has as many prototypes as it can hold");
+    const html = await fsp.readFile(path.join(dir, file), "utf8");
+    const title = String(name || titleOf(html) || (entry ? entry.replace(/\.html?$/i, "") : path.basename(dir))).slice(0, 120);
+    const id = await this.uniqueId(title);
+    await fsp.mkdir(this.envDir(id), { recursive: true });
+    const link = path.relative(this.home, dir).split(path.sep).join("/") || ".";
+    await this.writeMeta(id, { ...this.defaults(id), name: title, link, entry: entry || null, source: { kind: "linked", path: link + (entry ? `/${entry}` : "") }, author, created: now() });
+    await this.addBoard(id, { author });
+    return this.getEnv(id);
+  }
+
+  // Looks through the space's folder for prototypes it doesn't show yet: the folder's own
+  // index.html, folders with an index.html (two levels down), and loose .html pages.
+  async findPrototypes({ author = null } = {}) {
+    const have = new Set([...this.links.values()].map((l) => path.join(l.dir, l.entry || "index.html")));
+    const own = new Set([this.root, this.envsDir, this.canvasDir, this.recipesDir, this.metaDir]);
+    const found = [];
+    const look = async (dir, depth) => {
+      const entries = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
+      if (entries.some((e) => e.isFile() && e.name === "index.html")) found.push({ dir, entry: null });
+      else if (depth === 0) for (const e of entries) if (e.isFile() && /\.html?$/i.test(e.name) && !skipEntry(e.name)) found.push({ dir, entry: e.name });
+      if (depth >= 2) return;
+      for (const e of entries) if (e.isDirectory() && !skipEntry(e.name) && !own.has(path.join(dir, e.name))) await look(path.join(dir, e.name), depth + 1);
+    };
+    await look(this.home, 0);
+    const added = [];
+    const skipped = [];
+    for (const f of found) {
+      if (have.has(path.join(f.dir, f.entry || "index.html"))) continue;
+      const rel = path.relative(this.home, f.dir).split(path.sep).join("/") || ".";
+      if (added.length >= LIMITS.scanAdds) {
+        skipped.push({ path: rel, why: "Too many at once" });
+        continue;
+      }
+      try {
+        added.push(await this.linkEnv(rel, { entry: f.entry, author }));
+      } catch (e) {
+        skipped.push({ path: rel + (f.entry ? `/${f.entry}` : ""), why: e.message });
+      }
+    }
+    return { added, skipped };
   }
 
   // Guard: every path from a request or an agent is resolved inside its environment folder,
@@ -413,7 +531,7 @@ export class Store {
       } catch {}
     }
     const overrides = await this.getOverrides(id);
-    return { ...meta, updatedAt: new Date(updated).toISOString(), bytes: st.size, versions: (await this.listVersions(id)).length, overrides: rulesOf(overrides).length, ownIndex: index === path.join(dir, "index.html") };
+    return { ...meta, updatedAt: new Date(updated).toISOString(), bytes: st.size, versions: (await this.listVersions(id)).length, overrides: rulesOf(overrides).length, ownIndex: index === this.pathFor(id, "index.html"), folder: this.filesDir(id), linked: this.links.has(id) };
   }
 
   async listEnvs() {
@@ -436,8 +554,9 @@ export class Store {
   }
 
   async writeMeta(id, meta) {
-    const { versions, overrides, updatedAt, bytes, ownIndex, ...keep } = meta;
+    const { versions, overrides, updatedAt, bytes, ownIndex, folder, linked, ...keep } = meta;
     await writeJson(path.join(this.envDir(id), "env.json"), { ...keep, id });
+    this.setLink(id, keep);
   }
 
   async createEnv({ name, html, description = "", source = null, author = null, files = {} }) {
@@ -528,8 +647,8 @@ export class Store {
 
   async forkEnv(id, { name, version = null, author = null } = {}) {
     const src = await this.getEnv(id);
-    const from = version === null || version === undefined ? this.envDir(id) : path.join(this.versionDir(id, version), "files");
-    if (!(await exists(from))) throw new StoreError("not_found", `No version ${version} of ${id}`, 404);
+    const from = version === null || version === undefined ? null : path.join(this.versionDir(id, version), "files");
+    if (from && !(await exists(from))) throw new StoreError("not_found", `No version ${version} of ${id}`, 404);
     let title = String(name || `${src.name} copy`).slice(0, 120);
     if (!name) {
       // "X copy", then "X copy 2", "X copy 3" — two boards never share a name
@@ -537,9 +656,13 @@ export class Store {
       for (let i = 2; names.has(title) && i < 1000; i++) title = `${src.name} copy ${i}`;
     }
     const nid = await this.uniqueId(title);
-    await fsp.cp(from, this.envDir(nid), { recursive: true });
+    // a copy is always the copy's own: files come into its folder, and it isn't linked
+    if (from) await fsp.cp(from, this.envDir(nid), { recursive: true });
+    else await this.copyFiles(id, this.envDir(nid), { asIndex: true });
+    const entry = this.links.get(id)?.entry;
+    if (from && entry && !(await exists(path.join(this.envDir(nid), "index.html")))) await fsp.rename(path.join(this.envDir(nid), entry), path.join(this.envDir(nid), "index.html")).catch(() => {});
     const meta = { ...this.defaults(nid), ...(await readJson(path.join(this.envDir(nid), "env.json"), {})) };
-    await this.writeMeta(nid, { ...meta, id: nid, name: title, description: "", parent: id, branch: null, archived: false, forkedFrom: { env: id, version: version ?? null, at: now() }, created: now(), author });
+    await this.writeMeta(nid, { ...meta, id: nid, link: null, entry: null, name: title, description: "", parent: id, branch: null, archived: false, forkedFrom: { env: id, version: version ?? null, at: now() }, created: now(), author });
     await this.copyBoards(id, nid, author);
     return this.getEnv(nid);
   }
@@ -593,7 +716,7 @@ export class Store {
     let n = 0;
     for (const f of await this.listFiles(id)) {
       if (!f.inherited) continue;
-      await writeAtomic(path.join(this.envDir(id), ...f.path.split("/")), await this.readFile(id, f.path));
+      await writeAtomic(this.pathFor(id, f.path), await this.readFile(id, f.path));
       n++;
     }
     if (env.base) {
@@ -649,7 +772,7 @@ export class Store {
         if (!styles.has(sel)) styles.set(sel, {});
         styles.get(sel)[prop] = c.branch;
       }
-      if (c.kind === "file") await writeAtomic(path.join(this.envDir(d.parent), ...c.key.split("/")), await this.readFile(id, c.key));
+      if (c.kind === "file") await writeAtomic(this.pathFor(d.parent, c.key), await this.readFile(id, c.key)); // a linked prototype's real file
     }
     // what was decided, kept with the prototype so people and agents can read the reasoning later
     const applied = kept.length;
@@ -702,7 +825,9 @@ export class Store {
     const users = (await this.listEnvs()).filter((e) => e.base === id);
     if (users.length) throw new StoreError("in_use", `${users.map((e) => e.name).join(", ")} still use${users.length === 1 ? "s" : ""} this prototype's files. Delete or merge ${users.length === 1 ? "that branch" : "those branches"} first.`, 409);
     const key = `${id}--${Date.now().toString(36)}`;
+    // for a linked prototype only Atelier's own data goes to the trash; its folder stays where it is
     await fsp.rename(this.envDir(id), path.join(this.metaDir, "trash", key));
+    this.links.delete(id);
     const boards = (await this.items()).filter((i) => i.env === id);
     for (const b of boards) await fsp.rm(path.join(this.canvasDir, `${b.id}.json`), { force: true });
     await writeJson(path.join(this.metaDir, "trash", `${key}.json`), { id, boards, at: now() });
@@ -717,6 +842,7 @@ export class Store {
     const id = (await exists(this.envDir(info.id))) ? await this.uniqueId(info.id) : info.id;
     await fsp.rename(path.join(this.metaDir, "trash", key), this.envDir(id));
     await fsp.rm(path.join(this.metaDir, "trash", `${key}.json`), { force: true });
+    this.setLink(id, await readJson(path.join(this.envDir(id), "env.json"), {}));
     if (info.boards?.length) for (const b of info.boards) await this.putItem({ ...b, env: id });
     else await this.addBoard(id);
     return this.getEnv(id);
@@ -726,7 +852,7 @@ export class Store {
 
   // A file of this environment, or — for a branch that hasn't changed it — of its base.
   async resolveFile(id, rel, seen = new Set()) {
-    const p = this.safeJoin(this.envDir(id), rel);
+    const p = this.pathFor(id, rel);
     const st = await fsp.stat(p).catch(() => null);
     if (st && st.isFile()) return p;
     // Guard: base chains are short and can't loop
@@ -737,7 +863,16 @@ export class Store {
   }
 
   async listFiles(id, seen = new Set()) {
-    const own = (await listFilesRec(this.envDir(id)).catch(() => [])).map((f) => ({ ...f, inherited: null }));
+    let own = (await listFilesRec(this.filesDir(id)).catch(() => [])).map((f) => ({ ...f, inherited: null }));
+    const link = this.links.get(id);
+    if (link) {
+      // Atelier's own files come from .atelier; a single-page prototype's page is its index.html
+      own = own.filter((f) => !META_FILES.has(f.path) && !(link.entry && f.path === "index.html")).map((f) => (f.path === link.entry ? { ...f, path: "index.html" } : f));
+      for (const m of META_FILES) {
+        const st = await fsp.stat(path.join(this.envDir(id), m)).catch(() => null);
+        if (st) own.push({ path: m, bytes: st.size, mtime: st.mtimeMs, inherited: null });
+      }
+    }
     if (seen.has(id) || seen.size > 8) return own;
     seen.add(id);
     const meta = await readJson(path.join(this.envDir(id), "env.json"), {});
@@ -757,9 +892,11 @@ export class Store {
     await this.getEnv(id);
     const buf = Buffer.isBuffer(content) ? content : Buffer.from(String(content));
     if (buf.length > LIMITS.fileBytes) throw new StoreError("too_big", "That file is too big");
-    const p = this.safeJoin(this.envDir(id), rel);
-    if (path.relative(this.envDir(id), p) === "env.json") JSON.parse(buf.toString("utf8")); // a broken env.json would hide the environment
+    const p = this.pathFor(id, rel);
+    const isMeta = p === path.join(this.envDir(id), "env.json");
+    if (isMeta) JSON.parse(buf.toString("utf8")); // a broken env.json would hide the environment
     await writeAtomic(p, buf);
+    if (isMeta) this.setLink(id, JSON.parse(buf.toString("utf8")));
     return { path: rel, bytes: buf.length };
   }
 
@@ -843,7 +980,7 @@ export class Store {
     const n = (list[0]?.n || 0) + 1;
     const dir = this.versionDir(id, n);
     await fsp.mkdir(dir, { recursive: true });
-    await fsp.cp(this.envDir(id), path.join(dir, "files"), { recursive: true });
+    await this.copyFiles(id, path.join(dir, "files"));
     const meta = { n, label: String(label || `Version ${n}`).slice(0, 120), author, kind, at: now(), bytes: await dirSize(path.join(dir, "files")) };
     await writeJson(path.join(dir, "version.json"), meta);
     return meta;
@@ -853,6 +990,16 @@ export class Store {
     const dir = path.join(this.versionDir(id, n), "files");
     if (!(await exists(dir))) throw new StoreError("not_found", `No version ${n} of ${id}`, 404);
     const before = await this.saveVersion(id, { label: `Before restoring version ${n}`, author, kind: "auto" });
+    if (this.links.has(id)) {
+      // A linked folder is someone's real project: put back every file the version had, but never
+      // swap or empty the folder (files added since stay, and are in the version saved just now).
+      for (const f of await listFilesRec(dir)) {
+        const target = META_FILES.has(f.path) ? path.join(this.envDir(id), f.path) : this.safeJoin(this.filesDir(id), f.path);
+        await writeAtomic(target, await fsp.readFile(path.join(dir, ...f.path.split("/"))));
+      }
+      this.setLink(id, await readJson(path.join(this.envDir(id), "env.json"), {}));
+      return { env: await this.getEnv(id), before };
+    }
     const target = this.envDir(id);
     const tmp = `${target}.restore-${crypto.randomBytes(3).toString("hex")}`;
     await fsp.cp(dir, tmp, { recursive: true });
@@ -1051,7 +1198,7 @@ export class Store {
         const v = this.recipeVersion(r, task.recipe.n);
         recipe = { name: r.name, n: v.n, prompt: v.prompt };
       }
-      return { brief, decisions, recipe };
+      return { brief, decisions, recipe, entry: this.pathFor(envId, "index.html"), overrides: path.join(this.envDir(envId), "overrides.css") };
     } catch {
       return { brief: "", decisions: [], recipe: null };
     }

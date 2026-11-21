@@ -218,3 +218,42 @@ test("API: canvas items, branches, review and merge, and requests that branch", 
     await srv.close();
   }
 });
+
+test("spaces: connect a project folder, edit it in place, switch back", async () => {
+  const first = await tmp();
+  const project = await tmp();
+  await fsp.mkdir(path.join(project, "site"));
+  await fsp.writeFile(path.join(project, "site", "index.html"), HTML.replace("Board", "Site"));
+  const spaces = path.join(await tmp(), "spaces.json");
+  const srv = await startServer({ workspace: first, port: 0, quiet: true, agent: false, spaces });
+  const call = (p, body) => fetch(`${srv.url}/api/${p}`, body ? { method: "POST", headers: H, body: JSON.stringify(body) } : { headers: { "x-workshop": "1" } }).then(async (r) => ({ status: r.status, body: await r.json() }));
+  try {
+    assert.equal((await call("spaces")).body.current, first);
+    const picked = await call(`folders?path=${encodeURIComponent(project)}`);
+    assert.deepEqual(picked.body.dirs.map((d) => [d.name, d.prototype]), [["site", true]]);
+    assert.equal((await fetch(`${srv.url}/api/folders`)).status, 403, "folder names need the editor's header");
+    const c = await call("spaces", { path: project });
+    assert.equal(c.status, 201);
+    assert.deepEqual(c.body.added.map((e) => e.name), ["Site"]);
+    assert.equal(c.body.current, project);
+    assert.equal(srv.store.home, project);
+    // served from the real file, and live edits to it show up
+    const id = c.body.added[0].id;
+    assert.match(await (await fetch(`${srv.url}/env/${id}/`)).text(), /Site/);
+    const ws = await (await fetch(`${srv.url}/api/workspace`)).json();
+    assert.equal(ws.home, project);
+    assert.equal(ws.envs[0].folder, path.join(project, "site"));
+    // switch back; the list remembers both
+    const back = await call("spaces/switch", { path: first });
+    assert.equal(back.body.current, first);
+    assert.deepEqual(back.body.spaces.map((x) => x.path).sort(), [first, project].sort());
+    assert.equal((await call("spaces/switch", { path: os.tmpdir() })).status, 404, "only connected folders can be switched to");
+    assert.equal((await call("spaces", { path: os.homedir() })).status, 400, "never the home folder itself");
+    assert.equal((await call("spaces/forget", { path: first })).status, 400, "not the space you're in");
+    const forgot = await call("spaces/forget", { path: project });
+    assert.deepEqual(forgot.body.spaces.map((x) => x.path), [first]);
+    assert.ok(await fsp.stat(path.join(project, "site", "index.html")), "forgetting a space touches no files");
+  } finally {
+    await srv.close();
+  }
+});

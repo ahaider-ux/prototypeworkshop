@@ -269,7 +269,12 @@ export function draw(boards, cam, colors) {
     ctx.fillRect(x - 0.5, y - 0.5, w + 1, h + 1);
     if (covered) continue;
     const b = bitmapFor(it);
-    if (b) ctx.drawImage(b.bmp, x, y, w, h);
+    if (b) {
+      // a page that sets no background shows on white, as it does in a browser tab
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(x, y, w, h);
+      ctx.drawImage(b.bmp, x, y, w, h);
+    }
     else {
       ctx.fillStyle = colors.page;
       ctx.fillRect(x, y, w, h);

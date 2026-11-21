@@ -18,8 +18,9 @@ export function taskPrompt(task, env, dir, ctx = {}) {
   const sel = task.selection;
   const lines = [
     `You are editing an HTML prototype in Atelier: "${env.name}".`,
-    `Folder: ${dir}`,
-    `Entry file: ${path.join(dir, "index.html")}`,
+    `Folder: ${dir}${env.linked ? " (the project's real files: edit them in place)" : ""}`,
+    `Entry file: ${ctx.entry || path.join(dir, "index.html")}`,
+    `Design overrides: ${ctx.overrides || path.join(dir, "overrides.css")} (loads after the prototype's own styles)`,
     "",
   ];
   if (ctx.brief) lines.push("The prototype's brief (read this first; it outranks your own taste):", ctx.brief, "");
@@ -39,9 +40,9 @@ export function taskPrompt(task, env, dir, ctx = {}) {
   lines.push(
     "",
     "How to work:",
-    "- Change files in this folder only.",
-    "- For visual tweaks, add rules to overrides.css (it loads after the prototype's styles). For structure or behaviour, edit index.html.",
-    "- Keep to the design system already in the file: reuse its CSS variables (for Libra: --text-primary, --text-secondary, --bg-base, --bg-input, --bg-hover, --border-subtle, --text-accent; radii 4/6/8/12/16; spacing 2/4/6/8/12/16/24/32/40).",
+    "- Change files in this folder only (and the design overrides file above).",
+    "- For visual tweaks, add rules to the design overrides file. For structure or behaviour, edit the entry file.",
+    "- Keep to the design system already in the prototype: reuse its CSS variables, spacing scale, radii and type, and never invent new colours.",
     "- Never remove the prototype's existing features.",
     "- Finish with one or two plain sentences saying what you changed.",
   );
@@ -113,7 +114,7 @@ export class AgentRunner {
       this.emit({ kind: "tasks" });
       return;
     }
-    const dir = s.envDir(task.env);
+    const dir = s.filesDir(task.env);
     if (env.base) await s.checkout(task.env); // the agent edits real files in this folder
     const before = await s.saveVersion(task.env, { label: `Before agent: ${task.prompt.slice(0, 60)}`, author: agent.name, kind: "auto" });
     await s.updateTask(task.id, { status: "working", claimedBy: agent.name, beforeVersion: before.n, log: `${agent.name} started. Saved version ${before.n} first.`, logKind: "note" });

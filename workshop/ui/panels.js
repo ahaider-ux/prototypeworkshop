@@ -5,7 +5,7 @@
 // Right: Design (whatever is selected, or the page) and Prototype (how the page runs). The banner
 // across the canvas says which page this is and what to do with it.
 
-import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, familyOf, pageEnv, protoId, pageItems, pageOf, nearestBoard, screenName, plural, pageName } from "./state.js";
+import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, familyOf, pageEnv, protoId, pageItems, pageOf, nearestBoard, screenName, plural, pageName, folderLabel } from "./state.js";
 import { $, h, esc, api, toast, IC, dropdown, segmented, copyText, timeAgo, clamp } from "./lib.js";
 import { rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, setMode, docOf, winOf, flowOf, parseTranslate, exactSel, removeEl, selIds, toggleSel, alignSel, distributeSel, duplicateSel, removeItems } from "./canvas.js";
 import { PENS, INKS, SIZES as INK_SIZES } from "./ink.js";
@@ -13,7 +13,9 @@ import { record, rid } from "./history.js";
 import { renderRecipes } from "./recipes.js";
 import { loadOverrides, cachedOverrides, forgetOverrides, rulesFor, boardsLive, commitRules, resetSelectors, preview, endPreview } from "./styles.js";
 
-// ---------- the prototype's design tokens the inspector offers (Libra's, for Libra prototypes) ----------
+// ---------- the colours the inspector offers ----------
+// Each prototype's own colour variables, or the colours it uses (paletteOf, below). This list is
+// only the stand-in while no page is loaded to read them from.
 const FILL = [
   { name: "bg-layer", css: "var(--bg-layer, #fff)", hex: ["#ffffff", "#232321", "#1b1b19"] },
   { name: "bg-base", css: "var(--bg-base, #fafafa)", hex: ["#fafafa", "#1e1e1c"] },
@@ -56,6 +58,66 @@ function hexOf(rgb) {
   return a < 1 ? `#${hx}/${Math.round(a * 100)}` : `#${hx}`;
 }
 const tokenOf = (set, rgb) => set.find((t) => t.hex.includes(hexOf(rgb))) || null;
+
+// The colour variables a prototype defines on :root / html / body (and theme selectors), split into
+// text colours and fills by their names, so the swatches are the prototype's own design system.
+const PALETTES = new WeakMap();
+function paletteOf(doc) {
+  if (!doc) return { fill: FILL, ink: INK };
+  if (PALETTES.has(doc)) return PALETTES.get(doc);
+  const names = new Set();
+  const walk = (rules, depth = 0) => {
+    for (const r of rules || []) {
+      if (names.size >= 400 || depth > 3) return;
+      if (r.cssRules && !r.style) walk(r.cssRules, depth + 1); // @media, @layer, @supports
+      if (!r.style || !/(^|,)\s*(:root|html|body)\b|\[data-theme/.test(r.selectorText || "")) continue;
+      for (let k = 0; k < r.style.length; k++) if (r.style[k].startsWith("--")) names.add(r.style[k]);
+    }
+  };
+  for (const sh of doc.styleSheets) {
+    try {
+      walk(sh.cssRules);
+    } catch {} // a stylesheet from another origin can't be read
+  }
+  const root = doc.defaultView.getComputedStyle(doc.documentElement);
+  const probe = doc.createElement("i");
+  probe.style.display = "none";
+  doc.body?.append(probe);
+  const fill = [],
+    ink = [];
+  for (const n of names) {
+    const raw = root.getPropertyValue(n).trim();
+    // only plain colours: not sizes, fonts, shadows or gradients
+    if (!raw || raw.length > 60 || /^-?[\d.]+(px|rem|em|%|ms|s)?$/.test(raw) || /gradient|url\(|,\s*\d+px/.test(raw)) continue;
+    probe.style.color = "";
+    probe.style.color = raw;
+    if (!probe.style.color) continue;
+    const hex = hexOf(doc.defaultView.getComputedStyle(probe).color);
+    const t = { name: n.slice(2), css: `var(${n})`, hex: [hex] };
+    const nm = n.toLowerCase();
+    if (/text|ink|fg|foreground|font-color|icon/.test(nm)) ink.push(t);
+    else if (/bg|background|surface|fill|layer|base|card|panel|canvas|shell/.test(nm)) fill.push(t);
+    else (ink.push(t), fill.push(t)); // accents, brand, borders: either
+  }
+  probe.remove();
+  if (fill.length + ink.length < 3) {
+    // no colour variables: offer the colours the page already uses, most used first
+    const count = (m, v) => v && v !== "transparent" && m.set(v, (m.get(v) || 0) + 1);
+    const fills = new Map(),
+      inks = new Map();
+    for (const e of [...doc.querySelectorAll("body, body *")].slice(0, 600)) {
+      const cs = doc.defaultView.getComputedStyle(e);
+      count(fills, hexOf(cs.backgroundColor));
+      if (e.childNodes.length && [...e.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim())) count(inks, hexOf(cs.color));
+    }
+    const top = (m) => [...m].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([hx]) => ({ name: hx, css: hx.includes("/") ? hx.replace(/\/(\d+)$/, (_, a) => Math.round((a / 100) * 255).toString(16).padStart(2, "0")) : hx, hex: [hx] }));
+    fill.push(...top(fills));
+    ink.push(...top(inks));
+  }
+  const out = { fill: [...fill.slice(0, 24), { name: "none", css: "transparent", hex: ["transparent"] }], ink: ink.slice(0, 24) };
+  PALETTES.set(doc, out);
+  return out;
+}
 const px = (v) => Math.round(parseFloat(v) || 0);
 
 const diffing = new Map();
@@ -373,7 +435,7 @@ function briefSec(env) {
     return L;
   }
   L.append(h(`<span class="lineage">What every agent reads first: what this is for, the design rules, and what to keep.</span>`));
-  const ta = h(`<textarea class="afld-ta" aria-label="Brief" maxlength="20000" style="min-height:88px" placeholder="A banking app for small businesses. Use the Libra tokens only. Keep the sidebar and the chat composer as they are.">${esc(root.brief || "")}</textarea>`);
+  const ta = h(`<textarea class="afld-ta" aria-label="Brief" maxlength="20000" style="min-height:88px" placeholder="What it's for and who uses it. Which design system to keep to. What must not change.">${esc(root.brief || "")}</textarea>`);
   ta.addEventListener("blur", async () => {
     if (ta.value !== (root.brief || "")) (await patchEnv(root.id, { brief: ta.value })) && toast("Saved the brief", "Agents read it before every request");
   });
@@ -521,7 +583,7 @@ function designPage(body, env) {
   const id = env.id;
   const branch = isBranch(env);
   const parent = branch ? S.envs.get(env.parent) : null;
-  const t = h(`<div class="isec"><div class="ih"><b>Page</b><span class="tagro${branch ? " info" : ""}">${branch ? "Branch" : "Main"}</span></div><div class="ititle"><div class="afld-in"><input aria-label="Name" value="${esc(env.name)}" maxlength="120"></div><span class="pth"><span title="envs/${esc(id)}/">envs/${esc(id)}/</span><button type="button" class="ib24" aria-label="Copy folder path" data-tip="Copy path">${IC.copy}</button></span></div></div>`);
+  const t = h(`<div class="isec"><div class="ih"><b>Page</b><span class="tagro${branch ? " info" : ""}">${branch ? "Branch" : "Main"}</span></div><div class="ititle"><div class="afld-in"><input aria-label="Name" value="${esc(env.name)}" maxlength="120"></div><span class="pth">${env.linked ? `<span class="tagro ok" title="Agents and merges edit these files in place">In place</span>` : ""}<span title="${esc(env.folder || "")}">${esc(folderLabel(env))}</span><button type="button" class="ib24" aria-label="Copy folder path" data-tip="Copy path">${IC.copy}</button></span></div></div>`);
   const inp = t.querySelector("input");
   inp.addEventListener("keydown", (e) => (e.key === "Enter" && inp.blur(), e.key === "Escape" && ((inp.value = env.name), inp.blur())));
   inp.addEventListener("blur", async () => {
@@ -529,7 +591,7 @@ function designPage(body, env) {
     if (v && v !== env.name) await patchEnv(id, { name: v });
     else inp.value = env.name;
   });
-  t.querySelector(".ib24").onclick = () => copyText(`${S.ws.root}/envs/${id}`);
+  t.querySelector(".ib24").onclick = () => copyText(env.folder || "");
   body.append(t);
   body.append(briefSec(env));
   if (branch) {
@@ -585,7 +647,7 @@ function designPage(body, env) {
   const nCm = S.comments.filter((c) => !c.parent && !c.resolved && c.env === id).length;
   counts.append(h(`<div class="xyrow"><span class="xy"><i>Screens</i>${boardsOf(id).length}</span><span class="xy"><i>Notes</i>${nNotes + nCm}</span></div>`));
   body.append(counts);
-  const del = h(`<div class="isec" style="display:flex;flex-direction:row;flex-wrap:wrap;gap:8px">${branch && !env.archived ? `<button type="button" class="dbtn sm" data-a="arch">Archive</button>` : ""}<button type="button" class="dbtn sm err" data-a="del">${IC.trash}Delete ${branch ? "branch" : "prototype"}</button></div>`);
+  const del = h(`<div class="isec" style="display:flex;flex-direction:row;flex-wrap:wrap;gap:8px">${branch && !env.archived ? `<button type="button" class="dbtn sm" data-a="arch">Archive</button>` : ""}<button type="button" class="dbtn sm err" data-a="del">${IC.trash}${env.linked ? "Remove from Atelier" : `Delete ${branch ? "branch" : "prototype"}`}</button></div>`);
   del.querySelector('[data-a="del"]').onclick = () => fire("delete", id);
   const ar = del.querySelector('[data-a="arch"]');
   if (ar) ar.onclick = () => fire("archive", id);
@@ -737,7 +799,7 @@ function envSettings(body, env) {
 
 // the prototype's colours, as the prototype shows them in its current theme — not the editor's
 function swatches(set, current, onPick) {
-  const dark = pageEnv()?.theme === "dark";
+  const dark = set === FILL || set === INK ? pageEnv()?.theme === "dark" : false; // a prototype's own palette is read in its current theme
   const w = h(`<div class="sws" role="radiogroup"></div>`);
   for (const t of set) {
     const fill = (dark && t.hex[1]) || t.hex[0];
@@ -877,6 +939,7 @@ function designEl(body, s) {
   const env = S.envs.get(s.env);
   const id = s.item,
     el = s.el;
+  const { fill: FILLS, ink: INKS_ } = paletteOf(el?.ownerDocument);
   const exact = i.exactSelector || exactSel(id, el);
   const sel = S.scope === "exact" ? exact : i.selector || exact;
   const targets = () => {
@@ -1093,8 +1156,8 @@ function designEl(body, s) {
     T.append(row("Line height", dropdown({ value: lhNear ?? "off", options: [...(lhNear ? [] : [{ label: lh ? `${lh} · off the ramp` : "Normal", value: "off" }]), ...LEADING.map((n) => ({ label: `${n}`, value: n }))], full: true, label: "Line height", onChange: (n) => n !== "off" && set({ "line-height": String(n) }, "line height") })));
     const ta = /center/.test(st["text-align"]) ? "center" : /right|end/.test(st["text-align"]) ? "right" : "left";
     T.append(row("Align", segmented([{ label: "Left", value: "left" }, { label: "Centre", value: "center" }, { label: "Right", value: "right" }], ta, (v) => set({ "text-align": v }, "alignment"), { full: true, label: "Text align" })));
-    const inkTok = tokenOf(INK, st.color);
-    T.append(h(`<div class="ih"><span class="tokname${inkTok ? "" : " off"}">${esc(inkTok ? inkTok.name : hexOf(st.color))}</span></div>`), swatches(INK, inkTok, (tk) => set({ color: tk.css }, "text colour")));
+    const inkTok = tokenOf(INKS_, st.color);
+    T.append(h(`<div class="ih"><span class="tokname${inkTok ? "" : " off"}">${esc(inkTok ? inkTok.name : hexOf(st.color))}</span></div>`), swatches(INKS_, inkTok, (tk) => set({ color: tk.css }, "text colour")));
     if (i.editableText) {
       const tx = h(`<textarea class="afld-ta" aria-label="Text" style="min-height:44px">${esc(i.text)}</textarea>`);
       tx.addEventListener("change", async () => {
@@ -1114,9 +1177,9 @@ function designEl(body, s) {
   }
 
   // Fill
-  const fillTok = tokenOf(FILL, st["background-color"]);
+  const fillTok = tokenOf(FILLS, st["background-color"]);
   const F = sec("Fill", `<span class="tokname${fillTok ? "" : " off"}">${esc(fillTok ? fillTok.name : hexOf(st["background-color"]))}</span>`);
-  F.append(swatches(FILL, fillTok, (tk) => set({ "background-color": tk.css }, "fill")));
+  F.append(swatches(FILLS, fillTok, (tk) => set({ "background-color": tk.css }, "fill")));
   body.append(F);
 
   // Stroke
@@ -1138,7 +1201,7 @@ function designEl(body, s) {
   // off the system
   const off = [];
   if (!fillTok) off.push(`fill ${hexOf(st["background-color"])}`);
-  if (i.text && !tokenOf(INK, st.color)) off.push(`text ${hexOf(st.color)}`);
+  if (i.text && !tokenOf(INKS_, st.color)) off.push(`text ${hexOf(st.color)}`);
   const fsz = px(st["font-size"]);
   if (i.text && !SIZES.includes(fsz)) off.push(`${fsz}px type`);
   if (!RADII.includes(rad)) off.push(`${rad}px radius`);

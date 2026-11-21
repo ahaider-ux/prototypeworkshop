@@ -8,7 +8,9 @@ notes, highlights, arrows and comments, **compare** it with main, then **review 
 Coding agents (Claude Code or your own harness) work on the same files, read your annotations, and
 do their work on branches you merge.
 
-It starts with **Libra — Fourth Age** and two example branches.
+Bring your own projects: **connect any folder** on your computer as a **space** and Atelier finds
+the prototypes in it and works on them where they are. The repository's own workspace, with
+**Libra — Fourth Age** and two example branches, is just the first space.
 
 ## Start
 
@@ -23,6 +25,32 @@ npm start
 ```
 
 Open http://127.0.0.1:4600. The server only listens on this computer.
+
+## Spaces: work in your own project folders
+
+Open the **Atelier** menu (top left) and choose **Connect a folder…**, or click **Connect a
+folder** on Home. Paste a path or pick one in the folder browser, then connect. From the command
+line, `node bin/workshop.js connect ~/Projects/app` does the same.
+
+- **What counts as a prototype:** the folder's own `index.html`, any folder up to two levels down
+  with an `index.html`, and loose `.html` pages at the top. **Look for new prototypes** (same menu)
+  picks up ones you add later. `node_modules` and dot folders are skipped.
+- **In place.** Prototypes stay where they are and show *In place* in the Page panel. Edits to the
+  files (from your editor, an agent or a merge) show up live, and merging a branch writes the real
+  files. Atelier saves a version before every agent run, merge and restore.
+- **Atelier's own data** (branches, versions, notes, design overrides, recipes) goes in a hidden
+  `.atelier` folder inside the connected folder. Add it to your `.gitignore`, or commit it to
+  share branches and notes with your team (its own `.gitignore` keeps this computer's versions
+  and tasks out). Design overrides stay in `.atelier`, never in your files,
+  until you merge them into the code yourself.
+- **Switching.** Your spaces are listed at the top of the Atelier menu; pick one to open it. The
+  list is kept in `~/.atelier/spaces.json` (or `$ATELIER_HOME`). `workshop serve`, `workshop mcp`
+  and the other commands open the space you last used unless you pass `--workspace`, and a
+  connected agent follows you when you switch.
+- **Limits.** A connected prototype is versioned whole, so a folder over 3,000 files or 200 MB is
+  skipped with a note: connect the folder that holds just the prototype. **Remove from Atelier**
+  forgets a prototype and leaves its folder alone. Restoring a version puts back every file it had
+  and leaves files you added since.
 
 ## The workspace on disk
 

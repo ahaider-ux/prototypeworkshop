@@ -12,6 +12,7 @@ import { Store, StoreError, assertId } from "./store.js";
 import { AgentRunner } from "./agent.js";
 import { screenshot, screenshotAvailable } from "./screenshot.js";
 import { watchTree } from "./watch.js";
+import { spaceRoots, readSpaces, rememberSpace, forgetSpace, checkFolder, listFolder, SpaceError } from "./spaces.js";
 import { injectHtml } from "./inject.js";
 
 export { injectHtml } from "./inject.js";
@@ -43,8 +44,9 @@ function lanAddress() {
   return null;
 }
 
-export async function startServer({ workspace, port = 4600, host = "127.0.0.1", quiet = false, agent = true } = {}) {
-  const store = await Store.open(workspace);
+// spaces: the file listing this computer's spaces (null keeps the server on one workspace, as in tests)
+export async function startServer({ workspace, port = 4600, host = "127.0.0.1", quiet = false, agent = true, spaces = null } = {}) {
+  let store = await Store.open(workspace);
   const clients = new Set();
   // Recipes that run when notes are added: only on a branch page (main never changes on its own),
   // only after the designer pauses (Guard: one run per burst of marks, not one per stroke), and
@@ -83,6 +85,28 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
     }
   };
   const runner = agent ? new AgentRunner(store, emit) : null;
+  // Switching spaces: everything reads `store`, so the swap is one assignment plus fresh watchers.
+  let switching = Promise.resolve();
+  async function openSpace(folder, { find = false } = {}) {
+    const run = async () => {
+      if (runner?.current) throw new SpaceError("An agent is still working in this space. Wait for it to finish, or stop it, then switch.", 409);
+      const { root } = spaceRoots(folder);
+      const next = await Store.open(root);
+      const found = find ? await next.findPrototypes({ author: "You" }) : { added: [], skipped: [] };
+      await fsp.rm(path.join(store.metaDir, "server.json"), { force: true }).catch(() => {});
+      store = next;
+      if (runner) runner.store = next;
+      stopWatching();
+      startWatching();
+      await fsp.writeFile(path.join(store.metaDir, "server.json"), JSON.stringify({ port: state.port, pid: process.pid, at: new Date().toISOString() }) + "\n").catch(() => {});
+      const ws = await store.workspace();
+      if (spaces) await rememberSpace(spaces, store.home, { name: ws.name });
+      emit({ kind: "space" });
+      return found;
+    };
+    switching = switching.then(run, run);
+    return switching;
+  }
   const state = { port, shareServer: null, sharePort: null };
 
   // ---------- helpers ----------
@@ -160,7 +184,7 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
     if (a === "workspace" && !b) {
       if (m === "GET") {
         const [ws, envs, harnesses, items] = await Promise.all([store.workspace(), store.listEnvs(), store.harnesses(), store.items()]);
-        return json(res, 200, { ...ws, envs, items, harnesses, screenshot: await screenshotAvailable(), share: shareInfo(), cli: { node: process.execPath, bin: path.resolve(HERE, "..", "bin", "workshop.js") } });
+        return json(res, 200, { ...ws, envs, items, harnesses, screenshot: await screenshotAvailable(), home: store.home, spaces: !!spaces, share: shareInfo(), cli: { node: process.execPath, bin: path.resolve(HERE, "..", "bin", "workshop.js") } });
       }
       if (m === "PATCH") return json(res, 200, await store.updateWorkspace(await body(req)));
     }
@@ -336,6 +360,48 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
         return json(res, m === "POST" && c !== "promote" ? 201 : 200, out);
       }
     }
+    if (a === "spaces") {
+      if (!spaces) throw new SpaceError("This server works in one workspace", 404);
+      const list = async () => {
+        const d = await readSpaces(spaces);
+        return { current: store.home, spaces: d.spaces.map((x) => ({ ...x, current: x.path === store.home, missing: !fs.existsSync(x.path) })) };
+      };
+      if (!b && m === "GET") return json(res, 200, await list());
+      if (!b && m === "POST") {
+        // connect a folder: open it as a space and look for prototypes in it
+        const p = await body(req);
+        const found = await openSpace(await checkFolder(p.path), { find: p.find !== false });
+        return json(res, 201, { ...(await list()), added: found.added.map((e) => ({ id: e.id, name: e.name })), skipped: found.skipped });
+      }
+      if (b === "switch" && m === "POST") {
+        const folder = await checkFolder((await body(req)).path);
+        if (!(await readSpaces(spaces)).spaces.some((x) => x.path === folder)) throw new SpaceError("Connect that folder first", 404);
+        await openSpace(folder);
+        return json(res, 200, await list());
+      }
+      if (b === "forget" && m === "POST") {
+        const folder = String((await body(req)).path || "");
+        if (folder === store.home) throw new SpaceError("Switch to another space before removing this one");
+        await forgetSpace(spaces, folder); // only the entry in the list: no files are touched
+        return json(res, 200, await list());
+      }
+      if (b === "find" && m === "POST") {
+        const found = await store.findPrototypes({ author: me });
+        if (found.added.length) {
+          stopWatching();
+          startWatching();
+        }
+        emit({ kind: "envs" });
+        emit({ kind: "canvas" });
+        return json(res, 200, { added: found.added.map((e) => ({ id: e.id, name: e.name })), skipped: found.skipped });
+      }
+    }
+    if (a === "folders" && m === "GET") {
+      // Guard: names of folders on this computer are for the editor only — it sends the header,
+      // a page on another site can't (a custom header needs a CORS preflight this server never grants)
+      if (req.headers["x-workshop"] !== "1") return json(res, 403, { error: "forbidden", message: "Missing the x-workshop header" });
+      return json(res, 200, await listFolder(url.searchParams.get("path")));
+    }
     if (a === "selection") {
       if (m === "GET") return json(res, 200, await store.selection());
       if (m === "PUT") return json(res, 200, await store.setSelection((await body(req)).selection ?? null));
@@ -469,6 +535,10 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
     pending.set(key, { ev: { ...ev, files: [...files] }, t: setTimeout(() => (pending.delete(key), emit({ ...ev, files: [...files] })), 120) });
   };
   const watchers = [];
+  function stopWatching() {
+    for (const w of watchers.splice(0)) w.close();
+  }
+  function startWatching() {
   try {
     watchers.push(
       watchTree(store.envsDir, (name) => {
@@ -491,9 +561,21 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
         if (top === "tasks" && runner) runner.kick();
       }, { maxDepth: 2, skip: (n) => n === "trash" || n === "files" }),
     );
+    // linked prototypes: edits to the project's real files show up like any other
+    for (const [id, link] of store.links) {
+      watchers.push(
+        watchTree(link.dir, (name) => {
+          if (!name || String(name).endsWith(".tmp") || String(name).split("/").some((seg) => seg.startsWith("."))) return;
+          queue(`env:${id}`, { kind: "env", id, files: [name] });
+        }, { maxDepth: link.dir === store.home ? 0 : 6 }),
+      );
+    }
   } catch (e) {
     if (!quiet) console.warn("Live reload is off: this system can't watch folders", e.message);
   }
+  }
+  startWatching();
+  if (spaces) await rememberSpace(spaces, store.home, { name: (await store.workspace()).name });
 
   const server = http.createServer(handle);
   await new Promise((resolve, reject) => {
@@ -505,11 +587,11 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
   if (runner) runner.kick();
 
   const close = async () => {
-    for (const w of watchers) w.close();
+    stopWatching();
     for (const r of clients) r.end();
     await closeShareListener();
     await new Promise((r) => server.close(() => r()));
     await fsp.rm(path.join(store.metaDir, "server.json"), { force: true });
   };
-  return { url: `http://127.0.0.1:${state.port}`, port: state.port, store, close, emit };
+  return { url: `http://127.0.0.1:${state.port}`, port: state.port, get store() { return store; }, close, emit, openSpace };
 }

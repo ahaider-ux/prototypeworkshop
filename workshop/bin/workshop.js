@@ -3,12 +3,14 @@
 //   workshop serve                       open the canvas at http://127.0.0.1:4600
 //   workshop mcp                         MCP server on stdio, for Claude Code or your own harness
 //   workshop list | import | fork | version | restore | screenshot | tasks | selection | agent
-// Every command takes --workspace <dir> (default: ./workspace next to this app, or $WORKSHOP_DIR).
+// Every command takes --workspace <dir> (default: $WORKSHOP_DIR, the space last opened, or ./workspace).
 
 import path from "node:path";
+import fs from "node:fs";
 import fsp from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { Store, StoreError } from "../src/store.js";
+import { spacesFile, readSpaces, rememberSpace, checkFolder, spaceRoots } from "../src/spaces.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -24,12 +26,18 @@ for (let i = 0; i < argv.length; i++) {
   } else args.push(a);
 }
 const cmd = args.shift() || "help";
-const workspace = path.resolve(flags.workspace || process.env.WORKSHOP_DIR || path.join(HERE, "..", "workspace"));
+// The workspace: named on the command line, or $WORKSHOP_DIR, or the space last opened in the
+// editor (~/.atelier/spaces.json), or the one next to this app.
+const named = flags.workspace || process.env.WORKSHOP_DIR;
+const lastSpace = named ? null : (await readSpaces(spacesFile())).current;
+const workspace = path.resolve(named || (lastSpace && fs.existsSync(lastSpace) ? spaceRoots(lastSpace).root : path.join(HERE, "..", "workspace")));
 
 const HELP = `Atelier
 
   workshop serve [--port 4600] [--no-agent]     Open the canvas in your browser at http://127.0.0.1:<port>
   workshop mcp                                   MCP server on stdio (add it to Claude Code: see README)
+  workshop connect <folder>                      Open a project folder as a space: its prototypes are
+                                                 edited in place (Atelier keeps its data in .atelier)
   workshop list                                  Environments in the workspace
   workshop import <file.html | folder> [--name]  Add a prototype
   workshop fork <env> [--name] [--version N]     Copy an environment
@@ -41,7 +49,8 @@ const HELP = `Atelier
   workshop agent <command…> | --off              Run canvas requests with a local agent, e.g.
                                                  workshop agent claude -p {prompt} --permission-mode acceptEdits
 
-  --workspace <dir>  defaults to ${path.relative(process.cwd(), path.join(HERE, "..", "workspace")) || "."} (or $WORKSHOP_DIR)`;
+  --workspace <dir>  defaults to $WORKSHOP_DIR, then the space last opened in Atelier, then
+                     ${path.relative(process.cwd(), path.join(HERE, "..", "workspace")) || "."}`;
 
 const out = (x) => process.stdout.write((typeof x === "string" ? x : JSON.stringify(x, null, 2)) + "\n");
 
@@ -49,12 +58,12 @@ async function main() {
   if (cmd === "help" || flags.help) return out(HELP);
   if (cmd === "mcp") {
     const { runMcp } = await import("../src/mcp.js");
-    return runMcp({ workspace });
+    return runMcp({ workspace, follow: named ? null : spacesFile() });
   }
   if (cmd === "serve") {
     const { startServer } = await import("../src/server.js");
     const port = flags.port === undefined ? 4600 : Number(flags.port);
-    const srv = await startServer({ workspace, port, agent: !flags["no-agent"] });
+    const srv = await startServer({ workspace, port, agent: !flags["no-agent"], spaces: spacesFile() });
     out(`Atelier is running at ${srv.url}\nWorkspace: ${workspace}\nPress Ctrl+C to stop.`);
     const stop = async () => {
       await srv.close();
@@ -62,6 +71,14 @@ async function main() {
     };
     process.on("SIGINT", stop);
     process.on("SIGTERM", stop);
+    return;
+  }
+  if (cmd === "connect") {
+    const folder = await checkFolder(args[0] ? path.resolve(args[0]) : "");
+    const s = await Store.open(spaceRoots(folder).root);
+    const found = await s.findPrototypes({ author: "You" });
+    await rememberSpace(spacesFile(), s.home, { name: (await s.workspace()).name });
+    out(`Connected ${s.home}\n${found.added.length ? found.added.map((e) => `  + ${e.name}  (${path.relative(s.home, e.folder) || "."})`).join("\n") : "  No new prototypes found (a folder with an index.html, or a .html page)"}${found.skipped.length ? "\n" + found.skipped.map((x) => `  - ${x.path}: ${x.why}`).join("\n") : ""}\nIt opens next time you run: workshop serve`);
     return;
   }
   const store = await Store.open(workspace);
@@ -131,6 +148,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  process.stderr.write((e instanceof StoreError ? e.message : e.stack || String(e)) + "\n");
+  process.stderr.write((e instanceof StoreError || e?.code === "bad_space" ? e.message : e.stack || String(e)) + "\n");
   process.exitCode = 1;
 });

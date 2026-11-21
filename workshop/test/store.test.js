@@ -318,3 +318,58 @@ test("a merge is logged as a decision, and agents read the brief and recent deci
   assert.match(text, /Keep the sidebar/);
   assert.match(text, /Primary actions were too loud/);
 });
+
+test("a connected folder: prototypes are found and edited in place, Atelier's data stays in .atelier", async () => {
+  const home = await tmp();
+  await fsp.mkdir(path.join(home, "app", "img"), { recursive: true });
+  await fsp.writeFile(path.join(home, "app", "index.html"), HTML.replace("Sample app", "Real app"));
+  await fsp.writeFile(path.join(home, "app", "img", "a.svg"), "<svg/>");
+  await fsp.mkdir(path.join(home, "app", "node_modules", "x"), { recursive: true });
+  await fsp.writeFile(path.join(home, "app", "node_modules", "x", "big.js"), "x");
+  await fsp.writeFile(path.join(home, "pricing.html"), HTML.replace("Sample app", "Pricing page"));
+  await fsp.mkdir(path.join(home, ".git"), { recursive: true });
+  await fsp.writeFile(path.join(home, ".git", "index.html"), HTML);
+  const s = await Store.open(path.join(home, ".atelier"));
+  assert.equal(s.home, home);
+  assert.match(await fsp.readFile(path.join(home, ".atelier", ".gitignore"), "utf8"), /^\.workshop\/$/m, "this computer's state is never committed with .atelier");
+  const { added } = await s.findPrototypes();
+  assert.deepEqual(added.map((e) => e.name).sort(), ["Pricing page", "Real app"], "folders with an index.html and loose pages, never dot folders");
+  assert.equal((await s.findPrototypes()).added.length, 0, "looking again adds nothing twice");
+  const app = added.find((e) => e.name === "Real app");
+  assert.equal(app.folder, path.join(home, "app"));
+  assert.ok(app.linked);
+  const files = (await s.listFiles(app.id)).map((f) => f.path).sort();
+  assert.deepEqual(files, ["env.json", "img/a.svg", "index.html"], "node_modules is never listed");
+  assert.ok(!(await fsp.stat(path.join(home, "app", "env.json")).catch(() => null)), "Atelier's settings never land in the real folder");
+
+  // a branch reads the real files, and merging writes them back in place
+  const b = await s.branchEnv(app.id, { name: "Copy edit" });
+  await s.writeFile(b.id, "index.html", HTML.replace("Go", "Start"));
+  assert.match(await fsp.readFile(path.join(home, "app", "index.html"), "utf8"), />Go</, "the branch leaves the real file alone");
+  await s.setStyle(b.id, ".b", { color: "red" });
+  await s.mergeEnv(b.id, {});
+  assert.match(await fsp.readFile(path.join(home, "app", "index.html"), "utf8"), />Start</);
+  assert.ok(!(await fsp.stat(path.join(home, "app", "overrides.css")).catch(() => null)), "style overrides stay Atelier's");
+
+  // versions restore the real files; deleting the prototype never touches the folder
+  const v = (await s.listVersions(app.id)).find((x) => /^Before merging/.test(x.label));
+  await s.restoreVersion(app.id, v.n);
+  assert.match(await fsp.readFile(path.join(home, "app", "index.html"), "utf8"), />Go</);
+  await s.deleteEnv(b.id);
+  await s.deleteEnv(app.id);
+  assert.ok(await fsp.stat(path.join(home, "app", "index.html")));
+
+  // a loose page is index.html to everyone, and a copy is its own
+  const page = added.find((e) => e.name === "Pricing page");
+  assert.match((await s.readFile(page.id, "index.html")).toString(), /Pricing page/);
+  const copy = await s.forkEnv(page.id, { name: "Pricing copy" });
+  assert.equal(copy.linked, false);
+  assert.match((await s.readFile(copy.id, "index.html")).toString(), /Pricing page/);
+
+  // Guard: links stay inside the space and out of Atelier's own folder
+  await assert.rejects(() => s.linkEnv("../elsewhere"), /isn't in this space/);
+  await assert.rejects(() => s.linkEnv(".atelier"), /isn't in this space/);
+  // and reopening the space remembers the links
+  const again = await Store.open(path.join(home, ".atelier"));
+  assert.equal((await again.getEnv(page.id)).folder, home);
+});

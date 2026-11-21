@@ -45,7 +45,7 @@ test("MCP: a harness lists, forks, styles and takes canvas requests", async () =
   const c = client(ws);
   try {
     const init = await c.call("initialize", { protocolVersion: "2025-06-18", clientInfo: { name: "claude-code", version: "1" }, capabilities: {} });
-    assert.equal(init.result.serverInfo.name, "libra-workshop");
+    assert.equal(init.result.serverInfo.name, "atelier");
     const tools = await c.call("tools/list", {});
     assert.ok(tools.result.tools.length >= 15);
     const tx = (r) => r.result.content[0].text;

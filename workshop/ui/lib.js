@@ -62,7 +62,7 @@ export class ApiError extends Error {
 export async function api(path, { method = "GET", body } = {}) {
   const r = await fetch(`/api/${path}`, {
     method,
-    headers: method === "GET" ? {} : { "content-type": "application/json", "x-workshop": "1" },
+    headers: method === "GET" ? { "x-workshop": "1" } : { "content-type": "application/json", "x-workshop": "1" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const ct = r.headers.get("content-type") || "";

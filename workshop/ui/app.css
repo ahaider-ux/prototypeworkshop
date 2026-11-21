@@ -825,3 +825,29 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .rca{display:flex;gap:8px;flex-wrap:wrap}
 .vrow .tx .nt{color:var(--text-primary);white-space:normal}
 .rvwhy{padding:0 24px 12px}
+
+/* ---------- spaces ---------- */
+.home .hh .hacts{display:flex;gap:8px;flex-shrink:0}
+.home .hpath{display:flex;align-items:center;gap:6px;font:400 12px/16px var(--mono);color:var(--text-secondary);margin-bottom:4px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.home .hpath .ic,.card .hfolder .ic{flex-shrink:0;width:14px;height:14px}
+.card .bd2 .hfolder{display:flex;align-items:center;gap:4px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hempty{display:flex;flex-direction:column;gap:4px;padding:16px;border-radius:12px;background:var(--bg-layer);box-shadow:0 0 0 .5px var(--border-subtle);font-size:14px;line-height:1.5}
+.hempty span{color:var(--text-secondary)}
+.fbrowse{display:flex;flex-direction:column;height:280px;overflow:auto;margin:0 -8px;padding:4px 0;border-radius:8px;background:var(--bg-input);box-shadow:var(--sh-field)}
+.fbrowse .pg{flex-shrink:0;margin:0 4px}
+.fbrowse .pg>.ic:last-child{color:var(--text-secondary)}
+.md-f .fhint{font-size:12px;color:var(--text-secondary);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spl{max-height:168px;overflow:auto}
+@media (max-width:720px){.home .hh{flex-direction:column;align-items:stretch}.home .hh .hacts{flex-wrap:wrap}}
+
+/* ---------- fit between the panels: nothing floats under them, at any window size ---------- */
+.banner{max-width:calc(100% - var(--lw) - var(--rw) - 32px)}
+.banner .meta{flex:1 1 auto}
+.tb{max-width:calc(100% - var(--lw) - var(--rw) - 16px)}
+.inktray{max-width:calc(100% - var(--lw) - var(--rw) - 32px);flex-wrap:wrap;justify-content:center;row-gap:2px;border-radius:24px}
+/* panel text is 12px, so three options fit a 256px panel */
+:is(.lp,.rp) .segds button{font-size:12px;padding:0 6px}
+@media (max-width:1180px){
+  .tb .tbtx{font-size:0;gap:0;padding:0 10px}
+  .tb .tbtx .ic{margin:0}
+}

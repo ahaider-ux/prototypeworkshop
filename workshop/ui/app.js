@@ -1,6 +1,6 @@
 // Atelier — boot, Home and tabs, pages, live updates, branches, review and merge, dialogs.
 
-import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural, pageName } from "./state.js";
+import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural, pageName, folderLabel } from "./state.js";
 import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented } from "./lib.js";
 import { initCanvas, sync, fit, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
 import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff } from "./panels.js";
@@ -226,13 +226,16 @@ function lastEdit(rootId) {
 function renderHome() {
   if (S.view !== "home") return;
   const rs = roots();
-  const key = JSON.stringify([S.ws.name, rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen])]);
+  const key = JSON.stringify([S.ws.name, S.ws.home, rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen])]);
   if (key === homeKey) return;
   homeKey = key;
   const el = $("home");
   const inner = h(`<div class="in"></div>`);
-  const hh = h(`<div class="hh"><div class="tt"><h1>${esc(S.ws.name)}</h1><p>Prototypes run live on the canvas. Try each idea on a branch, mark it up or ask an agent, then review and merge.</p></div><button type="button" class="createbtn">${IC.upload}Import HTML</button></div>`);
-  hh.querySelector("button").onclick = openImport;
+  const linked = rs.some((e) => e.linked);
+  const hh = h(`<div class="hh"><div class="tt"><h1>${esc(S.ws.name)}</h1><p>${S.ws.home ? `<span class="hpath" title="${esc(S.ws.home)}">${IC.folder}${esc(S.ws.home)}</span>` : ""}${linked ? "Prototypes here are edited in place. " : ""}Try each idea on a branch, mark it up or ask an agent, then review and merge.</p></div><div class="hacts">${S.ws.spaces ? `<button type="button" class="dbtn" data-a="sp">${IC.folder}Connect a folder</button>` : ""}<button type="button" class="createbtn" data-a="im">${IC.upload}Import HTML</button></div></div>`);
+  hh.querySelector('[data-a="im"]').onclick = openImport;
+  const spb = hh.querySelector('[data-a="sp"]');
+  if (spb) spb.onclick = () => openSpaces();
   inner.append(hh);
   const sec = h(`<div class="hsec"><div class="shd"><span>Prototypes</span><span class="n">${rs.length || ""}</span></div><div class="cards"></div></div>`);
   const cards = sec.querySelector(".cards");
@@ -241,7 +244,7 @@ function renderHome() {
     const open = fam.filter((x) => isBranch(x.env) && !x.env.archived).map((x) => x.env);
     const edited = lastEdit(e.id);
     const first = boardsOf(e.id)[0];
-    const c = h(`<div class="card" role="button" tabindex="0" aria-label="Open ${esc(e.name)}"><div class="th"><span class="ph">${IC.board}</span></div><div class="bd2"><b>${esc(e.name)}</b><span class="m">${plural(boardsOf(e.id).length, "screen")} · ${plural(open.length, "open branch", "open branches")}${edited ? ` · edited ${esc(timeAgo(edited))}` : ""}</span><div class="brs"></div></div></div>`);
+    const c = h(`<div class="card" role="button" tabindex="0" aria-label="Open ${esc(e.name)}"><div class="th"><span class="ph">${IC.board}</span></div><div class="bd2"><b>${esc(e.name)}</b>${e.linked ? `<span class="m hfolder" title="${esc(e.folder)}">${IC.folder}${esc(folderLabel(e))}</span>` : ""}<span class="m">${plural(boardsOf(e.id).length, "screen")} · ${plural(open.length, "open branch", "open branches")}${edited ? ` · edited ${esc(timeAgo(edited))}` : ""}</span><div class="brs"></div></div></div>`);
     const brs = c.querySelector(".brs");
     for (const b of open.slice(0, 4)) {
       const tag = h(`<span class="brtag" role="link" tabindex="0">${IC.fork}${esc(b.name)} <span class="n"></span></span>`);
@@ -277,6 +280,10 @@ function renderHome() {
     th.append(fr);
     cards.append(c);
   }
+  if (!rs.length)
+    inner.append(
+      h(`<div class="hempty"><b>No prototypes in this space yet</b><span>Add a folder with an index.html (or any .html page) to ${esc(S.ws.home || "this folder")} and look again, connect another project folder, or import an HTML file.</span></div>`),
+    );
   const nw = h(`<div class="card new" role="button" tabindex="0">${IC.plus}<b>Import a prototype</b><span style="font-size:12px">An HTML file or a whole document you paste</span></div>`);
   nw.onclick = openImport;
   nw.onkeydown = (ev) => ev.key === "Enter" && openImport();
@@ -412,11 +419,11 @@ function envMenu({ anchor, env: id }) {
     { label: "Present", icon: IC.play, disabled: !boardsOf(id).length, onClick: () => (go(id), setTimeout(() => present(boardsOf(id)[0]?.id), 120)) },
     { label: "Share", icon: IC.share, onClick: () => openShare(id) },
     { label: "Rename", icon: IC.board, onClick: () => rename(id) },
-    { label: "Copy folder path", icon: IC.folder, onClick: () => copyText(`${S.ws.root}/envs/${id}`) },
+    { label: "Copy folder path", icon: IC.folder, onClick: () => copyText(e.folder || "") },
     { label: "Make an independent copy", icon: IC.copy, onClick: () => duplicateEnv(id) },
     "-",
     ...(br ? [{ label: e.archived ? "Unarchive branch" : "Archive branch", onClick: () => fire(e.archived ? "unarchive" : "archive", id) }] : [{ label: "Close tab", onClick: () => closeTab(id) }]),
-    { label: `Delete ${name}`, icon: IC.trash, danger: true, onClick: () => remove(id) },
+    { label: e.linked ? "Remove from Atelier" : `Delete ${name}`, icon: IC.trash, danger: true, onClick: () => remove(id) },
   ], { width: 256 });
 }
 async function duplicateEnv(id, version = null) {
@@ -442,7 +449,7 @@ async function remove(id) {
     if (!parent) (S.tabs = S.tabs.filter((x) => x !== id)), store.set("ws-tabs", S.tabs);
     await loadWorkspace();
     if (here) go(parent || "home");
-    toast(`Deleted ${env.name}`, "It's in .workshop/trash until you empty it", {
+    toast(env.linked ? `Removed ${env.name}` : `Deleted ${env.name}`, env.linked ? "Its folder and files are untouched. Look for prototypes to bring it back." : "It's in the trash until you empty it", {
       label: "Undo",
       fn: async () => {
         try {
@@ -824,12 +831,17 @@ function wsMenu() {
   try {
     pref = localStorage.getItem("ws-theme") || "light";
   } catch {}
+  const others = (spaceList || []).filter((x) => !x.current && !x.missing).slice(0, 6);
   menu($("wsBtn"), [
-    { head: S.ws.root },
+    { head: "Spaces" },
+    { label: S.ws.name, checked: true, onClick: () => go("home") },
+    ...others.map((x) => ({ label: x.name, checked: false, onClick: () => switchSpace(x.path) })),
+    ...(S.ws.spaces ? [{ label: "Connect a folder…", icon: IC.folder, onClick: openSpaces }, { label: "Look for new prototypes", icon: IC.restore, onClick: findPrototypes }] : []),
+    "-",
     { label: "Import HTML", icon: IC.upload, onClick: openImport },
     { label: "Connect an agent", icon: IC.agent, onClick: openConnect },
-    { label: "Copy folder path", icon: IC.copy, onClick: () => copyText(S.ws.root) },
-    { label: "Rename workspace", icon: IC.board, onClick: renameWorkspace },
+    { label: "Copy folder path", icon: IC.copy, onClick: () => copyText(S.ws.home || S.ws.root) },
+    { label: "Rename space", icon: IC.board, onClick: renameWorkspace },
     { label: "Keyboard shortcuts", kbd: "?", onClick: openShortcuts },
     "-",
     { head: "Appearance" },
@@ -839,8 +851,118 @@ function wsMenu() {
     ...[["clear", "Clear"], ["balanced", "Balanced"], ["frosted", "Frosted"]].map(([v, l]) => ({ label: l, checked: glassPref() === v, onClick: () => setGlass(v) })),
   ], { width: 280 });
 }
+// ---------- spaces: the folders Atelier works in ----------
+let spaceList = null;
+async function loadSpaces() {
+  if (!S.ws?.spaces) return (spaceList = []);
+  try {
+    spaceList = (await api("spaces")).spaces;
+  } catch {
+    spaceList = [];
+  }
+  return spaceList;
+}
+async function switchSpace(p) {
+  try {
+    toast("Opening the space…");
+    await api("spaces/switch", { method: "POST", body: { path: p } });
+  } catch (e) {
+    toast("Couldn't open that space", e.message);
+  }
+}
+async function findPrototypes() {
+  try {
+    const r = await api("spaces/find", { method: "POST" });
+    await loadWorkspace();
+    toast(r.added.length ? `Found ${plural(r.added.length, "prototype")}` : "No new prototypes", r.added.length ? r.added.map((x) => x.name).slice(0, 4).join(", ") : r.skipped[0] ? `${r.skipped[0].path}: ${r.skipped[0].why}` : "A prototype is a folder with an index.html, or a .html page");
+  } catch (e) {
+    toast("Couldn't look for prototypes", e.message);
+  }
+}
+// Connect a folder: browse this computer's folders (the browser can't hand us a path), then open it.
+async function openSpaces(start = null) {
+  await loadSpaces();
+  const md = modal(
+    `<div class="md-h"><div class="tt"><h2>Connect a folder</h2><p>Open a project as a space. Its prototypes stay where they are: agents and merges edit the real files, saving a version first. Atelier keeps its own data in a hidden .atelier folder there.</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div>
+    <div class="md-b" style="gap:16px">
+      ${spaceList.length > 1 ? `<div class="fld"><span class="lr">Your spaces</span><div class="pgs spl" id="spList" style="margin:0 -8px"></div></div>` : ""}
+      <div class="fld"><span class="lr">Folder<span class="hint">Paste a path, or pick one below</span></span><div class="afld-in"><input id="spPath" spellcheck="false" placeholder="/Users/you/Projects/app"></div></div>
+      <div class="fbrowse" id="spBrowse" role="listbox" aria-label="Folders"></div>
+    </div>
+    <div class="md-f"><span class="fhint" id="spHint"></span><span class="sp"></span><button type="button" class="ghbtn" data-a="x2">Cancel</button><button type="button" class="createbtn" data-a="ok">${IC.folder}Connect folder</button></div>`,
+    { wide: true },
+  );
+  const inp = $("spPath");
+  const list = $("spBrowse");
+  const hint = $("spHint");
+  const sl = $("spList");
+  if (sl)
+    for (const x of spaceList) {
+      const r = h(`<div class="pg${x.current ? " on" : ""}" role="button" tabindex="0">${IC.folder}<span class="t" title="${esc(x.path)}">${esc(x.name)}</span><span class="m">${x.current ? "Open" : x.missing ? "Missing" : ""}</span>${x.current ? "" : `<button type="button" class="ib24" aria-label="Remove ${esc(x.name)} from the list" data-tip="Remove from the list">${IC.x}</button>`}</div>`);
+      r.onclick = () => !x.current && !x.missing && (closeModal(), switchSpace(x.path));
+      r.onkeydown = (ev) => ev.key === "Enter" && r.click();
+      const rm = r.querySelector(".ib24");
+      if (rm)
+        rm.onclick = async (ev) => {
+          ev.stopPropagation();
+          await api("spaces/forget", { method: "POST", body: { path: x.path } }).catch((e) => toast("Couldn't remove it", e.message));
+          r.remove();
+        };
+      sl.append(r);
+    }
+  let cur = null;
+  const browse = async (p) => {
+    let d;
+    try {
+      d = await api(`folders${p ? `?path=${encodeURIComponent(p)}` : ""}`);
+    } catch (e) {
+      hint.textContent = e.message;
+      return;
+    }
+    cur = d;
+    inp.value = d.path;
+    list.replaceChildren();
+    if (d.parent) {
+      const up = h(`<div class="pg" role="option" tabindex="0">${IC.chev.replace("<svg", '<svg style="transform:rotate(90deg)"')}<span class="t">Up to ${esc(d.parent.split(/[\/]/).pop() || d.parent)}</span></div>`);
+      up.onclick = () => browse(d.parent);
+      up.onkeydown = (ev) => ev.key === "Enter" && up.click();
+      list.append(up);
+    }
+    for (const f of d.dirs) {
+      const r = h(`<div class="pg" role="option" tabindex="0">${IC.folder}<span class="t">${esc(f.name)}</span>${f.atelier ? `<span class="tagro info">Space</span>` : f.prototype ? `<span class="tagro ok">Prototype</span>` : ""}${IC.chevr}</div>`);
+      r.onclick = () => browse(f.path);
+      r.onkeydown = (ev) => ev.key === "Enter" && r.click();
+      list.append(r);
+    }
+    if (!d.dirs.length) list.append(h(`<div class="lineage" style="padding:8px 12px">No folders inside.</div>`));
+    const n = d.dirs.filter((f) => f.prototype).length + (d.hasIndex ? 1 : 0) + (d.hasIndex ? 0 : d.pages);
+    hint.textContent = d.path === d.home ? "Pick a project folder inside your home folder" : n ? `${plural(n, "prototype")} here or one level down` : "Atelier looks two levels down for index.html files and .html pages";
+  };
+  let t = null;
+  inp.addEventListener("input", () => (clearTimeout(t), (t = setTimeout(() => inp.value.trim().startsWith("/") || /^[a-z]:\\/i.test(inp.value.trim()) || inp.value.trim().startsWith("~") ? browse(inp.value.trim()) : null, 350))));
+  inp.addEventListener("keydown", (e) => e.key === "Enter" && md.querySelector('[data-a="ok"]').click());
+  browse(start || S.ws.home || null);
+  md.querySelector('[data-a="x"]').onclick = closeModal;
+  md.querySelector('[data-a="x2"]').onclick = closeModal;
+  let busy = false;
+  md.querySelector('[data-a="ok"]').onclick = async () => {
+    if (busy) return;
+    const p = inp.value.trim() || cur?.path;
+    if (!p) return;
+    busy = true;
+    try {
+      const r = await api("spaces", { method: "POST", body: { path: p } });
+      closeModal();
+      toast(`Connected ${p.split(/[\/]/).pop()}`, r.added.length ? `Found ${plural(r.added.length, "prototype")}: ${r.added.map((x) => x.name).slice(0, 3).join(", ")}${r.added.length > 3 ? "…" : ""}` : r.skipped[0] ? `${r.skipped[0].path}: ${r.skipped[0].why}` : "No prototypes found yet. Import one, or add an index.html and look again.");
+    } catch (e) {
+      busy = false;
+      toast("Couldn't connect that folder", e.message);
+    }
+  };
+}
+
 function renameWorkspace() {
-  const md = modal(`<div class="md-h"><div class="tt"><h2>Rename workspace</h2><p>The folder on disk keeps its name.</p></div></div><form class="md-b" id="rwF"><div class="fld"><span class="lr">Name</span><div class="afld-in"><input id="rwIn" value="${esc(S.ws.name)}" maxlength="120" autofocus></div></div></form><div class="md-f"><button type="button" class="ghbtn" data-a="x">Cancel</button><button type="button" class="createbtn" data-a="ok">Rename</button></div>`);
+  const md = modal(`<div class="md-h"><div class="tt"><h2>Rename space</h2><p>The folder on disk keeps its name.</p></div></div><form class="md-b" id="rwF"><div class="fld"><span class="lr">Name</span><div class="afld-in"><input id="rwIn" value="${esc(S.ws.name)}" maxlength="120" autofocus></div></div></form><div class="md-f"><button type="button" class="ghbtn" data-a="x">Cancel</button><button type="button" class="createbtn" data-a="ok">Rename</button></div>`);
   md.style.width = "480px";
   const ok = async () => {
     const v = $("rwIn").value.trim();
@@ -856,6 +978,12 @@ function renameWorkspace() {
 }
 
 async function onEvent(ev) {
+  if (ev.kind === "space") {
+    // another space is open now: start from its Home, without this space's tabs
+    store.set("ws-tabs", []);
+    store.set("ws-route", "");
+    return location.assign("/");
+  }
   if (ev.kind === "envs") return loadWorkspace().then(loadRecipes); // a merge or archive changes a recipe's results
   if (ev.kind === "canvas") return loadItems();
   if (ev.kind === "env") {
@@ -905,7 +1033,7 @@ async function boot() {
   initPanels();
   S.tabs = store.get("ws-tabs", []);
   if (!Array.isArray(S.tabs)) S.tabs = [];
-  $("wsBtn").onclick = wsMenu;
+  $("wsBtn").onclick = async () => (spaceList || (await loadSpaces()), wsMenu());
   $("uiToggle").onclick = toggleUi;
   $("agentBtn").onclick = openConnect;
   $("askBtn").onclick = () => fire("ask-agent", {});

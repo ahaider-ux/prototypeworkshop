@@ -7,7 +7,9 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
 
 ## Two kinds of work happen here
 
-1. **Working on prototypes** (most sessions). The prototypes live in `workspace/envs/<id>/`. Use the
+1. **Working on prototypes** (most sessions). The prototypes live in `workspace/envs/<id>/`, or,
+   in a connected space, in the project's own folders (`folder` in `list_environments`; edit those
+   real files in place, and put visual tweaks in the overrides file the brief names). Use the
    `workshop` MCP server (`.mcp.json` in this folder registers it): `list_environments`,
    `get_selection` (what the designer is pointing at), `list_canvas` (their notes, highlights, arrows
    and hand-drawn marks — read them as feedback; screenshot the screen under a mark to see it), `take_task` / `update_task` (requests typed in Chat),
@@ -51,6 +53,11 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
 - **Don't commit `workspace/.workshop/`** — it is one computer's local state (versions, trash,
   tasks, comments, share links). `workspace/canvas/`, `workspace/envs/` and `workspace/recipes/`
   are shared and committed.
+- **Spaces.** Any folder can be a space (`src/spaces.js`). A connected folder keeps Atelier's data
+  in `.atelier/` and links its prototypes (`env.link`): `Store.filesDir(id)` is where their files
+  are, `pathFor(id, rel)` the one way to a file's path. `env.json` and `overrides.css` always live
+  in Atelier's folder. Never write, move or delete inside a linked folder except through
+  `writeFile`, merges and restores, which save a version first.
 - **Nothing runs an agent on its own by default.** Recipe triggers start off; switching one on is
   the person's choice, because each run costs them.
 

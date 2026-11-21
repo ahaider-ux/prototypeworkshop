@@ -59,6 +59,12 @@ export const boardsOf = (env) => [...S.items.values()].filter((i) => i.type === 
 export const itemsOf = (type) => [...S.items.values()].filter((i) => i.type === type);
 export const isBranch = (e) => !!(e && e.parent && S.envs.has(e.parent));
 // what a page is called in the editor: a branch by its name, a prototype's own page "Main"
+// where a page's files are, as people read it: relative to the space's folder
+export const folderLabel = (e) => {
+  const f = e?.folder || "";
+  const home = S.ws?.home || "";
+  return home && f.startsWith(home) ? f.slice(home.length + 1) || "The space's own folder" : f;
+};
 export const pageName = (e) => (e ? (isBranch(e) ? e.name : "Main") : "");
 export const rootOf = (id) => {
   let e = S.envs.get(id);

@@ -7,6 +7,7 @@ import path from "node:path";
 import readline from "node:readline";
 import { Store, StoreError } from "./store.js";
 import { taskPrompt } from "./agent.js";
+import { readSpaces, spaceRoots } from "./spaces.js";
 import { screenshot, screenshotAvailable, closeBrowser } from "./screenshot.js";
 
 const VERSION = "0.1.0";
@@ -85,14 +86,14 @@ export async function callTool(store, name, a = {}, ctx = {}) {
       return text({
         workspace: ws.name,
         root: store.root,
-        environments: envs.map((e) => ({ id: e.id, name: e.name, folder: store.envDir(e.id), parent: e.parent, branch: !!e.branch, readsFilesFrom: e.base || null, archived: e.archived, device: e.device, theme: e.theme, screen: e.screen, versions: e.versions, overrides: e.overrides, updatedAt: e.updatedAt })),
+        environments: envs.map((e) => ({ id: e.id, name: e.name, folder: store.filesDir(e.id), parent: e.parent, branch: !!e.branch, readsFilesFrom: e.base || null, archived: e.archived, device: e.device, theme: e.theme, screen: e.screen, versions: e.versions, overrides: e.overrides, updatedAt: e.updatedAt })),
       });
     }
     case "get_environment": {
       const env = await store.getEnv(a.env);
       const [files, css, versions, comments] = await Promise.all([store.listFiles(a.env), store.getOverrides(a.env), store.listVersions(a.env), store.records("comments")]);
       const ctx = await store.contextFor(a.env);
-      return text({ ...env, brief: ctx.brief, recentDecisions: ctx.decisions, folder: store.envDir(a.env), files, overridesCss: css, versions: versions.slice(0, 20), comments: comments.filter((c) => c.env === a.env && !c.resolved) });
+      return text({ ...env, brief: ctx.brief, recentDecisions: ctx.decisions, folder: store.filesDir(a.env), files, overridesCss: css, versions: versions.slice(0, 20), comments: comments.filter((c) => c.env === a.env && !c.resolved) });
     }
     case "get_selection": {
       const s = await store.selection();
@@ -111,11 +112,11 @@ export async function callTool(store, name, a = {}, ctx = {}) {
       return text(await store.writeFile(a.env, a.path, a.content ?? ""));
     case "create_environment": {
       const e = await store.createEnv({ name: a.name, html: a.html, description: a.description || "", author: who, source: { kind: "agent", by: who } });
-      return text({ id: e.id, name: e.name, folder: store.envDir(e.id) });
+      return text({ id: e.id, name: e.name, folder: store.filesDir(e.id) });
     }
     case "create_branch": {
       const e = await store.branchEnv(a.env, { name: a.name, author: who });
-      return text({ id: e.id, name: e.name, folder: store.envDir(e.id), parent: e.parent, note: "The branch reads its parent's files until you edit one or call checkout_branch." });
+      return text({ id: e.id, name: e.name, folder: store.filesDir(e.id), parent: e.parent, note: "The branch reads its parent's files until you edit one or call checkout_branch." });
     }
     case "checkout_branch":
       return text(await store.checkout(a.env));
@@ -175,7 +176,7 @@ export async function callTool(store, name, a = {}, ctx = {}) {
     }
     case "fork_environment": {
       const e = await store.forkEnv(a.env, { name: a.name, version: a.version ?? null, author: who });
-      return text({ id: e.id, name: e.name, folder: store.envDir(e.id), parent: e.parent });
+      return text({ id: e.id, name: e.name, folder: store.filesDir(e.id), parent: e.parent });
     }
     case "update_environment": {
       const patch = {};
@@ -224,7 +225,7 @@ export async function callTool(store, name, a = {}, ctx = {}) {
       if (env.base) await store.checkout(t.env); // so you can edit the branch's files in its folder
       const v = await store.saveVersion(t.env, { label: `Before ${who}: ${t.prompt.slice(0, 60)}`, author: who, kind: "auto" });
       await store.updateTask(t.id, { status: "working", claimedBy: who, beforeVersion: v.n, log: `${who} took this request. Saved version ${v.n} first.`, logKind: "note" });
-      return text({ id: t.id, env: t.env, brief: taskPrompt(t, env, store.envDir(t.env), await store.contextFor(t.env, t)) });
+      return text({ id: t.id, env: t.env, brief: taskPrompt(t, env, store.filesDir(t.env), await store.contextFor(t.env, t)) });
     }
     case "update_task": {
       const t = await store.updateTask(a.id, { status: a.status, log: a.log, reply: a.reply, logKind: "out" });
@@ -246,8 +247,22 @@ export async function callTool(store, name, a = {}, ctx = {}) {
   }
 }
 
-export async function runMcp({ workspace, input = process.stdin, output = process.stdout } = {}) {
-  const store = await Store.open(workspace);
+// follow: the spaces file to follow, so a switch made in the editor reaches the agent too
+// (only when no workspace was named on the command line)
+export async function runMcp({ workspace, follow = null, input = process.stdin, output = process.stdout } = {}) {
+  let store = await Store.open(workspace);
+  let followed = follow ? (await readSpaces(follow)).current : null;
+  const current = async () => {
+    if (!follow) return store;
+    const now = (await readSpaces(follow)).current;
+    if (now && now !== followed) {
+      followed = now;
+      await store.dropHeartbeat().catch(() => {});
+      store = await Store.open(spaceRoots(now).root);
+      store.heartbeat(ctx.client).catch(() => {});
+    }
+    return store;
+  };
   const ctx = { client: "Harness" };
   let beat = null;
   const write = (msg) => output.write(JSON.stringify(msg) + "\n");
@@ -272,7 +287,7 @@ export async function runMcp({ workspace, input = process.stdin, output = proces
         ctx.client = String(params?.clientInfo?.name || "Harness").replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).slice(0, 60);
         if (/claude/i.test(ctx.client) && /code/i.test(ctx.client)) ctx.client = "Claude Code";
         startBeat();
-        return reply({ protocolVersion: params?.protocolVersion || "2025-06-18", capabilities: { tools: { listChanged: false } }, serverInfo: { name: "libra-workshop", version: VERSION }, instructions: INSTRUCTIONS });
+        return reply({ protocolVersion: params?.protocolVersion || "2025-06-18", capabilities: { tools: { listChanged: false } }, serverInfo: { name: "atelier", version: VERSION }, instructions: INSTRUCTIONS });
       }
       if (method === "notifications/initialized" || method?.startsWith("notifications/")) return;
       if (method === "ping") return reply({});
@@ -281,7 +296,7 @@ export async function runMcp({ workspace, input = process.stdin, output = proces
         const name = params?.name;
         if (!TOOLS.some((t) => t.name === name)) return error(-32602, `Unknown tool: ${name}`);
         try {
-          return reply(await callTool(store, name, params?.arguments || {}, ctx));
+          return reply(await callTool(await current(), name, params?.arguments || {}, ctx));
         } catch (e) {
           // Tool failures go back to the model as a result it can read and act on, not as a protocol error.
           return reply({ isError: true, content: [{ type: "text", text: e instanceof StoreError || (e && e.code && e.status) ? e.message : `Failed: ${e.message}` }] });
