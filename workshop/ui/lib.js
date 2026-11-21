@@ -1,5 +1,5 @@
-// Small UI kit for the Workshop: DOM helpers, the API client, live events, Libra menus,
-// modals, toasts and icons. Everything renders with the Libra classes in app.css.
+// Small UI kit for Atelier: DOM helpers, the API client, live events, menus, modals, toasts and
+// icons. Everything renders with the classes and tokens in app.css.
 
 export const $ = (id) => document.getElementById(id);
 export const q = (sel, root = document) => root.querySelector(sel);
@@ -94,7 +94,7 @@ export function events(onEvent, onState) {
   open();
 }
 
-// ---------- icons (16px, 1.4 stroke — the Libra chrome style) ----------
+// ---------- icons (16px, 1.4 stroke) ----------
 const I = (p, cls = "ic") => `<svg class="${cls}" viewBox="0 0 16 16" aria-hidden="true">${p}</svg>`;
 export const IC = {
   plus: I('<path d="M8 3.5v9M3.5 8h9"/>'),
@@ -131,7 +131,7 @@ export const IC = {
   folder: I('<path d="M2.5 4.5a1 1 0 0 1 1-1h3l1.5 1.5h4.5a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1Z"/>'),
 };
 
-// ---------- menus — Libra .cnmenu, anchored inside the frame ----------
+// ---------- menus — .cnmenu, anchored inside the frame ----------
 let openMenuEl = null;
 let openMenuAnchor = null;
 export function closeMenu() {

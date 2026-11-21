@@ -1,4 +1,4 @@
-// Libra Workshop — boot, Home and tabs, pages, live updates, branches, review and merge, dialogs.
+// Atelier — boot, Home and tabs, pages, live updates, branches, review and merge, dialogs.
 
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural } from "./state.js";
 import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented } from "./lib.js";
@@ -149,7 +149,7 @@ function showHome() {
   renderTabs();
   homeKey = "";
   renderHome();
-  document.title = `${S.ws.name} · Libra Workshop`;
+  document.title = `${S.ws.name} · Atelier`;
   store.set("ws-route", "#/");
 }
 function openPage(page) {
@@ -229,16 +229,9 @@ function renderHome() {
   homeKey = key;
   const el = $("home");
   const inner = h(`<div class="in"></div>`);
-  const hh = h(`<div class="hh"><div class="tt"><h1>${esc(S.ws.name)}</h1><p>HTML prototypes that run live on a canvas. Try every idea on a branch, mark it up, let agents do the work, and merge what's right.</p></div><button type="button" class="createbtn">${IC.upload}Import HTML</button></div>`);
+  const hh = h(`<div class="hh"><div class="tt"><h1>${esc(S.ws.name)}</h1><p>Prototypes run live on the canvas. Try each idea on a branch, mark it up or ask an agent, then review and merge.</p></div><button type="button" class="createbtn">${IC.upload}Import HTML</button></div>`);
   hh.querySelector("button").onclick = openImport;
   inner.append(hh);
-  const steps = [
-    [IC.board, "Open a prototype", "Each screen runs live on the canvas, exactly like the app it imitates."],
-    [IC.fork, "Branch an idea", "A branch is its own page with the same screens. Main stays as it is."],
-    [IC.note, "Mark it up, or ask", "Notes, highlights and comments. Agents read them and work on branches too."],
-    [IC.check, "Review and merge", "Compare with main, see every change, pick what wins, and merge."],
-  ];
-  inner.append(h(`<div class="steps">${steps.map(([ic, b, s]) => `<div class="step"><span class="k">${ic}</span><span class="tx"><b>${b}</b><span>${s}</span></span></div>`).join("")}</div>`));
   const sec = h(`<div class="hsec"><div class="shd"><span>Prototypes</span><span class="n">${rs.length || ""}</span></div><div class="cards"></div></div>`);
   const cards = sec.querySelector(".cards");
   for (const e of rs) {
@@ -344,7 +337,7 @@ async function openReview(id) {
   const md = modal(`<div class="md-h"><div class="tt"><h2>Review and merge</h2><p>${esc(env.name)} into ${esc(pageName(parent))} · ${d.changes.length} change${d.changes.length === 1 ? "" : "s"}${d.conflicts ? ` · ${d.conflicts} conflict${d.conflicts === 1 ? "" : "s"}: ${esc(pageName(parent))} changed the same thing since the branch was made` : ""}</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div><div class="md-b" id="rvB"></div><div class="md-f">${d.behind ? `<span style="font-size:12px;color:var(--text-secondary)">${d.behind} change${d.behind === 1 ? "" : "s"} on ${esc(pageName(parent))} stay as they are.</span>` : ""}<span class="sp"></span><button type="button" class="ghbtn" data-a="x2">Cancel</button><button type="button" class="createbtn" data-a="ok" ${d.changes.length ? "" : "disabled"}>Merge into ${esc(pageName(parent))}</button></div>`, { wide: true });
   const b = $("rvB");
   if (!d.changes.length) b.append(h(`<div class="pempty" style="padding:0"><b>Nothing to merge yet</b>This branch is the same as ${esc(pageName(parent))} was when it was made.</div>`));
-  const groups = [["setting", "SETTINGS"], ["style", "DESIGN OVERRIDES"], ["file", "FILES"]];
+  const groups = [["setting", "Settings"], ["style", "Design overrides"], ["file", "Files"]];
   for (const [kind, title] of groups) {
     const cs = d.changes.filter((c) => c.kind === kind);
     if (!cs.length) continue;
@@ -615,7 +608,7 @@ async function openShare(id) {
     b.append(lf);
     for (const l of links) {
       const url = data.base ? `${data.base}/s/${l.token}` : `/s/${l.token}`;
-      const r = h(`<div class="lnk"><span class="u" title="${esc(url)}">${esc(url)}</span><span class="tagro">${l.role === "comment" ? "CAN COMMENT" : "CAN VIEW"}</span><button type="button" class="ib24" aria-label="Copy link">${IC.copy}</button><button type="button" class="ghbtn sm" style="color:var(--text-error)">Turn off</button></div>`);
+      const r = h(`<div class="lnk"><span class="u" title="${esc(url)}">${esc(url)}</span><span class="tagro">${l.role === "comment" ? "Can comment" : "Can view"}</span><button type="button" class="ib24" aria-label="Copy link">${IC.copy}</button><button type="button" class="ghbtn sm" style="color:var(--text-error)">Turn off</button></div>`);
       r.querySelector(".ib24").onclick = () => copyText(url);
       r.querySelector(".ghbtn").onclick = async () => (await api(`shares/${l.id}`, { method: "DELETE" }).catch((e) => toast("Couldn't turn it off", e.message)), paint());
       b.append(r);
@@ -788,7 +781,7 @@ function openShortcuts() {
     ["Arrange several", [["Align left · centre · right", K("⌥A · ⌥H · ⌥D")], ["Align top · middle · bottom", K("⌥W · ⌥V · ⌥S")], ["Distribute", K("⌥⇧H · ⌥⇧V")], ["Move without snapping", K("hold ⌥")]]],
     ["View", [["Zoom to fit · selection", "⇧1 · ⇧2"], ["Zoom in · out · 100%", K("+ · − · ⌘0")], ["Outlines", K("⌘Y")], ["Rulers", "⇧R"], ["Hide panels", K("⌘\\")], ["Search", K("⌘K")]]],
   ];
-  const md = modal(`<div class="md-h"><div class="tt"><h2>Keyboard shortcuts</h2><p>The canvas follows the shortcuts you know from design tools.</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div><div class="md-b"><div class="kgrid">${groups.map(([g, rows]) => `<div class="kgrp"><div class="rvh">${esc(g.toUpperCase())}</div><div class="kbdl">${rows.map(([a, b]) => `<span>${esc(a)}</span><kbd>${esc(b)}</kbd>`).join("")}</div></div>`).join("")}</div></div>`, { wide: true });
+  const md = modal(`<div class="md-h"><div class="tt"><h2>Keyboard shortcuts</h2><p>The canvas follows the shortcuts you know from design tools.</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div><div class="md-b"><div class="kgrid">${groups.map(([g, rows]) => `<div class="kgrp"><div class="rvh">${esc(g)}</div><div class="kbdl">${rows.map(([a, b]) => `<span>${esc(a)}</span><kbd>${esc(b)}</kbd>`).join("")}</div></div>`).join("")}</div></div>`, { wide: true });
   md.querySelector('[data-a="x"]').onclick = closeModal;
 }
 // the element's CSS, as the browser applies it, plus this page's own rules for it

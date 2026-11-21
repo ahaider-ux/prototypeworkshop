@@ -1,6 +1,6 @@
-# Libra Workshop
+# Atelier
 
-A canvas for HTML prototypes where branching and annotating come first. It is laid out like a
+Atelier is a canvas for HTML prototypes where branching and annotating come first. It is laid out like a
 design tool: **Home** lists your prototypes, each opens in a **tab**, and inside a prototype every
 **branch is a page**, with **main** as the first one. A page shows the prototype's screens as live
 boards, each running exactly like the app it imitates. Try an idea on a branch, mark it up with
@@ -214,7 +214,11 @@ node bin/workshop.js help
 npm test
 ```
 
-## Libra assets
+## Look and Libra assets
+
+Atelier has its own quiet, neutral look (light and dark), so the prototype on the canvas is the
+only thing that looks like a product. The inspector's swatches show the prototype's own tokens.
+
 
 The Libra logo, icons, design tokens and the Fourth Age prototype belong to Libra. They are not
 covered by this repository's open-source licence and are not for reuse outside this project.

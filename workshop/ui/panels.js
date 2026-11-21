@@ -10,7 +10,7 @@ import { $, h, esc, api, toast, IC, dropdown, segmented, copyText, timeAgo, clam
 import { rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, setMode, docOf, winOf, flowOf, parseTranslate, exactSel, removeEl, selIds, toggleSel, alignSel, distributeSel, duplicateSel, removeItems } from "./canvas.js";
 import { loadOverrides, cachedOverrides, forgetOverrides, rulesFor, boardsLive, commitRules, resetSelectors, preview, endPreview } from "./styles.js";
 
-// ---------- Libra tokens offered by the inspector ----------
+// ---------- the prototype's design tokens the inspector offers (Libra's, for Libra prototypes) ----------
 const FILL = [
   { name: "bg-layer", css: "var(--bg-layer, #fff)", hex: ["#ffffff", "#232321", "#1b1b19"] },
   { name: "bg-base", css: "var(--bg-base, #fafafa)", hex: ["#fafafa", "#1e1e1c"] },
@@ -135,13 +135,14 @@ function agentLine() {
 }
 
 function pageMeta(e) {
-  if (e.archived && e.mergedAt) return { t: "MERGED", cls: "" };
-  if (e.archived) return { t: "ARCHIVED", cls: "" };
-  if (!isBranch(e)) return { t: plural(boardsOf(e.id).length, "SCREEN", "SCREENS"), cls: "" };
+  if (e.archived && e.mergedAt) return { t: "Merged", cls: "" };
+  if (e.archived) return { t: "Archived", cls: "" };
+  if (!isBranch(e)) return { t: "", cls: "" };
   const d = S.diffs.get(e.id);
   if (!d) return { t: "", cls: "" };
-  if (d.conflicts) return { t: plural(d.conflicts, "CONFLICT", "CONFLICTS"), cls: "cf" };
-  return { t: d.changes.length ? plural(d.changes.length, "CHANGE", "CHANGES") : "NO CHANGES", cls: d.changes.length ? "ch" : "" };
+  // the count is enough in a narrow list; the row's tooltip spells it out
+  if (d.conflicts) return { t: `${d.conflicts} !`, cls: "cf", title: plural(d.conflicts, "conflict") };
+  return { t: d.changes.length ? String(d.changes.length) : "", cls: d.changes.length ? "ch" : "", title: d.changes.length ? plural(d.changes.length, "change") : "No changes yet" };
 }
 
 // ----- file: the prototype's branches (its pages) and this page's layers -----
@@ -162,7 +163,7 @@ function renderFile(head, body) {
   for (const { env: e, depth } of open) {
     const m = pageMeta(e);
     const main = !isBranch(e);
-    const r = h(`<div class="pg${e.id === S.page ? " on" : ""}${e.archived ? " archived" : ""}" role="option" aria-selected="${e.id === S.page}" tabindex="0" style="padding-left:${8 + Math.max(0, depth - 1) * 16}px">${main ? IC.board : IC.fork}<span class="t" title="${esc(e.name)}">${main ? "Main" : esc(e.name)}</span><span class="m ${m.cls}">${esc(m.t)}</span><button type="button" class="ib24" aria-label="More for ${esc(main ? "main" : e.name)}" aria-haspopup="menu">${IC.more}</button></div>`);
+    const r = h(`<div class="pg${e.id === S.page ? " on" : ""}${e.archived ? " archived" : ""}" role="option" aria-selected="${e.id === S.page}" tabindex="0" style="padding-left:${8 + Math.max(0, depth - 1) * 16}px">${main ? IC.board : IC.fork}<span class="t" title="${esc(e.name)}">${main ? "Main" : esc(e.name)}</span><span class="m ${m.cls}" title="${esc(m.title || "")}">${esc(m.t)}</span><button type="button" class="ib24" aria-label="More for ${esc(main ? "main" : e.name)}" aria-haspopup="menu">${IC.more}</button></div>`);
     r.onclick = (ev) => !ev.target.closest(".ib24") && fire("go", e.id);
     r.onkeydown = (ev) => ev.key === "Enter" && fire("go", e.id);
     r.querySelector(".ib24").onclick = (ev) => (ev.stopPropagation(), fire("env-menu", { anchor: ev.currentTarget, env: e.id }));
@@ -295,7 +296,7 @@ function renderScreens(body, foot, env) {
   }
   const placed = (name) => boardsOf(env.id).filter((b) => (b.screen || null) === name && (b.state || "Default") === (S.placeState || "Default"));
   for (const [g, list] of groups) {
-    const grp = h(`<div class="sgrp"><div class="sgh"><span>${esc(g.toUpperCase())}</span><span class="sp"></span><button type="button">Place all</button></div></div>`);
+    const grp = h(`<div class="sgrp"><div class="sgh"><span>${esc(g)}</span><span class="sp"></span><button type="button">Place all</button></div></div>`);
     grp.querySelector("button").onclick = async () => {
       let n = 0;
       for (const s of list) if (!placed(s.name).length && (await placeScreen(env.id, s.name, S.placeState))) n++;
@@ -380,7 +381,7 @@ function renderHistory(head, body, env) {
     body.append(h(`<div class="pdiv"></div>`), h(`<div class="shd"><span>Merged and archived</span><span class="n">${merged.length}</span></div>`));
     const list = h(`<div class="pgs"></div>`);
     for (const e of merged) {
-      const r = h(`<div class="pg archived" role="button" tabindex="0">${IC.fork}<span class="t">${esc(e.name)}</span><span class="m">${e.mergedAt ? esc(timeAgo(e.mergedAt).toUpperCase()) : "ARCHIVED"}</span></div>`);
+      const r = h(`<div class="pg archived" role="button" tabindex="0">${IC.fork}<span class="t">${esc(e.name)}</span><span class="m">${e.mergedAt ? esc(timeAgo(e.mergedAt)) : "Archived"}</span></div>`);
       r.onclick = () => fire("go", e.id);
       list.append(r);
     }
@@ -485,7 +486,7 @@ function designPage(body, env) {
   const id = env.id;
   const branch = isBranch(env);
   const parent = branch ? S.envs.get(env.parent) : null;
-  const t = h(`<div class="isec"><div class="ih"><b>Page</b><span class="tagro${branch ? " info" : ""}">${branch ? "BRANCH" : "MAIN"}</span></div><div class="ititle"><div class="afld-in"><input aria-label="Name" value="${esc(env.name)}" maxlength="120"></div><span class="pth"><span title="envs/${esc(id)}/">envs/${esc(id)}/</span><button type="button" class="ib24" aria-label="Copy folder path" data-tip="Copy path">${IC.copy}</button></span></div></div>`);
+  const t = h(`<div class="isec"><div class="ih"><b>Page</b><span class="tagro${branch ? " info" : ""}">${branch ? "Branch" : "Main"}</span></div><div class="ititle"><div class="afld-in"><input aria-label="Name" value="${esc(env.name)}" maxlength="120"></div><span class="pth"><span title="envs/${esc(id)}/">envs/${esc(id)}/</span><button type="button" class="ib24" aria-label="Copy folder path" data-tip="Copy path">${IC.copy}</button></span></div></div>`);
   const inp = t.querySelector("input");
   inp.addEventListener("keydown", (e) => (e.key === "Enter" && inp.blur(), e.key === "Escape" && ((inp.value = env.name), inp.blur())));
   inp.addEventListener("blur", async () => {
@@ -533,7 +534,7 @@ function designPage(body, env) {
     L.append(h(`<span class="lineage">Main only changes when you merge a branch. Try ideas on branches; agents work on them too.</span>`));
     for (const k of kids) {
       const m = pageMeta(k);
-      const r = h(`<div class="pg" role="button" tabindex="0" style="margin:0 -8px">${IC.fork}<span class="t">${esc(k.name)}</span><span class="m ${m.cls}">${esc(m.t)}</span></div>`);
+      const r = h(`<div class="pg" role="button" tabindex="0" style="margin:0 -8px">${IC.fork}<span class="t">${esc(k.name)}</span><span class="m ${m.cls}">${esc(m.title || m.t)}</span></div>`);
       r.onclick = () => fire("go", k.id);
       L.append(r);
       if (!S.diffs.has(k.id)) loadDiff(k.id);
@@ -698,10 +699,13 @@ function envSettings(body, env) {
   body.append(e1);
 }
 
+// the prototype's colours, as the prototype shows them in its current theme — not the editor's
 function swatches(set, current, onPick) {
+  const dark = pageEnv()?.theme === "dark";
   const w = h(`<div class="sws" role="radiogroup"></div>`);
   for (const t of set) {
-    const b = h(`<button type="button" class="swc${t.name === "none" ? " none" : ""}${current?.name === t.name ? " on" : ""}" role="radio" aria-checked="${current?.name === t.name}" aria-label="${esc(t.name)}" title="${esc(t.name)}" style="${t.name === "none" ? "" : `background:${t.css}`}"></button>`);
+    const fill = (dark && t.hex[1]) || t.hex[0];
+    const b = h(`<button type="button" class="swc${t.name === "none" ? " none" : ""}${current?.name === t.name ? " on" : ""}" role="radio" aria-checked="${current?.name === t.name}" aria-label="${esc(t.name)}" title="${esc(t.name)}" style="${t.name === "none" ? "" : `background:${fill}`}"></button>`);
     b.onclick = () => onPick(t);
     w.append(b);
   }
@@ -852,7 +856,7 @@ function designEl(body, s) {
   const pcol = pflex && !prow;
 
   // Position — from where the page puts it, with translate; rotation
-  const P = sec("Position", flow.kind !== "free" ? `<span class="tagro" title="Its parent is an auto layout: drag or use the arrow keys to reorder">IN AUTO LAYOUT</span>` : "");
+  const P = sec("Position", flow.kind !== "free" ? `<span class="tagro" title="Its parent is an auto layout: drag or use the arrow keys to reorder">In auto layout</span>` : "");
   const tr = parseTranslate(st.translate);
   P.append(
     g2(
@@ -1096,7 +1100,7 @@ function designAnnotation(body, id) {
   const it = S.items.get(id);
   if (!it) return;
   const kind = { note: "Note", box: "Highlight", arrow: "Arrow" }[it.type];
-  const t = sec(kind, `<span class="tokname">${esc((it.author || "You").toUpperCase())} · ${esc(timeAgo(it.updatedAt || it.createdAt).toUpperCase())}</span>`);
+  const t = sec(kind, `<span class="tokname">${esc(it.author || "You")} · ${esc(timeAgo(it.updatedAt || it.createdAt))}</span>`);
   const save = async (patch) => {
     try {
       const next = await api(`canvas/items/${id}`, { method: "PATCH", body: patch });
@@ -1139,7 +1143,7 @@ function designAnnotation(body, id) {
 
 // ----- agents: Claude-style turns; from main, a request opens a branch for the agent -----
 let draft = "";
-const STATUS = { queued: ["QUEUED", ""], working: ["WORKING", "info"], done: ["DONE", "ok"], failed: ["FAILED", "err"], cancelled: ["STOPPED", ""] };
+const STATUS = { queued: ["Queued", ""], working: ["Working", "info"], done: ["Done", "ok"], failed: ["Failed", "err"], cancelled: ["Stopped", ""] };
 const openLogs = new Set();
 function renderChat(body, foot, env) {
   const ws = S.ws;

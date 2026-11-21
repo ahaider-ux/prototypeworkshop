@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// workshop — the command line for Libra Workshop.
+// workshop — the command line for Atelier.
 //   workshop serve                       open the canvas at http://127.0.0.1:4600
 //   workshop mcp                         MCP server on stdio, for Claude Code or your own harness
 //   workshop list | import | fork | version | restore | screenshot | tasks | selection | agent
@@ -26,7 +26,7 @@ for (let i = 0; i < argv.length; i++) {
 const cmd = args.shift() || "help";
 const workspace = path.resolve(flags.workspace || process.env.WORKSHOP_DIR || path.join(HERE, "..", "workspace"));
 
-const HELP = `Libra Workshop
+const HELP = `Atelier
 
   workshop serve [--port 4600] [--no-agent]     Open the canvas in your browser at http://127.0.0.1:<port>
   workshop mcp                                   MCP server on stdio (add it to Claude Code: see README)
@@ -55,7 +55,7 @@ async function main() {
     const { startServer } = await import("../src/server.js");
     const port = flags.port === undefined ? 4600 : Number(flags.port);
     const srv = await startServer({ workspace, port, agent: !flags["no-agent"] });
-    out(`Libra Workshop is running at ${srv.url}\nWorkspace: ${workspace}\nPress Ctrl+C to stop.`);
+    out(`Atelier is running at ${srv.url}\nWorkspace: ${workspace}\nPress Ctrl+C to stop.`);
     const stop = async () => {
       await srv.close();
       process.exit(0);

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Present · Libra Workshop</title>
+<title>Present · Atelier</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="/ui/app.css">
 <style>
@@ -29,14 +29,14 @@
   document.getElementById("app").src = `/env/${encodeURIComponent(id)}/${screen ? `?ws-screen=${encodeURIComponent(screen)}` : ""}`;
   if (shared) {
     document.getElementById("back").remove();
-    document.getElementById("note").textContent = "Shared from Libra Workshop · view only";
+    document.getElementById("note").textContent = "Shared from Atelier · view only";
   }
   try {
     const r = await fetch(`/api/envs/${encodeURIComponent(id)}`);
     if (r.ok) {
       const e = await r.json();
       document.getElementById("nm").textContent = e.name;
-      document.title = `${e.name} · Libra Workshop`;
+      document.title = `${e.name} · Atelier`;
       document.getElementById("dev").textContent = `${e.device.w} × ${e.device.h}`;
     }
   } catch {}

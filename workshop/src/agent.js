@@ -16,7 +16,7 @@ const FLUSH_MS = 400;
 export function taskPrompt(task, env, dir) {
   const sel = task.selection;
   const lines = [
-    `You are editing an HTML prototype in Libra Workshop: "${env.name}".`,
+    `You are editing an HTML prototype in Atelier: "${env.name}".`,
     `Folder: ${dir}`,
     `Entry file: ${path.join(dir, "index.html")}`,
     "",

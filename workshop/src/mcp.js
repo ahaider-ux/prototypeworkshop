@@ -47,7 +47,7 @@ export const TOOLS = [
   { name: "resolve_comment", description: "Marks a canvas comment as resolved.", inputSchema: S({ id: str("Comment id") }, ["id"]) },
 ];
 
-const INSTRUCTIONS = `Libra Workshop holds HTML prototypes ("environments") that a designer arranges on a canvas as boards, one per screen.
+const INSTRUCTIONS = `Atelier holds HTML prototypes ("environments") that a designer arranges on a canvas as boards, one per screen.
 Each environment is a folder with index.html; you can edit those files directly or through these tools, and the canvas reloads live.
 - list_environments shows ids, folders and branches. get_selection tells you what the designer is pointing at.
 - Each branch is a page of its own on the canvas, laid out like its parent. list_canvas shows the designer's notes, boxes and arrows on each page: treat them as feedback on the boards they sit over.

@@ -1,4 +1,4 @@
-# Libra Workshop — instructions for agents
+# Atelier — instructions for agents
 
 This folder is a separate web app that the repository owner added: a canvas for HTML prototypes.
 It does not build into FigCraft and touches none of its crates. FigCraft's Rust-only rules in the
@@ -22,11 +22,16 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
 
 - **No runtime dependencies.** Node 20+ built-ins only, ES modules, no build step. Playwright is
   optional and only used for screenshots when it is already installed.
-- **The UI is Libra.** Colours, radii, shadows, type and motion come from the tokens at the top of
-  `ui/app.css`, which are 1:1 with the Libra DS. New surfaces are recompositions of the existing
-  classes (`.dbtn`, `.createbtn`, `.ghbtn`, `.segds`, `.cnmenu`, `.ddtrig`, `.afld-in`, `.tagro`,
-  `.tct`, `.md`, `.toast`, `.isec`/`.irow`). No new hex values, no 5/7/10/13/15px one-offs, sentence
-  case, verb-first buttons. Every surface needs its dark-mode pair (`:root[data-ltheme="dark"]`).
+- **Atelier has its own look, not Libra's.** The editor's colours, shadows, type and motion come
+  from the Atelier tokens at the top of `ui/app.css` (neutral greys, a tool-blue accent, the system UI
+  face; mono only for code). Libra's tokens belong to the prototypes: they appear only inside boards
+  and in the inspector's swatches. Compose new surfaces from the existing classes (`.dbtn`,
+  `.createbtn`, `.ghbtn`, `.segds`, `.cnmenu`, `.ddtrig`, `.afld-in`, `.tagro`, `.tct`, `.md`,
+  `.toast`, `.isec`/`.irow`). No new hex values outside the token block, spacing 2/4/6/8/12/16/24/32,
+  12px text and 28px rows in panels and menus, sentence case, verb-first buttons, and a dark-mode
+  pair for every token. Motion follows the animations.dev bar: nothing animates on keyboard or
+  high-frequency actions, menus 180ms in and 120ms out from their trigger, press `scale(.97)`, no
+  hover scaling, and reduced motion keeps colour and opacity only.
 - **The canvas shell scales below 1180px** (`fitShell`). Anything measured with
   `getBoundingClientRect` and written into a style inside `#frame` is divided by `frScale()`
   (`inFrame()` in `ui/lib.js` does it for menus).

@@ -281,7 +281,7 @@ export function sync() {
       el.style.width = it.w + "px";
       const tx = el.querySelector(".tx");
       if (!tx.isContentEditable && tx.textContent !== it.text) tx.textContent = it.text || "";
-      el.querySelector(".by").textContent = `${(it.author || "You").toUpperCase()} · ${timeAgo(it.updatedAt || it.createdAt).toUpperCase()}`;
+      el.querySelector(".by").textContent = `${it.author || "You"} · ${timeAgo(it.updatedAt || it.createdAt)}`;
     } else {
       el.style.width = it.w + "px";
       el.style.height = it.h + "px";
@@ -900,7 +900,7 @@ export function drawHud() {
     l.style.left = s.x + "px";
     l.style.top = s.y + "px";
     l.style.maxWidth = Math.max(80, s.w) + "px";
-    const g = it.ghost ? parentName.toUpperCase().slice(0, 32) : GH.size ? "THIS BRANCH" : "";
+    const g = it.ghost ? parentName.slice(0, 32) : GH.size ? "This branch" : "";
     if (l.querySelector(".g").textContent !== g) l.querySelector(".g").textContent = g;
     const n = `${screenName(it)}${it.state && it.state !== "Default" ? ` · ${it.state}` : ""}`;
     if (l.querySelector(".n").textContent !== n) l.querySelector(".n").textContent = n;
