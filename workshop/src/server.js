@@ -53,24 +53,26 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
   const noteTimers = new Map();
   function noteAdded(envId) {
     clearTimeout(noteTimers.get(envId));
-    noteTimers.set(
-      envId,
-      setTimeout(async () => {
-        noteTimers.delete(envId);
-        try {
-          const env = await store.getEnv(envId);
-          if (!env.parent || env.archived) return;
-          const auto = (await store.listRecipes()).filter((r) => r.trigger === "on-notes");
-          if (!auto.length) return;
-          const ws = await store.workspace();
-          for (const r of auto) {
-            const out = await store.runRecipe(r.id, envId, { author: "Recipe trigger", runner: ws.agent && runner ? "auto" : "harness" });
-            if (out.task.runner === "auto" && !out.already) runner.kick();
-          }
-          emit({ kind: "tasks" });
-        } catch {}
-      }, NOTE_PAUSE_MS).unref?.() ?? undefined,
-    );
+    const t = setTimeout(async () => {
+      noteTimers.delete(envId);
+      try {
+        const [env, recipes] = await Promise.all([store.meta(envId), store.listRecipes()]);
+        const auto = recipes.filter((r) => r.trigger === "on-notes");
+        if (!env?.parent || env.archived || !auto.length) return;
+        for (const r of auto) await queueRecipe(r.id, envId, { author: "Recipe trigger" });
+        emit({ kind: "tasks" });
+      } catch {}
+    }, NOTE_PAUSE_MS);
+    t.unref?.();
+    noteTimers.set(envId, t);
+  }
+  // who runs a new request: the local agent command when one is set up, otherwise a harness over MCP
+  const pickRunner = async () => ((await store.workspace()).agent && runner ? "auto" : "harness");
+  const kick = (task) => task.runner === "auto" && runner.kick();
+  async function queueRecipe(id, env, opts) {
+    const r = await store.runRecipe(id, env, { ...opts, runner: await pickRunner() });
+    if (!r.already) kick(r.task);
+    return r;
   }
   const emit = (event) => {
     const line = `event: change\ndata: ${JSON.stringify(event)}\n\n`;
@@ -290,7 +292,6 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
       if (!b && m === "GET") return json(res, 200, await store.records("tasks"));
       if (!b && m === "POST") {
         const p = await body(req);
-        const ws = await store.workspace();
         let env = p.env;
         if (p.branch) {
           // the agent works on its own branch, so main only changes when someone merges
@@ -298,9 +299,9 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
           env = (await store.branchEnv(p.env, { name, author: me })).id;
           emit({ kind: "envs" });
         }
-        const t = await store.addTask({ env, prompt: p.prompt, selection: p.selection, author: me, runner: ws.agent && runner ? "auto" : "harness" });
+        const t = await store.addTask({ env, prompt: p.prompt, selection: p.selection, author: me, runner: await pickRunner() });
         emit({ kind: "tasks" });
-        if (t.runner === "auto") runner.kick();
+        kick(t);
         return json(res, 201, t);
       }
       if (b && c === "cancel" && m === "POST") {
@@ -312,23 +313,27 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
     }
     if (a === "recipes") {
       if (!b && m === "GET") {
-        const [list, stats] = await Promise.all([store.listRecipes(), store.recipeStats()]);
-        return json(res, 200, list.map((r) => ({ ...r, stats: stats[r.id] || { runs: 0, merged: 0, open: 0, failed: 0, discarded: 0, byVersion: {} } })));
+        const list = await store.listRecipes();
+        const stats = await store.recipeStats(list);
+        return json(res, 200, list.map((r) => ({ ...r, production: store.recipeVersion(r).n, stats: stats[r.id] })));
       }
-      const done = (r) => (emit({ kind: "recipes" }), r);
-      if (!b && m === "POST") return json(res, 201, done(await store.addRecipe(await body(req), me)));
-      if (b && !c && m === "PATCH") return json(res, 200, done(await store.updateRecipe(b, await body(req))));
-      if (b && !c && m === "DELETE") return json(res, 200, done(await store.deleteRecipe(b)) ?? { ok: true });
-      if (b && c === "versions" && m === "POST") return json(res, 201, done(await store.addRecipeVersion(b, { ...(await body(req)), author: me })));
-      if (b && c === "promote" && m === "POST") return json(res, 200, done(await store.promoteRecipeVersion(b, (await body(req)).n)));
       if (b && c === "run" && m === "POST") {
         const p = await body(req);
-        const ws = await store.workspace();
-        const r = await store.runRecipe(b, p.env, { version: p.version ?? null, author: me, runner: ws.agent && runner ? "auto" : "harness" });
-        emit({ kind: "envs" });
+        const r = await queueRecipe(b, p.env, { version: p.version ?? null, author: me });
+        if (r.env !== p.env) emit({ kind: "envs" }); // it made a branch
         emit({ kind: "tasks" });
-        if (r.task.runner === "auto" && !r.already) runner.kick();
         return json(res, 201, r);
+      }
+      // edits to the recipes themselves
+      let out;
+      if (!b && m === "POST") out = await store.addRecipe(await body(req), me);
+      else if (b && !c && m === "PATCH") out = await store.updateRecipe(b, await body(req));
+      else if (b && !c && m === "DELETE") out = (await store.deleteRecipe(b), { ok: true });
+      else if (b && c === "versions" && m === "POST") out = await store.addRecipeVersion(b, { ...(await body(req)), author: me });
+      else if (b && c === "promote" && m === "POST") out = await store.promoteRecipeVersion(b, (await body(req)).n);
+      if (out) {
+        emit({ kind: "recipes" });
+        return json(res, m === "POST" && c !== "promote" ? 201 : 200, out);
       }
     }
     if (a === "selection") {

@@ -3,27 +3,37 @@
 // instructions are versioned (testing → production → retired) and every run is counted by what
 // became of its branch, so someone can watch it and make it better.
 
-import { S, fire, isBranch } from "./state.js";
+import { S, fire, pageName, plural } from "./state.js";
 import { h, esc, api, toast, IC, modal, closeModal } from "./lib.js";
 
-const pageName = (e) => (e ? (isBranch(e) ? e.name : "Main") : "");
-const prod = (r) => r.versions.find((v) => v.status === "production") || r.versions[r.versions.length - 1];
+// the version that runs: the server says which (the rule lives in store.recipeVersion)
+const prod = (r) => r.versions.find((v) => v.n === r.production) || r.versions[r.versions.length - 1];
 
-export async function loadRecipes() {
-  try {
-    S.recipes = await api("recipes");
-  } catch {
-    S.recipes = S.recipes || [];
-  }
-  fire("recipes");
+// Several events can ask for a reload at once (a run makes a branch and a task); one request covers them.
+let pending = null;
+export function loadRecipes() {
+  clearTimeout(pending);
+  return new Promise((resolve) => {
+    pending = setTimeout(async () => {
+      try {
+        S.recipes = await api("recipes");
+      } catch {
+        S.recipes = S.recipes || [];
+      }
+      fire("recipes");
+      resolve();
+    }, 120);
+  });
 }
 
 // how a recipe's runs went, as one line and a bar: merged, open, discarded or failed
 function statsLine(st) {
   if (!st?.runs) return `<span class="rcst">No runs yet</span>`;
   const seg = (n, cls) => (n ? `<i class="${cls}" style="flex:${n}"></i>` : "");
-  const rate = st.merged + st.discarded + st.failed ? Math.round((100 * st.merged) / (st.merged + st.discarded + st.failed)) : null;
-  return `<div class="rcbar" aria-hidden="true">${seg(st.merged, "m")}${seg(st.open, "o")}${seg(st.discarded + st.failed, "d")}</div><span class="rcst">${st.runs} run${st.runs === 1 ? "" : "s"} · ${st.merged} merged${st.open ? ` · ${st.open} open` : ""}${st.discarded + st.failed ? ` · ${st.discarded + st.failed} not kept` : ""}${rate !== null ? ` · ${rate}% kept` : ""}</span>`;
+  const dropped = st.discarded + st.failed;
+  const settled = st.merged + dropped;
+  const rate = settled ? ` · ${Math.round((100 * st.merged) / settled)}% kept` : "";
+  return `<div class="rcbar" aria-hidden="true">${seg(st.merged, "m")}${seg(st.open, "o")}${seg(dropped, "d")}</div><span class="rcst">${plural(st.runs, "run")} · ${st.merged} merged${st.open ? ` · ${st.open} open` : ""}${dropped ? ` · ${dropped} not kept` : ""}${rate}</span>`;
 }
 
 export function renderRecipes(head, body, env) {
@@ -39,8 +49,8 @@ export function renderRecipes(head, body, env) {
   for (const r of S.recipes) {
     const v = prod(r);
     const testing = r.versions.filter((x) => x.status === "testing");
-    // a run still waiting on a branch that was since merged or archived doesn't count
-    const running = S.tasks.some((t) => t.recipe?.id === r.id && (t.status === "queued" || t.status === "working") && S.envs.get(t.env) && !S.envs.get(t.env).archived);
+    // (the store calls off runs waiting on a branch once it's merged or archived)
+    const running = S.tasks.some((t) => t.recipe?.id === r.id && (t.status === "queued" || t.status === "working"));
     const card = h(`<div class="isec rcard">
       <div class="ih"><b>${esc(r.name)}</b>${r.trigger === "on-notes" ? `<span class="tagro info" title="Runs on a branch when notes or drawings are added there">Auto</span>` : ""}<span class="tagro">v${v.n}</span>${testing.length ? `<span class="tagro" title="A newer version waits to be tried">v${testing[testing.length - 1].n} testing</span>` : ""}</div>
       ${r.description ? `<span class="lineage">${esc(r.description)}</span>` : ""}
@@ -61,6 +71,20 @@ async function runRecipe(r, env, version = null) {
     toast(`${r.name} is queued${onBranch ? " on a new branch" : ""}`, onBranch ? "Main stays as it is until you merge the result" : "Its changes show up here to review", onBranch ? { label: "Go to branch", fn: () => fire("go", out.env) } : null);
   } catch (e) {
     toast(`Couldn't run ${r.name}`, e.message);
+  }
+}
+
+// change something about the recipes, then close the dialog, refresh and say so
+async function act(call, done, failed) {
+  try {
+    await call();
+    closeModal();
+    loadRecipes();
+    if (done) toast(...done);
+    return true;
+  } catch (e) {
+    toast(failed, e.message);
+    return false;
   }
 }
 
@@ -90,7 +114,7 @@ export function openRecipe(id) {
     for (const x of [...r.versions].reverse()) {
       const s = bv[x.n];
       const tag = x.status === "production" ? `<span class="tagro ok">Production</span>` : x.status === "testing" ? `<span class="tagro info">Testing</span>` : `<span class="tagro">Retired</span>`;
-      const row = h(`<div class="rvr"><div style="display:flex;flex-direction:column;gap:4px;min-width:0"><span class="k">v${x.n} · ${esc(x.note || "No note")}</span><span class="v">${esc(x.author || "")} · ${s ? `${s.runs} run${s.runs === 1 ? "" : "s"}, ${s.merged} merged` : "not run yet"}</span></div><span class="ch" style="display:flex;gap:8px;align-items:center">${tag}${x.status !== "production" ? `<button type="button" class="dbtn sm" data-a="try">Try</button><button type="button" class="dbtn sm" data-a="pro">Promote</button>` : ""}</span></div>`);
+      const row = h(`<div class="rvr"><div style="display:flex;flex-direction:column;gap:4px;min-width:0"><span class="k">v${x.n} · ${esc(x.note || "No note")}</span><span class="v">${esc(x.author || "")} · ${s ? `${plural(s.runs, "run")}, ${s.merged} merged` : "not run yet"}</span></div><span class="ch" style="display:flex;gap:8px;align-items:center">${tag}${x.status !== "production" ? `<button type="button" class="dbtn sm" data-a="try">Try</button><button type="button" class="dbtn sm" data-a="pro">Promote</button>` : ""}</span></div>`);
       const tr = row.querySelector('[data-a="try"]');
       if (tr)
         tr.onclick = () => {
@@ -100,28 +124,10 @@ export function openRecipe(id) {
         };
       const pr = row.querySelector('[data-a="pro"]');
       if (pr)
-        pr.onclick = async () => {
-          try {
-            await api(`recipes/${r.id}/promote`, { method: "POST", body: { n: x.n } });
-            closeModal();
-            await loadRecipes();
-            toast(`v${x.n} of ${r.name} is in production`, "New runs use it");
-          } catch (e) {
-            toast("Couldn't promote that version", e.message);
-          }
-        };
+        pr.onclick = () => act(() => api(`recipes/${r.id}/promote`, { method: "POST", body: { n: x.n } }), [`v${x.n} of ${r.name} is in production`, "New runs use it"], "Couldn't promote that version");
       list.append(row);
     }
-    md.querySelector('[data-a="del"]').onclick = async () => {
-      try {
-        await api(`recipes/${r.id}`, { method: "DELETE" });
-        closeModal();
-        await loadRecipes();
-        toast(`Deleted ${r.name}`);
-      } catch (e) {
-        toast("Couldn't delete the recipe", e.message);
-      }
-    };
+    md.querySelector('[data-a="del"]').onclick = () => act(() => api(`recipes/${r.id}`, { method: "DELETE" }), [`Deleted ${r.name}`], "Couldn't delete the recipe");
   }
   md.querySelector('[data-a="x"]').onclick = closeModal;
   md.querySelector('[data-a="x2"]').onclick = closeModal;
@@ -133,23 +139,17 @@ export function openRecipe(id) {
     const description = md.querySelector("#rcDesc").value.trim();
     const prompt = md.querySelector("#rcText").value.trim();
     const trigger = auto.getAttribute("aria-checked") === "true" ? "on-notes" : "manual";
-    try {
-      if (!r) {
-        await api("recipes", { method: "POST", body: { name, description, prompt, trigger } });
-        toast(`Created ${name || "the recipe"}`);
-      } else {
+    const newVersion = r && prompt !== latest.prompt;
+    const ok = await act(
+      async () => {
+        if (!r) return api("recipes", { method: "POST", body: { name, description, prompt, trigger } });
         await api(`recipes/${r.id}`, { method: "PATCH", body: { name, description, trigger } });
-        if (prompt !== latest.prompt) {
-          await api(`recipes/${r.id}/versions`, { method: "POST", body: { prompt, note: md.querySelector("#rcNote").value.trim() } });
-          toast(`Saved v${latest.n + 1} of ${name} as testing`, "Try it on a branch, then promote it when it does better");
-        }
-      }
-      closeModal();
-      await loadRecipes();
-    } catch (e) {
-      busy = false;
-      toast("Couldn't save the recipe", e.message);
-    }
+        if (newVersion) await api(`recipes/${r.id}/versions`, { method: "POST", body: { prompt, note: md.querySelector("#rcNote").value.trim() } });
+      },
+      !r ? [`Created ${name || "the recipe"}`] : newVersion ? [`Saved v${latest.n + 1} of ${name} as testing`, "Try it on a branch, then promote it when it does better"] : null,
+      "Couldn't save the recipe",
+    );
+    if (!ok) busy = false;
   };
   md.querySelector('[data-a="ok"]').onclick = save;
   md.querySelector("#rcF").onsubmit = (e) => (e.preventDefault(), save());

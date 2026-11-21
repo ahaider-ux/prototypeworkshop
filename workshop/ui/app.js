@@ -1,13 +1,12 @@
 // Atelier — boot, Home and tabs, pages, live updates, branches, review and merge, dialogs.
 
-import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural } from "./state.js";
+import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural, pageName } from "./state.js";
 import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented } from "./lib.js";
 import { initCanvas, sync, fit, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
 import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff } from "./panels.js";
 import { rulesFor, loadOverrides } from "./styles.js";
 import { loadRecipes } from "./recipes.js";
 
-const pageName = (e) => (e ? (isBranch(e) ? e.name : "Main") : "");
 const store = {
   get(k, d) {
     try {
@@ -67,6 +66,8 @@ async function loadTasks() {
       loadDiff(t.env);
     }
   }
+  // a recipe's results only move when a run starts or finishes, not on every log line
+  if (list.length !== lastStatus.size || list.some((t) => lastStatus.get(t.id) !== t.status)) loadRecipes();
   lastStatus = new Map(list.map((t) => [t.id, t.status]));
   S.tasks = list;
   if (S.view === "proto") renderLeft();
@@ -855,7 +856,7 @@ function renameWorkspace() {
 }
 
 async function onEvent(ev) {
-  if (ev.kind === "envs") return loadWorkspace().then(() => S.recipes && loadRecipes()); // a merge or archive changes a recipe's results
+  if (ev.kind === "envs") return loadWorkspace().then(loadRecipes); // a merge or archive changes a recipe's results
   if (ev.kind === "canvas") return loadItems();
   if (ev.kind === "env") {
     if (!S.envs.has(ev.id)) return loadWorkspace();
@@ -877,7 +878,7 @@ async function onEvent(ev) {
     if (ev.id === S.page) (renderRight(), renderBanner());
     return;
   }
-  if (ev.kind === "tasks") return loadTasks().then(() => S.recipes && loadRecipes());
+  if (ev.kind === "tasks") return loadTasks();
   if (ev.kind === "recipes") return loadRecipes();
   if (ev.kind === "comments") return loadComments();
   if (ev.kind === "versions") return S.page && loadVersions(S.page);
@@ -996,7 +997,7 @@ async function boot() {
     $("frame").append(h(`<div class="winov open"><div class="md" style="width:480px"><div class="md-h"><div class="tt"><h2>The Workshop server isn't answering</h2><p>${esc(e.message)}. Start it with <span class="mono" style="font-size:12px;font-weight:400">npm start</span> in the workshop folder, then reload.</p></div></div></div></div>`));
     return;
   }
-  await Promise.all([loadComments(), loadTasks(), loadRecipes()]);
+  await Promise.all([loadComments(), loadTasks()]); // loading the tasks loads the recipes too
   // a fresh visit picks up where this browser left off
   if (!location.hash || location.hash === "#") {
     const last = store.get("ws-route", "");

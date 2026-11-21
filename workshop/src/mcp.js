@@ -91,8 +91,8 @@ export async function callTool(store, name, a = {}, ctx = {}) {
     case "get_environment": {
       const env = await store.getEnv(a.env);
       const [files, css, versions, comments] = await Promise.all([store.listFiles(a.env), store.getOverrides(a.env), store.listVersions(a.env), store.records("comments")]);
-      const ctx = await store.contextFor(a.env).catch(() => ({}));
-      return text({ ...env, brief: ctx.brief || "", recentDecisions: ctx.decisions || [], folder: store.envDir(a.env), files, overridesCss: css, versions: versions.slice(0, 20), comments: comments.filter((c) => c.env === a.env && !c.resolved) });
+      const ctx = await store.contextFor(a.env);
+      return text({ ...env, brief: ctx.brief, recentDecisions: ctx.decisions, folder: store.envDir(a.env), files, overridesCss: css, versions: versions.slice(0, 20), comments: comments.filter((c) => c.env === a.env && !c.resolved) });
     }
     case "get_selection": {
       const s = await store.selection();
@@ -128,8 +128,9 @@ export async function callTool(store, name, a = {}, ctx = {}) {
       return text({ mergedInto: r.parent.id, applied: r.applied, savedBeforeAs: r.before.n, savedAfterAs: r.after.n });
     }
     case "list_recipes": {
-      const [list, stats] = await Promise.all([store.listRecipes(), store.recipeStats()]);
-      return text(list.map((r) => ({ id: r.id, name: r.name, description: r.description, trigger: r.trigger, production: store.recipeVersion(r).n, versions: r.versions.map((v) => ({ n: v.n, status: v.status, note: v.note })), runs: stats[r.id] || { runs: 0 } })));
+      const list = await store.listRecipes();
+      const stats = await store.recipeStats(list);
+      return text(list.map((r) => ({ id: r.id, name: r.name, description: r.description, trigger: r.trigger, production: store.recipeVersion(r).n, versions: r.versions.map((v) => ({ n: v.n, status: v.status, note: v.note })), runs: stats[r.id] })));
     }
     case "run_recipe": {
       const r = await store.runRecipe(a.recipe, a.env, { version: a.version ?? null, author: who, runner: "harness" });
@@ -223,7 +224,7 @@ export async function callTool(store, name, a = {}, ctx = {}) {
       if (env.base) await store.checkout(t.env); // so you can edit the branch's files in its folder
       const v = await store.saveVersion(t.env, { label: `Before ${who}: ${t.prompt.slice(0, 60)}`, author: who, kind: "auto" });
       await store.updateTask(t.id, { status: "working", claimedBy: who, beforeVersion: v.n, log: `${who} took this request. Saved version ${v.n} first.`, logKind: "note" });
-      return text({ id: t.id, env: t.env, brief: taskPrompt(t, env, store.envDir(t.env), await store.contextFor(t.env, t).catch(() => ({}))) });
+      return text({ id: t.id, env: t.env, brief: taskPrompt(t, env, store.envDir(t.env), await store.contextFor(t.env, t)) });
     }
     case "update_task": {
       const t = await store.updateTask(a.id, { status: a.status, log: a.log, reply: a.reply, logKind: "out" });

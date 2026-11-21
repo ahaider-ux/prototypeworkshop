@@ -119,7 +119,7 @@ export class AgentRunner {
     await s.updateTask(task.id, { status: "working", claimedBy: agent.name, beforeVersion: before.n, log: `${agent.name} started. Saved version ${before.n} first.`, logKind: "note" });
     this.emit({ kind: "tasks" });
     const files0 = await snapshot(dir);
-    const prompt = taskPrompt(task, env, dir, await s.contextFor(task.env, task).catch(() => ({})));
+    const prompt = taskPrompt(task, env, dir, await s.contextFor(task.env, task));
     const fill = (a) => a.replace(/\{prompt\}/g, prompt).replace(/\{request\}/g, task.prompt).replace(/\{env\}/g, task.env).replace(/\{dir\}/g, dir).replace(/\{file\}/g, path.join(dir, "index.html"));
     const args = agent.command.map(fill);
     const viaStdin = !agent.command.some((a) => /\{prompt\}|\{request\}/.test(a));

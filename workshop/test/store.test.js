@@ -283,11 +283,14 @@ test("recipes: a new workspace has starters, versions go testing → production,
   assert.deepEqual(run.task.recipe, { id: polish.id, n: 2, name: "Polish pass" });
   const again = await s.runRecipe(polish.id, run.env);
   assert.equal(again.already, true, "a recipe already waiting on that branch isn't queued twice");
-  await s.updateTask(run.task.id, { status: "done" });
   await s.mergeEnv(run.env, {});
+  assert.equal((await s.record("tasks", run.task.id)).status, "cancelled", "a run still waiting on a merged branch is called off");
   const run2 = await s.runRecipe(polish.id, a.id, { version: 1 });
   await s.updateEnv(run2.env, { archived: true });
-  const st = (await s.recipeStats())[polish.id];
+  assert.equal((await s.record("tasks", run2.task.id)).status, "cancelled", "and on an archived one");
+  const all = await s.recipeStats(await s.listRecipes());
+  assert.equal(all[list[2].id].runs, 0, "a recipe that never ran still has an entry");
+  const st = all[polish.id];
   assert.equal(st.runs, 2);
   assert.equal(st.merged, 1);
   assert.equal(st.discarded, 1);

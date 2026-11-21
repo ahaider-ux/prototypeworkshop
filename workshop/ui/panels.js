@@ -5,7 +5,7 @@
 // Right: Design (whatever is selected, or the page) and Prototype (how the page runs). The banner
 // across the canvas says which page this is and what to do with it.
 
-import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, familyOf, pageEnv, protoId, pageItems, pageOf, nearestBoard, screenName, plural } from "./state.js";
+import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, familyOf, pageEnv, protoId, pageItems, pageOf, nearestBoard, screenName, plural, pageName } from "./state.js";
 import { $, h, esc, api, toast, IC, dropdown, segmented, copyText, timeAgo, clamp } from "./lib.js";
 import { rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, setMode, docOf, winOf, flowOf, parseTranslate, exactSel, removeEl, selIds, toggleSel, alignSel, distributeSel, duplicateSel, removeItems } from "./canvas.js";
 import { PENS, INKS, SIZES as INK_SIZES } from "./ink.js";
@@ -131,7 +131,6 @@ function railBadges() {
   set("agents", S.tasks.filter((t) => fam.has(t.env) && (t.status === "queued" || t.status === "working")).length);
   set("notes", S.comments.filter((c) => !c.parent && !c.resolved && c.env === S.page).length);
 }
-const pageName = (e) => (e ? (isBranch(e) ? e.name : "Main") : "");
 function agentLine() {
   const ws = S.ws;
   const hs = ws?.harnesses || [];
@@ -367,7 +366,7 @@ function renderNotes(head, body, env) {
 // ----- history: versions of this page, and branches merged into the prototype -----
 // The brief: what every agent reads first. It belongs to the prototype; its branches read it.
 function briefSec(env) {
-  const root = rootOf(env.id) || env;
+  const root = rootOf(env.id) || env; // the brief and decisions belong to the prototype
   const L = sec("Brief", root.brief ? `<span class="tct">${root.brief.length > 999 ? `${Math.round(root.brief.length / 1000)}k` : root.brief.length}</span>` : "");
   if (root.id !== env.id) {
     L.append(h(`<span class="lineage">Agents here read the brief of ${esc(root.name)}${root.brief ? `: “${esc(root.brief.slice(0, 120))}${root.brief.length > 120 ? "…" : ""}”` : ". It has none yet."}</span>`));
@@ -382,13 +381,13 @@ function briefSec(env) {
   return L;
 }
 function decisionsSec(env) {
-  const root = rootOf(env.id) || env;
+  const root = rootOf(env.id) || env; // the brief and decisions belong to the prototype
   const ds = (root.decisions || []).slice().reverse();
   if (!ds.length) return null;
   const L = sec("Decisions", `<span class="tct">${ds.length}</span>`);
   L.append(h(`<span class="lineage">Every merge, with why. Agents read the recent ones.</span>`));
   for (const d of ds.slice(0, 20)) {
-    const r = h(`<div class="dcrow"><span class="tx"><b>${esc(d.branchName)}</b>${d.note ? `<span class="nt">${esc(d.note)}</span>` : ""}<span>${esc(d.author || "You")} · ${esc(timeAgo(d.at))} · ${plural(d.applied || 0, "change")}</span></span></div>`);
+    const r = h(`<div class="vrow"><span class="tx"><b>${esc(d.branchName)}</b>${d.note ? `<span class="nt">${esc(d.note)}</span>` : ""}<span>${esc(d.author || "You")} · ${esc(timeAgo(d.at))} · ${plural(d.applied || 0, "change")}</span></span></div>`);
     if (d.changes?.length) r.title = d.changes.join("\n");
     L.append(r);
   }

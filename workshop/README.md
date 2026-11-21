@@ -157,7 +157,8 @@ prototype, in files that are committed and shared:
     or not kept. Run history lives in `.workshop/`, so each computer counts its own runs.
   - **Run when notes are added.** This switch (off by default, because each run uses your agent)
     queues the recipe on a branch 15 seconds after you stop adding notes, highlights, arrows or
-    drawings there. A recipe already waiting on that branch isn't queued twice.
+    drawings there. A recipe already waiting on that branch isn't queued twice, and merging or
+    archiving a branch calls off the runs still waiting on it.
 
 ## Connect a coding agent
 

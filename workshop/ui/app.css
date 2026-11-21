@@ -823,10 +823,5 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .rcbar .d{background:var(--text-disabled)}
 .rcst{font-size:12px;line-height:16px;color:var(--text-secondary)}
 .rca{display:flex;gap:8px;flex-wrap:wrap}
-.dcrow{display:flex;gap:8px;padding:6px 8px;margin:0 -8px;border-radius:8px;transition:background-color 120ms ease}
-.dcrow:hover{background:var(--menu-hover)}
-.dcrow .tx{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:12px;line-height:16px}
-.dcrow .tx b{font-weight:500;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dcrow .tx .nt{color:var(--text-primary)}
-.dcrow .tx span:last-child{color:var(--text-secondary)}
+.vrow .tx .nt{color:var(--text-primary);white-space:normal}
 .rvwhy{padding:0 24px 12px}

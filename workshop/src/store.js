@@ -128,6 +128,8 @@ async function listFilesRec(dir, base = dir, out = []) {
 
 // ---------- the store ----------
 
+const emptyStats = () => ({ runs: 0, merged: 0, open: 0, failed: 0, discarded: 0, byVersion: {} });
+
 // Ready-made recipes a new workspace starts with: the atelier's standing instructions.
 const STARTER_RECIPES = [
   {
@@ -164,6 +166,15 @@ const STARTER_RECIPES = [
     ].join("\n"),
   },
 ];
+
+// instructions for an agent: a request typed on the canvas, or a recipe's text
+function cleanPrompt(text, emptyMsg) {
+  const t = String(text || "").trim();
+  if (!t) throw new StoreError("empty", emptyMsg);
+  // Guard: a prompt is pasted into an agent's context; a huge one would crowd out the work
+  if (t.length > LIMITS.promptChars) throw new StoreError("too_big", "That's too long for an agent to read");
+  return t;
+}
 
 export class Store {
   constructor(root) {
@@ -511,6 +522,7 @@ export class Store {
       if (next.screens.length || !env.catalog?.screens?.length) env.catalog = next;
     }
     await this.writeMeta(id, env);
+    if (p.archived) await this.cancelWaiting(id, "The branch was archived");
     return this.getEnv(id);
   }
 
@@ -627,10 +639,10 @@ export class Store {
     const before = await this.saveVersion(d.parent, { label: `Before merging ${env.name}`, author, kind: "auto" });
     const meta = await this.getEnv(d.parent);
     const styles = new Map();
-    let applied = 0;
+    const kept = [];
     for (const c of d.changes) {
       if (c.conflict && take[c.key] === "main") continue;
-      applied++;
+      kept.push(c.label);
       if (c.kind === "setting") applySetting(meta, c.key, c.branch);
       if (c.kind === "style") {
         const [sel, prop] = c.key.split("|");
@@ -640,7 +652,7 @@ export class Store {
       if (c.kind === "file") await writeAtomic(path.join(this.envDir(d.parent), ...c.key.split("/")), await this.readFile(id, c.key));
     }
     // what was decided, kept with the prototype so people and agents can read the reasoning later
-    const kept = d.changes.filter((c) => !(c.conflict && take[c.key] === "main")).map((c) => c.label);
+    const applied = kept.length;
     meta.decisions = [...(meta.decisions || []), { at: now(), branch: id, branchName: env.name, author, note: String(note || "").slice(0, 2000), changes: kept.slice(0, 40), applied }].slice(-LIMITS.decisions);
     await this.writeMeta(d.parent, meta);
     for (const [sel, props] of styles) await this.setStyle(d.parent, sel, props);
@@ -648,6 +660,7 @@ export class Store {
     const fresh = await this.getEnv(id);
     Object.assign(fresh, { archived: true, mergedAt: now(), mergedInto: d.parent });
     await this.writeMeta(id, fresh);
+    await this.cancelWaiting(id, "The branch was merged");
     return { parent: await this.getEnv(d.parent), before, after, applied };
   }
 
@@ -852,26 +865,30 @@ export class Store {
 
   // ----- records shared with harnesses: comments, tasks, shares, selection, heartbeats -----
 
-  async records(kind) {
-    const dir = path.join(this.metaDir, kind);
-    const out = [];
-    for (const f of await fsp.readdir(dir).catch(() => [])) {
-      if (!f.endsWith(".json")) continue;
-      const r = await readJson(path.join(dir, f), null);
-      if (r) out.push(r);
-    }
+  // one JSON file per record in a folder: local records live in .workshop/<kind>, recipes in recipes/
+  async readAll(dir) {
+    const files = (await fsp.readdir(dir).catch(() => [])).filter((f) => f.endsWith(".json"));
+    const out = (await Promise.all(files.map((f) => readJson(path.join(dir, f), null)))).filter(Boolean);
     return out.sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
   }
-
-  async record(kind, id) {
-    const r = await readJson(path.join(this.metaDir, kind, `${assertRecord(id)}.json`), null);
-    if (!r) throw new StoreError("not_found", `No ${kind.replace(/s$/, "")} ${id}`, 404);
+  async readOne(dir, id, what) {
+    const r = await readJson(path.join(dir, `${assertRecord(id)}.json`), null);
+    if (!r) throw new StoreError("not_found", `No ${what} ${id}`, 404);
+    return r;
+  }
+  async writeOne(dir, r) {
+    await writeJson(path.join(dir, `${assertRecord(r.id)}.json`), r);
     return r;
   }
 
-  async putRecord(kind, r) {
-    await writeJson(path.join(this.metaDir, kind, `${assertRecord(r.id)}.json`), r);
-    return r;
+  records(kind) {
+    return this.readAll(path.join(this.metaDir, kind));
+  }
+  record(kind, id) {
+    return this.readOne(path.join(this.metaDir, kind), id, kind.replace(/s$/, ""));
+  }
+  putRecord(kind, r) {
+    return this.writeOne(path.join(this.metaDir, kind), r);
   }
 
   async addComment({ env, board = null, x, y, selector = null, text, author = "You", parent = null }) {
@@ -903,12 +920,16 @@ export class Store {
 
   async addTask({ env, prompt, selection = null, author = "You", runner = "harness", recipe = null }) {
     await this.getEnv(env);
-    const p = String(prompt || "").trim();
-    if (!p) throw new StoreError("empty", "Say what the agent should change");
-    if (p.length > LIMITS.promptChars) throw new StoreError("too_big", "That request is too long");
+    const p = cleanPrompt(prompt, "Say what the agent should change");
     const sel = selection && typeof selection === "object" ? { selector: String(selection.selector || "").slice(0, LIMITS.selectorChars), label: String(selection.label || "").slice(0, 120), html: String(selection.html || "").slice(0, 4000), text: String(selection.text || "").slice(0, 600), styles: selection.styles && typeof selection.styles === "object" ? selection.styles : null } : null;
     const rec = recipe && typeof recipe === "object" && typeof recipe.id === "string" ? { id: assertRecord(recipe.id), n: Number.isInteger(recipe.n) ? recipe.n : null, name: String(recipe.name || "").slice(0, 120) } : null;
     return this.putRecord("tasks", { id: newId("t"), env, prompt: p, selection: sel, recipe: rec, author: String(author).slice(0, 80), runner, status: "queued", log: [], reply: null, claimedBy: null, beforeVersion: null, changed: [], createdAt: now(), updatedAt: now() });
+  }
+
+  // A branch that's merged or archived is finished: requests still waiting on it would only run an
+  // agent on a page nobody looks at. (One already working is left to finish or be stopped.)
+  async cancelWaiting(env, why) {
+    for (const t of await this.records("tasks")) if (t.env === env && t.status === "queued") await this.updateTask(t.id, { status: "cancelled", log: why, logKind: "note" });
   }
 
   async updateTask(id, patch) {
@@ -934,28 +955,14 @@ export class Store {
   // are counted and its instructions are versioned: testing, production, retired).
 
   async listRecipes() {
-    const out = [];
-    for (const f of await fsp.readdir(this.recipesDir).catch(() => [])) {
-      if (!f.endsWith(".json")) continue;
-      const r = await readJson(path.join(this.recipesDir, f), null);
-      if (r?.id) out.push(r);
-    }
-    return out.sort((a, b) => (a.order ?? 1e9) - (b.order ?? 1e9) || String(a.createdAt).localeCompare(String(b.createdAt)));
+    const all = (await this.readAll(this.recipesDir)).filter((r) => r.id && Array.isArray(r.versions));
+    return all.sort((a, b) => (a.order ?? 1e9) - (b.order ?? 1e9)); // stable: ties keep creation order
   }
-  async getRecipe(id) {
-    const r = await readJson(path.join(this.recipesDir, `${assertRecord(id)}.json`), null);
-    if (!r) throw new StoreError("not_found", "That recipe doesn't exist", 404);
-    return r;
+  getRecipe(id) {
+    return this.readOne(this.recipesDir, id, "recipe");
   }
-  async putRecipe(r) {
-    await writeJson(path.join(this.recipesDir, `${assertRecord(r.id)}.json`), r);
-    return r;
-  }
-  cleanRecipeText(prompt) {
-    const t = String(prompt || "").trim();
-    if (!t) throw new StoreError("empty", "Write the recipe's instructions");
-    if (t.length > LIMITS.promptChars) throw new StoreError("too_big", "Those instructions are too long");
-    return t;
+  putRecipe(r) {
+    return this.writeOne(this.recipesDir, r);
   }
   async addRecipe({ name, description = "", prompt, trigger = "manual" }, author = "You") {
     // Guard: recipes are shared instructions, not a dumping ground; a hundred is plenty for a team.
@@ -963,7 +970,7 @@ export class Store {
     if (existing.length >= LIMITS.recipes) throw new StoreError("too_many", "This workspace has as many recipes as it can hold");
     const nm = String(name || "").trim().slice(0, 80);
     if (!nm) throw new StoreError("empty", "Give the recipe a name");
-    return this.putRecipe({ id: newId("r"), name: nm, description: String(description).slice(0, 400), trigger: trigger === "on-notes" ? "on-notes" : "manual", order: Math.max(-1, ...existing.map((r) => r.order ?? -1)) + 1, versions: [{ n: 1, prompt: this.cleanRecipeText(prompt), status: "production", at: now(), author, note: "First version" }], createdAt: now(), author });
+    return this.putRecipe({ id: newId("r"), name: nm, description: String(description).slice(0, 400), trigger: trigger === "on-notes" ? "on-notes" : "manual", order: Math.max(-1, ...existing.map((r) => r.order ?? -1)) + 1, versions: [{ n: 1, prompt: cleanPrompt(prompt, "Write the recipe's instructions"), status: "production", at: now(), author, note: "First version" }], createdAt: now(), author });
   }
   async updateRecipe(id, patch = {}) {
     const r = await this.getRecipe(id);
@@ -977,7 +984,7 @@ export class Store {
   async addRecipeVersion(id, { prompt, note = "", author = "You" }) {
     const r = await this.getRecipe(id);
     const n = Math.max(0, ...r.versions.map((v) => v.n)) + 1;
-    r.versions = [...r.versions, { n, prompt: this.cleanRecipeText(prompt), status: "testing", at: now(), author, note: String(note).slice(0, 200) }].slice(-50);
+    r.versions = [...r.versions, { n, prompt: cleanPrompt(prompt, "Write the recipe's instructions"), status: "testing", at: now(), author, note: String(note).slice(0, 200) }].slice(-50);
     r.updatedAt = now();
     return this.putRecipe(r);
   }
@@ -1009,14 +1016,19 @@ export class Store {
     return { task, env: target, already: false };
   }
   // how a recipe is doing: runs, and what became of their branches
-  async recipeStats() {
+  // recipes: the recipes to report on (every one gets an entry, with zeros when it never ran)
+  async recipeStats(recipes = null) {
     const tasks = (await this.records("tasks")).filter((t) => t.recipe?.id);
-    const envs = new Map((await this.listEnvs()).map((e) => [e.id, e]));
+    const ids = [...new Set(tasks.map((t) => t.env))];
+    const metas = await Promise.all(ids.map((id) => this.meta(id)));
+    const envs = new Map(ids.map((id, i) => [id, metas[i]]));
     const out = {};
+    for (const r of recipes || []) out[r.id] = emptyStats();
     for (const t of tasks) {
-      const s = (out[t.recipe.id] ||= { runs: 0, merged: 0, open: 0, failed: 0, discarded: 0, byVersion: {} });
+      const s = (out[t.recipe.id] ||= emptyStats());
       const e = envs.get(t.env);
-      const outcome = t.status === "failed" || t.status === "cancelled" ? "failed" : e?.mergedAt ? "merged" : !e || e.archived ? "discarded" : "open";
+      // the branch decides: merged, thrown away, or still open; a run that never finished on a live branch failed
+      const outcome = e?.mergedAt ? "merged" : !e || e.archived ? "discarded" : t.status === "failed" || t.status === "cancelled" ? "failed" : "open";
       s.runs++;
       s[outcome]++;
       const bv = (s.byVersion[t.recipe.n] ||= { runs: 0, merged: 0 });
@@ -1027,21 +1039,38 @@ export class Store {
   }
   // what an agent reads before working on a page: the prototype's brief, its recent decisions, and
   // the recipe's instructions when the task came from one
+  // Never throws: missing context means a plainer brief, not a failed task.
   async contextFor(envId, task = null) {
-    let e = await this.getEnv(envId);
-    let brief = e.brief || "";
-    for (let i = 0; e.parent && i < 8; i++) {
-      e = await this.getEnv(e.parent).catch(() => null);
-      if (!e) break;
-      if (!brief && e.brief) brief = e.brief;
+    try {
+      const chain = await this.ancestors(envId);
+      const brief = chain.find((e) => e.brief)?.brief || "";
+      const decisions = (chain[chain.length - 1]?.decisions || []).slice(-10);
+      let recipe = null;
+      const r = task?.recipe?.id ? await this.getRecipe(task.recipe.id).catch(() => null) : null;
+      if (r) {
+        const v = this.recipeVersion(r, task.recipe.n);
+        recipe = { name: r.name, n: v.n, prompt: v.prompt };
+      }
+      return { brief, decisions, recipe };
+    } catch {
+      return { brief: "", decisions: [], recipe: null };
     }
-    const decisions = (e?.decisions || []).slice(-10);
-    let recipe = null;
-    if (task?.recipe?.id) {
-      const r = await this.getRecipe(task.recipe.id).catch(() => null);
-      if (r) recipe = { name: r.name, n: this.recipeVersion(r, task.recipe.n).n, prompt: this.recipeVersion(r, task.recipe.n).prompt };
+  }
+  // an environment's saved settings only (env.json), without the file checks getEnv makes
+  async meta(id) {
+    return readJson(path.join(this.envDir(id), "env.json"), null);
+  }
+  // this environment, its parent, and so on up to its prototype
+  async ancestors(id) {
+    const chain = [];
+    // Guard: a hand-edited env.json could point parents in a circle
+    for (let cur = id; cur && chain.length < 16 && !chain.some((e) => e.id === cur); ) {
+      const m = await this.meta(cur);
+      if (!m) break;
+      chain.push({ ...m, id: cur });
+      cur = m.parent;
     }
-    return { brief, decisions, recipe };
+    return chain;
   }
 
   async addShare({ env, role = "view", author = "You" }) {
