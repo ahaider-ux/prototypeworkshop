@@ -1198,15 +1198,16 @@ async function boot() {
     }
     loadTasks();
   });
+  // the first time this browser opens Atelier (or with ?intro): the intro plays while the workspace loads
+  playIntro({ force: new URLSearchParams(location.search).has("intro") });
   try {
     await loadWorkspace();
   } catch (e) {
+    document.documentElement.removeAttribute("data-intro"); // index.html hid the app for the intro; show the error instead
     $("frame").append(h(`<div class="winov open"><div class="md" style="width:480px"><div class="md-h"><div class="tt"><h2>The Workshop server isn't answering</h2><p>${esc(e.message)}. Start it with <span class="mono" style="font-size:12px;font-weight:400">npm start</span> in the workshop folder, then reload.</p></div></div></div></div>`));
     return;
   }
   await Promise.all([loadComments(), loadTasks(), loadActivity()]); // loading the tasks loads the recipes too
-  // the first time this browser opens Atelier (or with ?intro): the intro, then the app
-  playIntro({ force: new URLSearchParams(location.search).has("intro") });
   // a fresh visit picks up where this browser left off
   if (!location.hash || location.hash === "#") {
     const last = store.get("ws-route", "");

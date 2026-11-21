@@ -27,12 +27,14 @@ npm start
 Open http://127.0.0.1:4600. The server only listens on this computer.
 
 The first time a browser opens Atelier, a six-second intro plays, made only of Atelier's own
-pieces: tool icons pop in around one tile, then the studio fills the screen (frames, a sticky note,
-a red ink circle, comments, branches, a recipe running, Review and merge, cursors for you and
-Claude). Everything cuts away, the tile flashes through the app's colours, the name types on, and
-the mark (a comment pin with an eye) drops onto the "i" as its dot and blinks. Flat colour, no
-gradients. Click or press Esc to go straight in; replay it from the Atelier menu (**Play the
-intro**) or by opening `/?intro`. With reduced motion, only the final lockup shows.
+pieces: tool icons cut through one tile, then the studio fills the screen (frames, a sticky note,
+comments, branches, a recipe running, Review and merge, cursors for you and Claude). Interface
+moves smooth; hand-drawn ink moves like stop-motion, eight frames a second, drawn on and then
+gently "boiling". Everything cuts away, the tile flashes through the app's colours, the name types
+on, the mark (a comment pin with an eye) drops onto the "i" with a squash, a hand underlines it,
+and the lockup flies into the header logo as the app appears. Flat colour, no gradients. Click or
+press Esc to go straight in; replay it from the Atelier menu (**Play the intro**) or by opening
+`/?intro`. With reduced motion, only the final lockup shows.
 
 ## Spaces: work in your own project folders
 
