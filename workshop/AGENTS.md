@@ -31,7 +31,10 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   12px text and 28px rows in panels and menus, sentence case, verb-first buttons, and a dark-mode
   pair for every token. Motion follows the animations.dev bar: nothing animates on keyboard or
   high-frequency actions, menus 180ms in and 120ms out from their trigger, press `scale(.97)`, no
-  hover scaling, and reduced motion keeps colour and opacity only.
+  hover scaling, and reduced motion keeps colour and opacity only. Chrome is glass after iOS 27
+  (`--glass-*` tokens: floating panels, capsule toolbar and banner, glass menus and dialogs); the
+  inspector's controls follow DialKit (number bars with the label and value inside, `numField` in
+  `ui/panels.js`). Both are design references only: no code or assets are copied from either.
 - **The canvas shell scales below 1180px** (`fitShell`). Anything measured with
   `getBoundingClientRect` and written into a style inside `#frame` is divided by `frScale()`
   (`inFrame()` in `ui/lib.js` does it for menus).

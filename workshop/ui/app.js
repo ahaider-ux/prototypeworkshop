@@ -810,6 +810,12 @@ function setTheme(t) {
   document.documentElement.setAttribute("data-ltheme", d);
   document.documentElement.setAttribute("data-ltheme-pref", t);
 }
+// how see-through the floating panels and bars are, like iOS 27's Liquid Glass setting
+const glassPref = () => store.get("ws-glass", "balanced");
+function setGlass(v) {
+  store.set("ws-glass", v);
+  document.documentElement.setAttribute("data-glass", v);
+}
 function wsMenu() {
   let pref = "light";
   try {
@@ -825,6 +831,9 @@ function wsMenu() {
     "-",
     { head: "Appearance" },
     ...["light", "dark", "system"].map((t) => ({ label: t[0].toUpperCase() + t.slice(1), checked: pref === t, onClick: () => setTheme(t) })),
+    "-",
+    { head: "Glass" },
+    ...[["clear", "Clear"], ["balanced", "Balanced"], ["frosted", "Frosted"]].map(([v, l]) => ({ label: l, checked: glassPref() === v, onClick: () => setGlass(v) })),
   ], { width: 280 });
 }
 function renameWorkspace() {
@@ -887,6 +896,7 @@ async function patchArchived(id, archived) {
 }
 
 async function boot() {
+  document.documentElement.setAttribute("data-glass", glassPref());
   initCanvas();
   initPanels();
   S.tabs = store.get("ws-tabs", []);

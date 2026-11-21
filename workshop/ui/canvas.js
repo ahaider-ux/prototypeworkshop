@@ -69,9 +69,13 @@ export const toScreen = (w) => ({ x: w.x * S.cam.z + S.cam.x, y: w.y * S.cam.z +
 // the part of the canvas the rulers, the page banner and the toolbar don't cover
 export function viewRect() {
   if ($("frame").classList.contains("present")) return { x0: 0, y0: 0, x1: cv.clientWidth, y1: cv.clientHeight };
+  // the panels float over the canvas: the view is the part between them
+  const st = getComputedStyle($("stage"));
+  const lw = parseFloat(st.getPropertyValue("--lw")) || 0,
+    rw = parseFloat(st.getPropertyValue("--rw")) || 0;
   const r = S.rulers === false ? 0 : RULER;
-  const banner = $("banner").childElementCount ? 80 : r;
-  return { x0: r, y0: banner, x1: cv.clientWidth, y1: cv.clientHeight - 72 };
+  const banner = $("banner").childElementCount ? 84 : r;
+  return { x0: lw + r, y0: banner, x1: cv.clientWidth - rw, y1: cv.clientHeight - 76 };
 }
 
 function boardAtPoint(p) {
@@ -813,7 +817,7 @@ function selWorldRect() {
 function drawRulers() {
   const sr = selWorldRect();
   const col = rulerColors();
-  const key = [S.cam.x.toFixed(1), S.cam.y.toFixed(1), S.cam.z.toFixed(5), cv.clientWidth, cv.clientHeight, col.theme, sr ? [sr.x0, sr.y0, sr.x1, sr.y1].map(Math.round).join(",") : ""].join("|");
+  const key = [S.cam.x.toFixed(1), S.cam.y.toFixed(1), S.cam.z.toFixed(5), cv.clientWidth, cv.clientHeight, rulerH.offsetLeft, col.theme, sr ? [sr.x0, sr.y0, sr.x1, sr.y1].map(Math.round).join(",") : ""].join("|");
   if (key === rKey) return;
   rKey = key;
   const z = S.cam.z;
@@ -832,7 +836,7 @@ function drawRulers() {
     if (!c) continue;
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.clearRect(0, 0, w, hh);
-    const off = (horiz ? S.cam.x : S.cam.y) - RULER; // each ruler starts RULER px into the canvas
+    const off = horiz ? S.cam.x - el.offsetLeft : S.cam.y - el.offsetTop; // where the ruler starts in the canvas
     const len = horiz ? w : hh;
     if (sr) {
       // the selection's extent, as in a design tool

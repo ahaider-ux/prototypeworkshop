@@ -219,6 +219,13 @@ npm test
 Atelier has its own quiet, neutral look (light and dark), so the prototype on the canvas is the
 only thing that looks like a product. The inspector's swatches show the prototype's own tokens.
 
+Its chrome follows iOS 27's Liquid Glass: the canvas runs underneath, and the panels, toolbar, page
+banner, menus and dialogs float above it as glass with capsule controls and concentric corners.
+Workspace menu → **Glass** sets how clear it is (clear, balanced, frosted); reduced-transparency
+settings make it solid. The inspector's controls follow DialKit: each number is a bar with its label
+and value inside — drag or click it to set (bars with a range fill to the value), click the number
+to type, arrow keys to step.
+
 
 The Libra logo, icons, design tokens and the Fourth Age prototype belong to Libra. They are not
 covered by this repository's open-source licence and are not for reuse outside this project.

@@ -727,20 +727,37 @@ const SHADOWS = [
 ];
 const LEADING = [1.2, 1.3, 1.45, 1.5];
 
-// A number field like a design tool's: type a value, step it with the arrow keys (Shift: ×10), or
-// drag the label to scrub. It previews as it changes and saves when you let go.
-function numField(label, value, { onLive, onCommit, onCancel, step = 1, min = -100000, max = 100000, suffix = "", title = label, k = label, icon = "" } = {}) {
+// A DialKit-style number bar: the label and the value sit inside it. With a range, the bar fills to
+// the value and a click or drag anywhere sets it; without one, dragging scrubs from where it was.
+// Type a value (click it, or focus and type), step with the arrow keys (Shift ×10), Esc cancels.
+// It previews while you drag or step, and saves when you let go.
+function numField(label, value, { onLive, onCommit, onCancel, step = 1, min = -100000, max = 100000, range = null, suffix = "", title = label, k = label, icon = "" } = {}) {
   const v0 = Number.isFinite(+value) ? Math.round(+value * 100) / 100 : 0;
-  const w = h(`<label class="nf" title="${esc(title)}"><span class="l" aria-hidden="true">${icon || esc(label)}</span><input type="text" inputmode="decimal" spellcheck="false" autocomplete="off" data-k="${esc(k)}" aria-label="${esc(title)}"><span class="u">${esc(suffix)}</span></label>`);
+  const w = h(`<label class="nf${range ? " slider" : ""}" title="${esc(title)}">${range ? '<span class="fill"></span><span class="knob"></span>' : ""}<span class="l" aria-hidden="true">${icon || esc(label)}</span><input type="text" inputmode="decimal" spellcheck="false" autocomplete="off" data-k="${esc(k)}" aria-label="${esc(title)}"${range ? ` role="slider" aria-valuemin="${range[0]}" aria-valuemax="${range[1]}"` : ""}><span class="u">${esc(suffix)}</span></label>`);
   const inp = w.querySelector("input");
-  inp.value = String(v0);
+  const fill = w.querySelector(".fill"),
+    knob = w.querySelector(".knob");
   let last = v0;
   let timer = 0;
-  const fix = (n) => clamp(Math.round(n / step) * step, min, max);
+  const fix = (n) => clamp(Math.round(n / step) * step, range ? range[0] : min, range ? range[1] : max);
+  const show = (n) => {
+    inp.value = String(n);
+    if (range) {
+      const pos = (v) => clamp((v - range[0]) / (range[1] - range[0] || 1), 0, 1) * 100;
+      const f = pos(n);
+      // a range across zero fills from zero, so 0° reads as empty, not half full
+      const z = range[0] < 0 && range[1] > 0 ? pos(0) : 0;
+      fill.style.left = `${Math.min(z, f)}%`;
+      fill.style.width = `${Math.abs(f - z)}%`;
+      knob.style.left = `${f}%`;
+      inp.setAttribute("aria-valuenow", String(n));
+    }
+  };
+  show(v0);
   const commit = (n) => {
     clearTimeout(timer);
     n = fix(n);
-    inp.value = String(n);
+    show(n);
     if (n === last) return;
     last = n;
     onCommit?.(n);
@@ -751,15 +768,16 @@ function numField(label, value, { onLive, onCommit, onCancel, step = 1, min = -1
       e.preventDefault();
       const n = parseFloat(inp.value);
       if (Number.isFinite(n)) commit(n);
-      else inp.value = String(last);
+      else show(last);
     } else if (e.key === "Escape") {
-      inp.value = String(last);
+      show(last);
       onCancel?.();
       inp.blur();
-    } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+    } else if (e.key === "ArrowUp" || e.key === "ArrowDown" || (range && (e.key === "ArrowLeft" || e.key === "ArrowRight") && inp.selectionStart === inp.value.length)) {
       e.preventDefault();
-      const n = fix((parseFloat(inp.value) || 0) + (e.key === "ArrowUp" ? 1 : -1) * step * (e.shiftKey ? 10 : 1));
-      inp.value = String(n);
+      const up = e.key === "ArrowUp" || e.key === "ArrowRight";
+      const n = fix((parseFloat(inp.value) || 0) + (up ? 1 : -1) * step * (e.shiftKey ? 10 : 1));
+      show(n);
       onLive?.(n);
       clearTimeout(timer);
       timer = setTimeout(() => commit(n), 450);
@@ -768,22 +786,37 @@ function numField(label, value, { onLive, onCommit, onCancel, step = 1, min = -1
   inp.addEventListener("change", () => {
     const n = parseFloat(inp.value);
     if (Number.isFinite(n)) commit(n);
-    else inp.value = String(last);
+    else show(last);
   });
   inp.addEventListener("focus", () => inp.select());
-  w.querySelector(".l").addEventListener("pointerdown", (e) => {
+  // drag on the bar (anywhere but the number itself, which is for typing)
+  w.addEventListener("pointerdown", (e) => {
+    if (e.target === inp || e.button !== 0) return;
     e.preventDefault();
+    const r = w.getBoundingClientRect();
     const x0 = e.clientX,
       base = parseFloat(inp.value) || 0;
-    let n = base;
+    let n = base,
+      moved = false;
+    const at = (cx) => (range ? fix(range[0] + clamp((cx - r.left) / r.width, 0, 1) * (range[1] - range[0])) : fix(base + Math.round((cx - x0) / 2) * step));
     const mv = (ev) => {
-      n = fix(base + Math.round((ev.clientX - x0) / 2) * step * (ev.shiftKey ? 10 : 1));
-      inp.value = String(n);
+      if (!moved && Math.abs(ev.clientX - x0) < 2 && !range) return;
+      moved = true;
+      w.classList.add("dragging");
+      n = at(ev.clientX);
+      show(n);
       onLive?.(n);
     };
-    const up = () => {
+    const up = (ev) => {
       removeEventListener("pointermove", mv);
       removeEventListener("pointerup", up);
+      w.classList.remove("dragging");
+      // a click on a slider jumps there; a click on a plain number starts typing
+      if (!moved) {
+        if (range) (n = at(ev.clientX)), commit(n);
+        else inp.focus();
+        return;
+      }
       if (n !== base) commit(n);
     };
     addEventListener("pointermove", mv);
@@ -865,7 +898,7 @@ function designEl(body, s) {
     ),
   );
   const rot = parseFloat(st.rotate) || 0;
-  P.append(g2(field("", rot, (n) => ({ rotate: n ? `${n}deg` : null }), "rotation", { exactOnly: true, suffix: "°", min: -360, max: 360, title: "Rotation", k: "rotation", icon: '<svg class="ic" viewBox="0 0 16 16"><path d="M3 12.5h10M3 12.5 10 4.5M7.5 12.5a4.5 4.5 0 0 0-1.4-3.3"/></svg>' }), h(`<span></span>`)));
+  P.append(g2(field("", rot, (n) => ({ rotate: n ? `${n}deg` : null }), "rotation", { exactOnly: true, suffix: "°", range: [-180, 180], title: "Rotation", k: "rotation", icon: '<svg class="ic" viewBox="0 0 16 16"><path d="M3 12.5h10M3 12.5 10 4.5M7.5 12.5a4.5 4.5 0 0 0-1.4-3.3"/></svg>' }), h(`<span></span>`)));
   if (tr.x || tr.y) {
     const rb = h(`<button type="button" class="ghbtn sm" style="align-self:flex-start">${IC.restore}Back to its place</button>`);
     rb.onclick = () => set({ translate: null }, "position", true);
@@ -1007,7 +1040,7 @@ function designEl(body, s) {
   const radDD = dropdown({ value: RADII.includes(rad) ? rad : "off", options: [...(RADII.includes(rad) ? [] : [{ label: `${rad} · off system`, value: "off" }]), ...RADII.map((n) => ({ label: `${n}`, value: n }))], full: true, label: "Corner radius", onChange: (n) => n !== "off" && set({ "border-radius": `${n}px` }, "radius") });
   const radWrap = h(`<div class="nfdd" title="Corner radius"><span class="l" aria-hidden="true"><svg class="ic" viewBox="0 0 16 16"><path d="M3.5 12.5V8a4.5 4.5 0 0 1 4.5-4.5h4.5"/></svg></span></div>`);
   radWrap.append(radDD);
-  A.append(g2(field("", op, (n) => ({ opacity: n >= 100 ? null : String(n / 100) }), "opacity", { min: 0, max: 100, title: "Opacity", k: "opacity", suffix: "%", icon: '<svg class="ic" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5"/><path d="M8 3a5 5 0 0 1 0 10Z" fill="currentColor"/></svg>' }), radWrap));
+  A.append(g2(field("", op, (n) => ({ opacity: n >= 100 ? null : String(n / 100) }), "opacity", { range: [0, 100], title: "Opacity", k: "opacity", suffix: "%", icon: '<svg class="ic" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5"/><path d="M8 3a5 5 0 0 1 0 10Z" fill="currentColor"/></svg>' }), radWrap));
   A.append(switchRow("Visible", st.visibility !== "hidden", (v) => set({ visibility: v ? null : "hidden" }, "visibility")));
   body.append(A);
 

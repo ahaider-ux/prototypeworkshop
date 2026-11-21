@@ -670,3 +670,113 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .tab{font-size:12px}
 /* labels inside fields sit on the field grey: secondary ink keeps them readable */
 .xy i,.nf .l,.nfdd .l{color:var(--text-secondary)}
+
+/* ═══ Glass — iOS 27-style chrome: content runs underneath, bars and panels float above it ═══
+   Clearer than frosted, with a darker rim for separation and a bright specular top edge.
+   Appearance → Glass sets how clear (data-glass on <html>). */
+:root{
+  --glass-a:.78;--glass-blur:saturate(1.8) blur(24px);
+  --glass-bg:rgba(255,255,255,var(--glass-a));
+  --glass-rim:0 0 0 .5px rgba(24,24,27,.14);
+  --glass-spec:inset 0 1px 0 rgba(255,255,255,.85),inset 0 0 0 .5px rgba(255,255,255,.5);
+  --glass-shadow:0 8px 28px rgba(24,24,27,.10),0 1px 3px rgba(24,24,27,.06);
+  --glass:var(--glass-rim),var(--glass-spec),var(--glass-shadow);
+  --r-panel:20px;--gutter:8px;
+}
+:root[data-ltheme="dark"]{
+  --glass-a:.72;--glass-bg:rgba(34,34,37,var(--glass-a));
+  --glass-rim:0 0 0 .5px rgba(0,0,0,.6);
+  --glass-spec:inset 0 1px 0 rgba(255,255,255,.12),inset 0 0 0 .5px rgba(255,255,255,.08);
+  --glass-shadow:0 10px 32px rgba(0,0,0,.45),0 1px 3px rgba(0,0,0,.3);
+}
+:root[data-glass="clear"]{--glass-a:.6}
+:root[data-glass="frosted"]{--glass-a:.92}
+:root[data-ltheme="dark"][data-glass="clear"]{--glass-a:.55}
+:root[data-ltheme="dark"][data-glass="frosted"]{--glass-a:.9}
+/* without backdrop blur, glass falls back to a solid surface so text stays readable */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){:root,:root[data-ltheme="dark"]{--glass-a:1}}
+@media (prefers-reduced-transparency:reduce){:root,:root[data-ltheme="dark"]{--glass-a:1}}
+
+.glass,.rail,.lp,.rp,.tb,.banner,.cnmenu,.toast,.pal,.prsbar,.pop{background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass);border:0}
+
+/* floating layout: the canvas fills the work area; rail + left panel and the right panel are
+   inset glass sheets above it, with concentric corners */
+.work{position:relative}
+/* plain px: the canvas reads these to know the part of it the panels leave in view
+   (gutter 8 + rail 56 + panel 256 + gutter 8 on the left; gutter + panel + gutter on the right) */
+.stage{position:absolute;inset:0;--lw:328px;--rw:272px}
+.app.ui-off .stage{--lw:72px;--rw:0px}
+@media(max-width:1180px){.stage{--lw:312px;--rw:256px}.app.ui-off .stage{--lw:72px;--rw:0px}}
+.rail{position:absolute;z-index:15;left:var(--gutter);top:var(--gutter);bottom:var(--gutter);border-radius:var(--r-panel) 0 0 var(--r-panel);border-right:0;padding:8px 0}
+.lp{position:absolute;z-index:15;left:calc(var(--gutter) + 56px);top:var(--gutter);bottom:var(--gutter);border-radius:0 var(--r-panel) var(--r-panel) 0;border-right:0;clip-path:inset(-40px -40px -40px 0)}
+.app.ui-off .rail{border-radius:var(--r-panel)}
+.rp{position:absolute;z-index:15;right:var(--gutter);top:var(--gutter);bottom:var(--gutter);border-radius:var(--r-panel);border-left:0;overflow:hidden}
+.lp .lhd,.rp .rtabs{border-bottom-color:color-mix(in srgb,var(--border-subtle) 70%,transparent)}
+.ruler.rh{left:calc(var(--lw) + 20px);width:calc(100% - var(--lw) - var(--rw) - 20px)}
+.ruler.rv{left:var(--lw)}
+.rcorner{left:var(--lw)}
+.ruler,.rcorner{background:color-mix(in srgb,var(--bg-layer) 86%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.banner{left:calc(var(--lw) + (100% - var(--lw) - var(--rw)) / 2);border-radius:99px;height:44px;padding:0 4px 0 16px;top:32px}
+.tb{left:calc(var(--lw) + (100% - var(--lw) - var(--rw)) / 2);border-radius:99px;padding:6px;bottom:20px}
+.toasts{right:calc(var(--rw) + 8px);top:16px}
+.top{background:color-mix(in srgb,var(--bg-shell) 92%,transparent);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur)}
+
+/* capsules: the toolbar, the banner's actions, tabs */
+.tb .ib32,.tb .tbtx{border-radius:99px}
+.tb .ib32{width:36px;height:36px}
+.tb .tbtx{height:36px;padding:0 14px 0 10px}
+.banner .dbtn.sm,.banner .createbtn.sm,.banner .ghbtn.sm{height:32px;border-radius:99px;padding:0 12px}
+.ttabs button,.tab{border-radius:99px}
+.tab{padding:0 6px 0 14px}
+.tab.home{padding:0 14px 0 10px}
+.tab.on{background:var(--glass-bg);box-shadow:var(--glass-rim),var(--glass-spec)}
+.rail>button[data-t] i{border-radius:12px}
+.zm{border-radius:99px}
+
+/* menus, toasts, dialogs: glass sheets with concentric corners */
+.cnmenu{border-radius:16px;padding:6px}
+.cnmenu button{border-radius:10px}
+.toast{border-radius:18px}
+.md{border-radius:24px;box-shadow:var(--glass-rim),var(--sh-modal)}
+.pal{border-radius:20px;padding:6px}
+.pal .rs button{border-radius:12px}
+[data-tip]::after{border-radius:99px;padding:5px 10px}
+
+/* ═══ Inspector — DialKit-style tuning controls ═══
+   One surface model: a faint tint at rest, a stronger one on hover and while dragging.
+   Rows are 32px, labels 13px/500 secondary, values mono, the label and value live inside the bar. */
+.rp{--dk-surface:color-mix(in srgb,var(--text-primary) 5%,transparent);--dk-hover:color-mix(in srgb,var(--text-primary) 9%,transparent);--dk-fill:color-mix(in srgb,var(--text-primary) 10%,transparent);--dk-fill-on:color-mix(in srgb,var(--text-primary) 15%,transparent)}
+.rp .isec{gap:6px;padding:12px 14px}
+.rp .isec .ih b{font-size:13px;font-weight:600;letter-spacing:-.01em}
+.rp .irow{min-height:32px}
+.rp .irow>.k{font-size:13px;font-weight:500}
+.nf{position:relative;height:32px;border-radius:8px;background:var(--dk-surface,var(--bg-input));box-shadow:none;overflow:hidden;cursor:ew-resize;padding:0 10px 0 0;transition:background-color 150ms ease}
+.nf:hover{background:var(--dk-hover,var(--bg-hover))}
+.nf:focus-within{box-shadow:0 0 0 2px var(--ring-default)}
+.nf .fill{position:absolute;left:0;top:0;bottom:0;background:var(--dk-fill);pointer-events:none;transition:background-color 150ms ease}
+.nf.dragging .fill,.nf:focus-within .fill{background:var(--dk-fill-on)}
+.nf .knob{position:absolute;top:50%;width:3px;height:16px;margin:-8px 0 0 -1.5px;border-radius:99px;background:var(--text-primary);opacity:0;pointer-events:none;transition:opacity 150ms ease}
+.nf.slider:hover .knob,.nf.dragging .knob{opacity:.9}
+.nf .l{position:relative;width:auto;min-width:28px;padding:0 4px 0 10px;justify-content:flex-start;font:500 13px/1 var(--fakt);cursor:inherit}
+.nf input{position:relative;text-align:right;font:500 13px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--text-primary);cursor:text;min-width:3ch}
+.nf .u{position:relative;font:500 13px/1 var(--mono)}
+.rp .ddtrig{height:32px;border-radius:8px;background:var(--dk-surface);box-shadow:none;border:0;font-size:13px;font-weight:500}
+.rp .ddtrig:hover,.rp .ddtrig[aria-expanded="true"]{background:var(--dk-hover)}
+.rp .segds{height:32px;padding:2px;background:var(--dk-surface);box-shadow:none;border:0}
+.rp .segds button{height:28px;font-size:13px;border-radius:6px}
+.rp .segds button.on{background:var(--dk-fill-on);box-shadow:none;color:var(--text-primary)}
+.rp .sw,.lp .sw{width:36px;height:20px;padding:2px;background:var(--dk-fill,var(--switch-off));box-shadow:none}
+.rp .sw[aria-checked="true"]{background:var(--switch-on)}
+.rp .setrow{min-height:32px;padding:0 4px 0 10px;border-radius:8px;background:var(--dk-surface)}
+.rp .setrow .tx span{font-size:13px!important;font-weight:500}
+.rp .xy{height:32px;border-radius:8px;background:var(--dk-surface);font:500 13px/1 var(--mono)}
+.rp .algrid{background:var(--dk-surface);box-shadow:none}
+.rp .albar{background:var(--dk-surface);box-shadow:none}
+.rp .swc{width:22px;height:22px;border-radius:6px}
+.rp .sws{gap:6px}
+.rp .whr{grid-template-columns:minmax(0,1fr) 92px}
+.rp .dbtn.sm,.rp .createbtn.sm{height:32px;border-radius:8px}
+.rp .dbtn{background:var(--dk-surface);box-shadow:none;border:0}
+.rp .dbtn:hover{background:var(--dk-hover)}
+/* panels hold dense text: firmer glass than the bars and menus, so what's behind never greys it out */
+.rail,.lp,.rp{background:color-mix(in srgb,var(--bg-layer) calc(var(--glass-a) * 100% + 14%),transparent)}
