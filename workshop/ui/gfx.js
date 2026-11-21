@@ -395,24 +395,32 @@ export function draw(boards, cam, colors) {
     else {
       ctx.fillStyle = colors.page;
       ctx.fillRect(x, y, w, h);
-      waiting++;
-      if (!STILL && w > 24) {
-        // a soft band sweeping across, every 1.6 s, like the shimmer on loading text
-        const t = (performance.now() % 1600) / 1600;
-        const bx = x - w * 0.5 + t * w * 2;
-        const g = ctx.createLinearGradient(bx - w * 0.25, 0, bx + w * 0.25, 0);
-        g.addColorStop(0, "rgba(255,255,255,0)");
-        g.addColorStop(0.5, colors.shine);
-        g.addColorStop(1, "rgba(255,255,255,0)");
-        ctx.fillStyle = g;
-        ctx.fillRect(x, y, w, h);
-      }
       if (w > 120) {
-        ctx.fillStyle = colors.text;
+        // only the screen's name shimmers, like loading text elsewhere: the frame itself stays still
+        const label = colors.label(it);
+        const cx = x + w / 2,
+          cy = y + h / 2;
         ctx.font = `400 ${Math.max(10, Math.min(24, w / 24))}px ${colors.font}`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(colors.label(it), x + w / 2, y + h / 2);
+        ctx.fillStyle = colors.text;
+        if (STILL) ctx.fillText(label, cx, cy);
+        else {
+          waiting++;
+          const tw = ctx.measureText(label).width;
+          ctx.globalAlpha = 0.42;
+          ctx.fillText(label, cx, cy);
+          ctx.globalAlpha = 1;
+          // a band sweeping across the words every 1.6 s
+          const t = (performance.now() % 1600) / 1600;
+          const bx = cx - tw / 2 - tw * 0.4 + t * tw * 1.8;
+          const g = ctx.createLinearGradient(bx - tw * 0.2, 0, bx + tw * 0.2, 0);
+          g.addColorStop(0, "transparent");
+          g.addColorStop(0.5, colors.text);
+          g.addColorStop(1, "transparent");
+          ctx.fillStyle = g;
+          ctx.fillText(label, cx, cy);
+        }
       }
     }
   }
