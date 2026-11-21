@@ -1,7 +1,7 @@
 // Atelier — boot, Home and tabs, pages, live updates, branches, review and merge, dialogs.
 
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural, pageName, folderLabel } from "./state.js";
-import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented } from "./lib.js";
+import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented, skeleton, loadingToast, pendingButton } from "./lib.js";
 import { initCanvas, sync, fit, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
 import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff } from "./panels.js";
 import { rulesFor, loadOverrides } from "./styles.js";
@@ -262,6 +262,7 @@ function renderHome() {
     c.onkeydown = (ev) => ev.key === "Enter" && c.click();
     // a live thumbnail of its first screen
     const th = c.querySelector(".th");
+    th.classList.add("skel"); // until its first screen has drawn
     const fr = document.createElement("iframe");
     fr.title = `${e.name} preview`;
     fr.loading = "lazy";
@@ -276,7 +277,7 @@ function renderHome() {
     fr.style.height = ht + "px";
     const scale = () => (fr.style.transform = `scale(${th.clientWidth / w})`);
     new ResizeObserver(scale).observe(th);
-    fr.onload = () => (th.querySelector(".ph")?.remove(), scale());
+    fr.onload = () => (th.querySelector(".ph")?.remove(), th.classList.remove("skel"), scale());
     th.append(fr);
     cards.append(c);
   }
@@ -314,6 +315,7 @@ function createBranch(id) {
   const ok = async () => {
     if (busy) return;
     busy = true;
+    const undoBusy = pendingButton(md.querySelector('[data-a="ok"]'), "Creating branch…");
     try {
       const env = await api(`envs/${id}/branch`, { method: "POST", body: { name: $("brIn").value.trim() || undefined } });
       copyStorage(id, env.id);
@@ -323,6 +325,7 @@ function createBranch(id) {
       toast(`Created ${env.name}`, `A branch of ${pageName(src)}. It reads ${pageName(src)}'s files until it changes them`);
     } catch (e) {
       busy = false;
+      undoBusy();
       toast("Couldn't create the branch", e.message);
     }
   };
@@ -375,6 +378,7 @@ async function openReview(id) {
   md.querySelector('[data-a="ok"]').onclick = async () => {
     if (busy) return;
     busy = true;
+    const undoBusy = pendingButton(md.querySelector('[data-a="ok"]'), "Merging…");
     try {
       const r = await api(`envs/${id}/merge`, { method: "POST", body: { take, note: $("rvWhy")?.value.trim() || "" } });
       closeModal();
@@ -390,6 +394,7 @@ async function openReview(id) {
       });
     } catch (e) {
       busy = false;
+      undoBusy();
       toast("Couldn't merge", e.message);
     }
   };
@@ -496,6 +501,7 @@ function saveVersion(id) {
   const ok = async () => {
     if (busy) return;
     busy = true;
+    const undoBusy = pendingButton(md.querySelector('[data-a="ok"]'), "Saving…");
     try {
       const v = await api(`envs/${id}/versions`, { method: "POST", body: { label: $("svIn").value.trim() } });
       closeModal();
@@ -503,6 +509,7 @@ function saveVersion(id) {
       toast(`Saved V${v.n}`, v.label);
     } catch (e) {
       busy = false;
+      undoBusy();
       toast("Couldn't save the version", e.message);
     }
   };
@@ -570,7 +577,8 @@ document.addEventListener("keydown", (e) => presenting && e.key === "Escape" && 
 async function openShare(id) {
   const env = S.envs.get(id);
   if (!env) return toast("Open a prototype to share it");
-  const md = modal(`<div class="md-h"><div class="tt"><h2>Share ${esc(isBranch(env) ? env.name : rootOf(env.id)?.name || env.name)}</h2><p>People open it as the running app. Links can't change it.</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div><div class="md-b" id="shB"><div class="pempty" style="padding:0">Loading links</div></div><div class="md-f"><button type="button" class="createbtn" data-a="done">Done</button></div>`);
+  const md = modal(`<div class="md-h"><div class="tt"><h2>Share ${esc(isBranch(env) ? env.name : rootOf(env.id)?.name || env.name)}</h2><p>People open it as the running app. Links can't change it.</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div><div class="md-b" id="shB"></div><div class="md-f"><button type="button" class="createbtn" data-a="done">Done</button></div>`);
+  $("shB").append(skeleton("Loading links", 2));
   md.querySelector('[data-a="x"]').onclick = closeModal;
   md.querySelector('[data-a="done"]').onclick = closeModal;
   let role = "view";
@@ -726,6 +734,7 @@ function openImport() {
     const html = $("imHtml").value;
     if (!file && !html.trim()) return toast("Choose a file or paste some HTML first");
     busy = true;
+    const undoBusy = pendingButton(md.querySelector('[data-a="ok"]'), "Importing…");
     try {
       const env = file ? await importFile(file, name) : await api("envs", { method: "POST", body: { html, name, source: { kind: "paste" } } });
       if (!file) toast(`Added ${env.name}`, `Saved to envs/${env.id}/index.html`);
@@ -734,6 +743,7 @@ function openImport() {
       go(env.id);
     } catch (e) {
       busy = false;
+      undoBusy();
       toast("Couldn't import", e.message);
     }
   };
@@ -864,15 +874,16 @@ async function loadSpaces() {
 }
 async function switchSpace(p) {
   try {
-    toast("Opening the space…");
+    loadingToast("Opening the space…"); // the page reloads into the new space when it's open
     await api("spaces/switch", { method: "POST", body: { path: p } });
   } catch (e) {
     toast("Couldn't open that space", e.message);
   }
 }
 async function findPrototypes() {
+  const done = loadingToast("Looking for prototypes…");
   try {
-    const r = await api("spaces/find", { method: "POST" });
+    const r = await api("spaces/find", { method: "POST" }).finally(done);
     await loadWorkspace();
     toast(r.added.length ? `Found ${plural(r.added.length, "prototype")}` : "No new prototypes", r.added.length ? r.added.map((x) => x.name).slice(0, 4).join(", ") : r.skipped[0] ? `${r.skipped[0].path}: ${r.skipped[0].why}` : "A prototype is a folder with an index.html, or a .html page");
   } catch (e) {
@@ -913,6 +924,8 @@ async function openSpaces(start = null) {
   let cur = null;
   const browse = async (p) => {
     let d;
+    hint.innerHTML = `<span class="shimmer">Reading the folder…</span>`;
+    if (!cur) list.replaceChildren(skeleton("", 6));
     try {
       d = await api(`folders${p ? `?path=${encodeURIComponent(p)}` : ""}`);
     } catch (e) {
@@ -950,12 +963,14 @@ async function openSpaces(start = null) {
     const p = inp.value.trim() || cur?.path;
     if (!p) return;
     busy = true;
+    const undoBusy = pendingButton(md.querySelector('[data-a="ok"]'), "Connecting…");
     try {
       const r = await api("spaces", { method: "POST", body: { path: p } });
       closeModal();
       toast(`Connected ${p.split(/[\/]/).pop()}`, r.added.length ? `Found ${plural(r.added.length, "prototype")}: ${r.added.map((x) => x.name).slice(0, 3).join(", ")}${r.added.length > 3 ? "…" : ""}` : r.skipped[0] ? `${r.skipped[0].path}: ${r.skipped[0].why}` : "No prototypes found yet. Import one, or add an index.html and look again.");
     } catch (e) {
       busy = false;
+      undoBusy();
       toast("Couldn't connect that folder", e.message);
     }
   };

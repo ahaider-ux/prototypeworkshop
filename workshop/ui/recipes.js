@@ -4,7 +4,7 @@
 // became of its branch, so someone can watch it and make it better.
 
 import { S, fire, pageName, plural } from "./state.js";
-import { h, esc, api, toast, IC, modal, closeModal } from "./lib.js";
+import { h, esc, api, toast, IC, modal, closeModal, skeleton } from "./lib.js";
 
 // the version that runs: the server says which (the rule lives in store.recipeVersion)
 const prod = (r) => r.versions.find((v) => v.n === r.production) || r.versions[r.versions.length - 1];
@@ -41,6 +41,7 @@ export function renderRecipes(head, body, env) {
   add.onclick = () => openRecipe(null);
   head.append(add);
   if (!S.recipes) {
+    body.append(skeleton("Loading recipes", 3, { cards: true }));
     loadRecipes();
     return;
   }
@@ -55,7 +56,7 @@ export function renderRecipes(head, body, env) {
       <div class="ih"><b>${esc(r.name)}</b>${r.trigger === "on-notes" ? `<span class="tagro info" title="Runs on a branch when notes or drawings are added there">Auto</span>` : ""}<span class="tagro">v${v.n}</span>${testing.length ? `<span class="tagro" title="A newer version waits to be tried">v${testing[testing.length - 1].n} testing</span>` : ""}</div>
       ${r.description ? `<span class="lineage">${esc(r.description)}</span>` : ""}
       <div class="rcs">${statsLine(r.stats)}</div>
-      <div class="rca"><button type="button" class="createbtn sm" data-a="run" ${running ? "disabled" : ""}>${running ? "Running…" : `Run on ${esc(pageName(env))}`}</button><button type="button" class="dbtn sm" data-a="edit">Open</button></div>
+      <div class="rca"><button type="button" class="createbtn sm" data-a="run" ${running ? "disabled" : ""}>${running ? `<span class="shimmer">Running…</span>` : `Run on ${esc(pageName(env))}`}</button><button type="button" class="dbtn sm" data-a="edit">Open</button></div>
     </div>`);
     card.querySelector('[data-a="run"]').onclick = () => runRecipe(r, env);
     card.querySelector('[data-a="edit"]').onclick = () => openRecipe(r.id);

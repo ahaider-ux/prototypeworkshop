@@ -16,7 +16,7 @@
   --border-subtle:#e6e6e9;--border-crumb:#e6e6e9;--border-default:#cfcfd5;--border-white:rgba(255,255,255,.9);
   --switch-off:#dcdce0;--switch-on:#2f6df6;--ring-default:rgba(47,109,246,.55);--menu-hover:#f3f3f4;
   --on-primary:#fff;--on-accent:#fff;--tip-bg:#18181b;--tip-ink:#fafafa;--knob:#fff;
-  --note-bg:#fff6d6;--note-edge:#f1e2a6;--guide:#f2482a;
+  --note-bg:#fff6d6;--note-edge:#f1e2a6;--guide:#f2482a;--skel:#ededef;--skel-hi:#f7f7f8;
   --sh-sm:0 1px 2px rgba(24,24,27,.06);--sh-md:0 6px 20px rgba(24,24,27,.10),0 0 0 .5px rgba(24,24,27,.06);--sh-field:0 0 0 1px rgba(24,24,27,.06);
   --sh-btn:0 0 0 1px rgba(24,24,27,.06),0 1px 2px rgba(24,24,27,.05);
   --sh-chat:0 6px 20px rgba(24,24,27,.10),0 0 0 1px rgba(24,24,27,.07);--sh-modal:0 16px 40px rgba(24,24,27,.16),0 0 0 .5px rgba(24,24,27,.08);
@@ -36,7 +36,7 @@
   --border-subtle:#2e2e33;--border-crumb:#2e2e33;--border-default:#43434a;--border-white:rgba(255,255,255,.06);
   --switch-off:#3a3a40;--switch-on:#6b9bff;--ring-default:rgba(107,155,255,.6);
   --on-primary:#18181b;--on-accent:#fff;--tip-bg:#ededef;--tip-ink:#18181b;--knob:#fff;
-  --note-bg:#3a3420;--note-edge:#4d4428;--guide:#ff6b4a;
+  --note-bg:#3a3420;--note-edge:#4d4428;--guide:#ff6b4a;--skel:#2a2a2e;--skel-hi:#36363b;
   --sh-sm:0 1px 2px rgba(0,0,0,.5);--sh-md:0 12px 32px rgba(0,0,0,.5),0 0 0 .5px rgba(255,255,255,.08);
   --sh-field:0 0 0 1px rgba(255,255,255,.06);--sh-btn:0 0 0 1px rgba(255,255,255,.07),0 1px 2px rgba(0,0,0,.4);
   --sh-chat:0 10px 30px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.07);--sh-modal:0 16px 40px rgba(0,0,0,.5),0 0 0 .5px rgba(255,255,255,.08);
@@ -851,3 +851,23 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
   .tb .tbtx{font-size:0;gap:0;padding:0 10px}
   .tb .tbtx .ic{margin:0}
 }
+
+/* ---------- loading: shimmer on words that say something is on its way, skeletons for content ---------- */
+/* .shimmer sweeps a light band through any text (or icon) in its own colour, so it works on a dark
+   button as well as in a panel; .skel is a placeholder block for rows and frames still loading */
+.shimmer{-webkit-mask-image:linear-gradient(90deg,rgba(0,0,0,.42) 0%,rgba(0,0,0,.42) 38%,#000 50%,rgba(0,0,0,.42) 62%,rgba(0,0,0,.42) 100%);mask-image:linear-gradient(90deg,rgba(0,0,0,.42) 0%,rgba(0,0,0,.42) 38%,#000 50%,rgba(0,0,0,.42) 62%,rgba(0,0,0,.42) 100%);-webkit-mask-size:300% 100%;mask-size:300% 100%;animation:shimmer-mask 1.6s linear infinite}
+@keyframes shimmer-mask{from{-webkit-mask-position:100% 0;mask-position:100% 0}to{-webkit-mask-position:0 0;mask-position:0 0}}
+.skel{display:block;border-radius:6px;background:linear-gradient(90deg,var(--skel) 0%,var(--skel) 38%,var(--skel-hi) 50%,var(--skel) 62%,var(--skel) 100%);background-size:300% 100%;animation:shimmer-bg 1.6s linear infinite}
+@keyframes shimmer-bg{from{background-position:100% 0}to{background-position:0 0}}
+.skrow{display:flex;align-items:center;gap:8px;height:32px;padding:0 8px}
+.skrow .skel{height:10px}
+.skrow .skel.ic{width:16px;height:16px;border-radius:4px;flex-shrink:0}
+.skcard{display:flex;flex-direction:column;gap:8px;padding:16px;border-bottom:.5px solid var(--border-subtle)}
+.skcard .skel{height:10px}
+.skload{display:flex;flex-direction:column;gap:4px;padding:8px 0}
+.skload>.lab{font-size:12px;color:var(--text-secondary);padding:0 16px 4px}
+.card .th.skel{border-radius:0}
+.toast .tt2.shimmer{display:inline-block}
+@media (prefers-reduced-motion:reduce){.shimmer{animation:none;-webkit-mask-image:none;mask-image:none;opacity:.7}.skel{animation:none}}
+.card .th.skel iframe{opacity:0}
+.card .th iframe{transition:opacity 200ms ease}

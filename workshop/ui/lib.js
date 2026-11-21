@@ -277,8 +277,31 @@ document.addEventListener("keydown", (e) => {
 }, true);
 
 // ---------- toasts — top-right, Undo as an inline action ----------
-export function toast(title, desc = "", action = null, ms = 4200) {
-  const t = h(`<div class="toast" role="status"><div class="tcol"><span class="tt2">${esc(title)}</span>${desc ? `<span class="tdesc">${esc(desc)}</span>` : ""}${action ? `<button type="button" class="tact">${esc(action.label)}</button>` : ""}</div><button type="button" class="ib24" aria-label="Dismiss">${IC.x}</button></div>`);
+// A loading line: words in the shimmer, with skeleton rows under it while content is on its way.
+export function skeleton(label = "", rows = 3, { cards = false } = {}) {
+  const w = [44, 68, 56, 80, 50, 72];
+  const one = (i) => (cards ? `<div class="skcard"><span class="skel" style="width:${w[i % 6] - 10}%;height:12px"></span><span class="skel" style="width:${w[(i + 3) % 6] + 12}%"></span><span class="skel" style="width:${w[(i + 1) % 6]}%"></span></div>` : `<div class="skrow"><span class="skel ic"></span><span class="skel" style="width:${w[i % 6]}%"></span></div>`);
+  return h(`<div class="skload" role="status" aria-live="polite">${label ? `<span class="lab shimmer">${esc(label)}</span>` : `<span class="sr">Loading</span>`}${Array.from({ length: rows }, (_, i) => one(i)).join("")}</div>`);
+}
+// A button that started something slow: its label says what's happening, in the shimmer, and it
+// can't be pressed twice. Returns a function that puts it back (when the action failed).
+export function pendingButton(btn, label) {
+  if (!btn) return () => {};
+  const was = btn.innerHTML;
+  btn.disabled = true;
+  btn.setAttribute("aria-busy", "true");
+  btn.innerHTML = `<span class="shimmer">${esc(label)}</span>`;
+  return () => {
+    btn.disabled = false;
+    btn.removeAttribute("aria-busy");
+    btn.innerHTML = was;
+  };
+}
+// a toast for something under way: the title shimmers and it stays until close() (or 20 s)
+export const loadingToast = (title, desc = "") => toast(title, desc, null, 20000, { loading: true });
+
+export function toast(title, desc = "", action = null, ms = 4200, { loading = false } = {}) {
+  const t = h(`<div class="toast" role="status"><div class="tcol"><span class="tt2${loading ? " shimmer" : ""}">${esc(title)}</span>${desc ? `<span class="tdesc">${esc(desc)}</span>` : ""}${action ? `<button type="button" class="tact">${esc(action.label)}</button>` : ""}</div><button type="button" class="ib24" aria-label="Dismiss">${IC.x}</button></div>`);
   const close = () => {
     t.classList.remove("is-open");
     setTimeout(() => t.remove(), 260);

@@ -248,8 +248,12 @@ export function resize() {
   }
 }
 // boards: [{it, live}] — a live board that is ready is drawn by its page, not here
+// Returns how many boards on screen are still waiting for their picture, so the caller keeps
+// drawing while their shimmer runs.
+const STILL = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 export function draw(boards, cam, colors) {
-  if (!ctx) return;
+  if (!ctx) return 0;
+  let waiting = 0;
   resize();
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.width / dpr,
@@ -278,6 +282,18 @@ export function draw(boards, cam, colors) {
     else {
       ctx.fillStyle = colors.page;
       ctx.fillRect(x, y, w, h);
+      waiting++;
+      if (!STILL && w > 24) {
+        // a soft band sweeping across, every 1.6 s, like the shimmer on loading text
+        const t = (performance.now() % 1600) / 1600;
+        const bx = x - w * 0.5 + t * w * 2;
+        const g = ctx.createLinearGradient(bx - w * 0.25, 0, bx + w * 0.25, 0);
+        g.addColorStop(0, "rgba(255,255,255,0)");
+        g.addColorStop(0.5, colors.shine);
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(x, y, w, h);
+      }
       if (w > 120) {
         ctx.fillStyle = colors.text;
         ctx.font = `400 ${Math.max(10, Math.min(24, w / 24))}px ${colors.font}`;
@@ -287,5 +303,6 @@ export function draw(boards, cam, colors) {
       }
     }
   }
+  return waiting;
 }
 export const stats = () => ({ bitmaps: CACHE.size, running: RUNNING.size, queued: QUEUE.length });

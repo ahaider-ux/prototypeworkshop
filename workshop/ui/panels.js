@@ -6,7 +6,7 @@
 // across the canvas says which page this is and what to do with it.
 
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, familyOf, pageEnv, protoId, pageItems, pageOf, nearestBoard, screenName, plural, pageName, folderLabel } from "./state.js";
-import { $, h, esc, api, toast, IC, dropdown, segmented, copyText, timeAgo, clamp } from "./lib.js";
+import { $, h, esc, api, toast, IC, dropdown, segmented, copyText, timeAgo, clamp, skeleton } from "./lib.js";
 import { rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, setMode, docOf, winOf, flowOf, parseTranslate, exactSel, removeEl, selIds, toggleSel, alignSel, distributeSel, duplicateSel, removeItems } from "./canvas.js";
 import { PENS, INKS, SIZES as INK_SIZES } from "./ink.js";
 import { record, rid } from "./history.js";
@@ -351,6 +351,11 @@ function renderScreens(body, foot, env) {
     st.append(dropdown({ value: S.placeState, options: states, full: true, label: "State for new boards", onChange: (v) => ((S.placeState = v), renderLeft()) }));
     body.append(st);
   }
+  if (!cat?.screens?.length && !cat && boardsOf(env.id).length) {
+    // a board is loading: its page tells us the screens once it runs
+    body.append(skeleton("Reading the prototype's screens…", 5));
+    return;
+  }
   if (!cat?.screens?.length) {
     body.append(h(`<div class="pempty"><b>${cat ? "This prototype doesn't list its screens" : "Its screens show once a board has loaded"}</b>${cat ? "Pick a board's screen in Design, or describe the screens with window.workshopEnv (see the README)." : "Open a page with a board of it; the Workshop reads the screens, states and flows the prototype offers."}</div>`));
     return;
@@ -462,6 +467,7 @@ function renderHistory(head, body, env) {
   const vs = S.versions.get(env.id);
   if (!vs) loadVersions(env.id);
   const v = h(`<div class="isec" style="border-bottom:0"></div>`);
+  if (!vs) v.append(skeleton("Loading versions", 3));
   if (vs && !vs.length) v.append(h(`<span class="lineage">No versions yet. Merges and agents save one before they change anything.</span>`));
   for (const x of vs || []) {
     const vr = h(`<div class="vrow"><span class="n">V${x.n}</span><span class="tx"><b title="${esc(x.label)}">${esc(x.label)}</b><span>${esc(x.author || "You")} · ${esc(timeAgo(x.at))}</span></span><span class="va"><button type="button" class="ib24" aria-label="Restore version ${x.n}" data-tip="Restore">${IC.restore}</button><button type="button" class="ib24" aria-label="Copy version ${x.n}" data-tip="Copy as a new prototype">${IC.copy}</button></span></div>`);
@@ -1399,7 +1405,7 @@ function turnView(t, agentName) {
   const waiting = t.status === "queued" && !ws.agent && !(ws.harnesses || []).length;
   const turn = h(`<div class="turn"><span class="av agent" style="background:var(--bg-primary);color:var(--bg-layer)">${esc(who[0] || "A")}</span><div class="body"></div></div>`);
   const b = turn.querySelector(".body");
-  b.append(h(`<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary)"><b style="color:var(--text-primary);font-weight:500">${esc(who)}</b><span class="tagro ${cls}">${lab}</span>${t.status === "working" ? '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>' : ""}<span class="sp"></span><span>${esc(timeAgo(t.updatedAt))}</span></div>`));
+  b.append(h(`<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary)"><b style="color:var(--text-primary);font-weight:500">${esc(who)}</b><span class="tagro ${cls}"${t.status === "working" ? ' aria-busy="true"' : ""}>${t.status === "working" ? `<span class="shimmer">${lab}</span>` : lab}</span>${t.status === "working" ? '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>' : ""}<span class="sp"></span><span>${esc(timeAgo(t.updatedAt))}</span></div>`));
   if (env) {
     const d = isBranch(env) ? S.diffs.get(env.id) : null;
     const tag = h(`<span class="brtag">${isBranch(env) ? IC.fork : IC.board}${esc(pageName(env))}${d?.changes.length ? ` <span class="n">${d.changes.length}</span>` : ""}</span>`);
@@ -1407,7 +1413,7 @@ function turnView(t, agentName) {
     b.append(tag);
   }
   if (t.reply) b.append(h(`<div class="rep" style="font-size:12px;line-height:1.5;white-space:pre-wrap">${esc(t.reply)}</div>`));
-  else if (t.status === "queued") b.append(h(`<div style="font-size:12px;line-height:1.5;color:var(--text-secondary)">${waiting ? "Waiting for an agent. Connect one, or ask Claude Code to take the next Workshop task." : "Waiting for the agent to pick this up."}</div>`));
+  else if (t.status === "queued") b.append(h(`<div style="font-size:12px;line-height:1.5;color:var(--text-secondary)">${waiting ? "Waiting for an agent. Connect one, or ask Claude Code to take the next Workshop task." : '<span class="shimmer">Waiting for the agent to pick this up…</span>'}</div>`));
   if (t.changed?.length) b.append(h(`<div style="display:flex;flex-wrap:wrap;gap:4px">${t.changed.slice(0, 6).map((f) => `<span class="tagro">${esc(f)}</span>`).join("")}</div>`));
   const acts = h(`<div style="display:flex;gap:8px;flex-wrap:wrap"></div>`);
   if (waiting) {

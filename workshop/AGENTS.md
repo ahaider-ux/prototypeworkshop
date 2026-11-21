@@ -39,6 +39,9 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   (`--glass-*` tokens: floating panels, capsule toolbar and banner, glass menus and dialogs); the
   inspector's controls follow DialKit (number bars with the label and value inside, `numField` in
   `ui/panels.js`). Both are design references only: no code or assets are copied from either.
+  Anything still loading shows it: words that say so ("Loading…", "Running…", "Connecting…") get
+  `.shimmer`, content on its way gets `skeleton()` rows or cards, a button that started something
+  slow gets `pendingButton()`, and a progress toast is `loadingToast()` (all in `ui/lib.js`).
 - **The canvas shell scales below 1180px** (`fitShell`). Anything measured with
   `getBoundingClientRect` and written into a style inside `#frame` is divided by `frScale()`
   (`inFrame()` in `ui/lib.js` does it for menus).

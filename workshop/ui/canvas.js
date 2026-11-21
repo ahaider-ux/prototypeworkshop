@@ -438,15 +438,15 @@ function gfxColors() {
   if (gfxCol?.theme === theme) return gfxCol;
   const cs = getComputedStyle(document.documentElement);
   const v = (n) => cs.getPropertyValue(n).trim();
-  return (gfxCol = { theme, edge: v("--border-subtle"), page: v("--bg-layer"), text: v("--text-placeholder"), font: v("--fakt") || "sans-serif", label: (it) => screenName(it) });
+  return (gfxCol = { theme, edge: v("--border-subtle"), page: v("--skel"), shine: v("--skel-hi"), text: v("--text-placeholder"), font: v("--fakt") || "sans-serif", label: (it) => screenName(it) });
 }
 function drawGfx() {
-  gfxDirty = false;
-  G.draw(
+  // while a board waits for its picture, its shimmer keeps the canvas drawing
+  gfxDirty = G.draw(
     pageBoards().map((it) => ({ it, covered: !!B.get(it.id)?.shown })),
     S.cam,
     gfxColors(),
-  );
+  ) > 0;
 }
 // the live page and its bitmap must agree: once the page has settled, it renders itself
 function captureSoon(b) {
