@@ -248,3 +248,16 @@ test("an empty screen list never replaces a known one", async () => {
   const after = await s.updateEnv(e.id, { catalog: { adapter: "", screens: [], states: [], variants: [] } });
   assert.deepEqual(after.catalog.screens.map((x) => x.name), ["Inbox"]);
 });
+
+test("a drawing is checked, kept relative to its spot, and measured", async () => {
+  const s = await Store.open(await tmp());
+  const e = await s.createEnv({ html: HTML });
+  const k = await s.addItem({ type: "ink", env: e.id, x: 100, y: 50, pen: "marker", color: "#E03131", size: 8, points: [[0, 0, 0.5], [40, 10], [80, 30, 2]] });
+  assert.equal(k.id[0], "k");
+  assert.deepEqual([k.w, k.h, k.color, k.points[2][2]], [80, 30, "#e03131", 1], "box from the points, colour normalised, pressure capped");
+  await assert.rejects(s.addItem({ type: "ink", env: e.id, points: [[0, 0]], color: "red" }), /hex colour/);
+  await assert.rejects(s.addItem({ type: "ink", env: e.id, points: [[0, 0]], pen: "crayon" }), /marker, pen, pencil or highlighter/);
+  await assert.rejects(s.addItem({ type: "ink", env: e.id, points: Array.from({ length: 4001 }, () => [0, 0]) }), /4000/);
+  const moved = await s.updateItem(k.id, { x: 300 });
+  assert.deepEqual([moved.x, moved.points.length], [300, 3], "moving a drawing moves its spot, not its points");
+});

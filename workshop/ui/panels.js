@@ -8,6 +8,8 @@
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, familyOf, pageEnv, protoId, pageItems, pageOf, nearestBoard, screenName, plural } from "./state.js";
 import { $, h, esc, api, toast, IC, dropdown, segmented, copyText, timeAgo, clamp } from "./lib.js";
 import { rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, setMode, docOf, winOf, flowOf, parseTranslate, exactSel, removeEl, selIds, toggleSel, alignSel, distributeSel, duplicateSel, removeItems } from "./canvas.js";
+import { PENS, INKS, SIZES as INK_SIZES } from "./ink.js";
+import { record, rid } from "./history.js";
 import { loadOverrides, cachedOverrides, forgetOverrides, rulesFor, boardsLive, commitRules, resetSelectors, preview, endPreview } from "./styles.js";
 
 // ---------- the prototype's design tokens the inspector offers (Libra's, for Libra prototypes) ----------
@@ -179,7 +181,7 @@ function renderFile(head, body) {
   body.append(h(`<div class="pdiv"></div>`));
   // layers: this page's frames (open one to reach its live page) and its annotations
   const boards = pageItems("board").sort((a, b) => a.y - b.y || a.x - b.x);
-  const anns = [...pageItems("box"), ...pageItems("note"), ...pageItems("arrow")];
+  const anns = [...pageItems("box"), ...pageItems("note"), ...pageItems("arrow"), ...pageItems("ink")];
   body.append(h(`<div class="shd"><span>Layers</span><span class="n">${boards.length + anns.length || ""}</span></div>`));
   const tree = h(`<div class="ltree" role="tree" aria-label="Layers"></div>`);
   const s = S.sel;
@@ -202,10 +204,11 @@ function renderFile(head, body) {
     if (open) landmarkRows(tree, b.id, d);
   }
   if (anns.length) {
-    const kind = { note: ["Note", IC.note], box: ["Highlight", IC.box], arrow: ["Arrow", IC.arrow] };
+    const kind = { note: ["Note", IC.note], box: ["Highlight", IC.box], arrow: ["Arrow", IC.arrow], ink: ["Drawing", IC.draw] };
     for (const a of anns) {
       const [k, ic] = kind[a.type];
-      const r = h(`<div class="lrow${selIds().includes(a.id) ? " on" : ""}" role="treeitem" tabindex="0" style="padding-left:4px"><span class="tw none"></span>${ic}<span class="t">${esc(a.text || a.label || k)}</span></div>`);
+      const label = a.type === "ink" ? `${PENS[a.pen]?.label || "Drawing"}${a.board && S.items.get(a.board) ? ` on ${screenName(S.items.get(a.board))}` : ""}` : a.text || a.label || k;
+      const r = h(`<div class="lrow${selIds().includes(a.id) ? " on" : ""}" role="treeitem" tabindex="0" style="padding-left:4px"><span class="tw none"></span>${ic}<span class="t">${esc(label)}</span>${a.type === "ink" ? `<span class="inkchip" style="--ink:${esc(a.color)}"></span>` : ""}</div>`);
       r.onclick = (e) => (e.shiftKey ? toggleSel(a.id) : (selectItem(a.id), a.type !== "arrow" && !isVisible(a.id) && focusItem(a.id, { maxZ: 0.8 })));
       r.onkeydown = (e) => e.key === "Enter" && r.click();
       tree.append(r);
@@ -1129,9 +1132,47 @@ function designEl(body, s) {
   body.append(C);
 }
 
+function designInk(body, it) {
+  const id = it.id;
+  const save = async (patch, what) => {
+    try {
+      const prev = Object.fromEntries(Object.keys(patch).map((k) => [k, it[k]]));
+      const next = await api(`canvas/items/${id}`, { method: "PATCH", body: patch });
+      S.items.set(id, next);
+      sync();
+      record({ label: what, undo: async () => (S.items.set(rid(id), await api(`canvas/items/${rid(id)}`, { method: "PATCH", body: prev })), sync()), redo: async () => (S.items.set(rid(id), await api(`canvas/items/${rid(id)}`, { method: "PATCH", body: patch })), sync()) });
+      renderDesign();
+    } catch (e) {
+      toast("Couldn't change the drawing", e.message);
+    }
+  };
+  const on = it.board && S.items.get(it.board);
+  const t = sec(PENS[it.pen]?.label || "Drawing", `<span class="tokname">${esc(it.author || "You")} · ${esc(timeAgo(it.updatedAt || it.createdAt))}</span>`);
+  t.append(h(`<span class="lineage">${on ? `Drawn on ${esc(screenName(on))}; it moves with that screen.` : "Drawn on the canvas."} Agents see it in list_canvas.</span>`));
+  const dots = h(`<div class="sws" role="radiogroup" aria-label="Ink"></div>`);
+  for (const c of INKS) {
+    const b = h(`<button type="button" class="inkdot${it.color === c ? " on" : ""}" style="--ink:${c}" aria-label="Ink ${c}" aria-pressed="${it.color === c}"></button>`);
+    b.onclick = () => save({ color: c }, "ink colour");
+    dots.append(b);
+  }
+  t.append(row("Ink", dots, true));
+  const base = PENS[it.pen]?.size || 6;
+  const cur = INK_SIZES.reduce((a, x) => (Math.abs(x.k * base - it.size) < Math.abs(a.k * base - it.size) ? x : a), INK_SIZES[1]);
+  t.append(row("Weight", segmented(INK_SIZES.map((x) => ({ label: x.label, value: x.k })), cur.k, (k) => save({ size: Math.round(base * k * 10) / 10 }, "weight"), { full: true, label: "Weight" })));
+  body.append(t);
+  const a = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="agent">${IC.spark}Ask an agent about this</button><button type="button" class="dbtn sm err" data-a="del">${IC.trash}Remove</button></div></div>`);
+  a.querySelector('[data-a="agent"]').onclick = () => {
+    if (on) selectBoard(on.id);
+    fire("ask-agent", { prompt: `Look at the ${PENS[it.pen]?.label.toLowerCase() || "drawing"} mark I made${on ? ` on ${screenName(on)}` : ""} and fix what it points at.` });
+  };
+  a.querySelector('[data-a="del"]').onclick = () => removeItems([id]);
+  body.append(a);
+}
+
 function designAnnotation(body, id) {
   const it = S.items.get(id);
   if (!it) return;
+  if (it.type === "ink") return designInk(body, it);
   const kind = { note: "Note", box: "Highlight", arrow: "Arrow" }[it.type];
   const t = sec(kind, `<span class="tokname">${esc(it.author || "You")} · ${esc(timeAgo(it.updatedAt || it.createdAt))}</span>`);
   const save = async (patch) => {

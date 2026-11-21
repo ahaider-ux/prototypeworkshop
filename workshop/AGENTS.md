@@ -9,8 +9,8 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
 
 1. **Working on prototypes** (most sessions). The prototypes live in `workspace/envs/<id>/`. Use the
    `workshop` MCP server (`.mcp.json` in this folder registers it): `list_environments`,
-   `get_selection` (what the designer is pointing at), `list_canvas` (their notes, highlights and
-   arrows — read them as feedback), `take_task` / `update_task` (requests typed in Chat),
+   `get_selection` (what the designer is pointing at), `list_canvas` (their notes, highlights, arrows
+   and hand-drawn marks — read them as feedback; screenshot the screen under a mark to see it), `take_task` / `update_task` (requests typed in Chat),
    `create_branch` / `review_branch` / `merge_branch`, `set_style`, `read_file` / `write_file`,
    `save_version`, `screenshot`. Work on a branch, not on main. A branch reads its parent's files
    until it changes them; `checkout_branch` (or `take_task`) copies them into its folder. Visual

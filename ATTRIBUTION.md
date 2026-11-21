@@ -47,3 +47,7 @@ egui's default fonts (compiled into the `egui`/`epaint` crates) keep their own l
 | Path | Contributor | Source | Licence | Review |
 |---|---|---|---|---|
 | `crates/ui-egui/locales/ar.toml` | @hussain-hz with OpenAI Codex (AI-assisted) | Original Arabic wording from FigCraft's English catalog and engine command labels; no proprietary localisation consulted | MIT OR Apache-2.0 | Draft; native-speaker review and maintainer approval pending |
+
+## Libra Workshop / Atelier — design references
+
+- `workshop/ui/ink.js` follows the pen parameters and stroke approach of Drawesome by Benji Taylor (MIT, © 2026 Benji Taylor, https://github.com/benjitaylor/drawesome). The code is Atelier's own implementation; no Drawesome source or assets are included.

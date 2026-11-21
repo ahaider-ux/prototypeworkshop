@@ -9,12 +9,14 @@ import { $, h, esc, clamp, frScale, api, toast, IC, menu, rmo, timeAgo } from ".
 import { commitRules, preview, endPreview, undoStyle, idle as stylesIdle } from "./styles.js";
 import * as G from "./gfx.js";
 import { record, rid, remap, undo as histUndo, redo as histRedo } from "./history.js";
+import { PENS, INKS, SIZES, outline, touches } from "./ink.js";
 
 const B = new Map(); // board item id → {id, el, hit, frame, live, ready} — frame only while mounted live
 const NEL = new Map(); // note/box item id → element
 const GH = new Map(); // compare boards: main's screens above a branch's, not saved anywhere
 const HUD = { labels: new Map(), alabels: new Map(), pins: new Map(), sel: null, hover: null, size: null, handles: [], ehandles: [], ins: null, draft: null, multi: [], guides: [] };
-let cv, world, hud, wires, boardLayer, noteLayer, rulerH, rulerV;
+let cv, world, hud, wires, boardLayer, noteLayer, inkLayer, inkRoot, wiresRoot, rulerH, rulerV;
+const INK = new Map(); // ink item id → {g, path, key}
 const RULER = 20;
 const MAX_LIVE = 3; // Guard: live pages are costly to pan and zoom; everything else is a bitmap
 let gfxDirty = true;
@@ -293,7 +295,31 @@ export function sync() {
       el.querySelector(".lb span").textContent = it.label || "Highlight";
     }
   }
-  $("cvEmpty").hidden = !S.page || pageBoards().length > 0 || anns.length > 0;
+  // hand-drawn marks on this page
+  const inks = pageItems("ink");
+  const liveInk = new Set(inks.map((k) => k.id));
+  for (const [id, x] of INK) if (!liveInk.has(id)) (x.g.remove(), INK.delete(id));
+  for (const k of inks) {
+    let x = INK.get(k.id);
+    if (!x) {
+      const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      g.dataset.item = k.id;
+      g.innerHTML = `<path></path>`;
+      inkRoot.append(g);
+      x = { g, path: g.firstChild, key: "" };
+      INK.set(k.id, x);
+    }
+    x.g.setAttribute("transform", `translate(${k.x} ${k.y})`);
+    const key = `${k.pen}|${k.size}|${k.points.length}|${k.updatedAt || k.createdAt}`;
+    if (x.key !== key) {
+      x.key = key;
+      x.path.setAttribute("d", outline(k.points, k.pen, k.size));
+    }
+    x.path.setAttribute("fill", k.color);
+    x.path.setAttribute("opacity", String(PENS[k.pen]?.opacity ?? 1));
+    x.g.classList.toggle("hl", k.pen === "highlighter");
+  }
+  $("cvEmpty").hidden = !S.page || pageBoards().length > 0 || anns.length > 0 || inks.length > 0;
   dirty = true;
 }
 
@@ -688,7 +714,59 @@ export function setTool(t) {
   if (t !== "move") setHover(null, null);
   if (t !== "move" && t !== "hand" && S.mode === "prototype") setMode("design");
   closePop();
+  renderTray();
 }
+
+// ---------- the pen tray: which pen, which ink, how bold ----------
+const PEN_ICONS = {
+  marker: '<path d="M4 12.5 3.5 14l1.5-.5L12.6 6 10 3.4Z"/><path d="m9 4.4 2.6 2.6M3.5 14h9"/>',
+  pen: '<path d="M10.6 2.9a1.6 1.6 0 0 1 2.3 2.3L6 12.1l-3.2.9.9-3.2Z"/>',
+  pencil: '<path d="m3 13 1-3.2 7-7 2.2 2.2-7 7Z"/><path d="m9.6 4.2 2.2 2.2"/><path d="m3 13 1.1-.3"/>',
+  highlighter: '<path d="M5 9.5 10.2 4.3l2.5 2.5L7.5 12H5Z"/><path d="M3 14h10"/>',
+  eraser: '<path d="M6.5 13.5h7M3.2 9.8l5.6-5.6a1.4 1.4 0 0 1 2 0l2 2a1.4 1.4 0 0 1 0 2l-5.3 5.3H6.1Z"/><path d="m6.2 6.8 4 4"/>',
+};
+function loadInk() {
+  try {
+    const v = JSON.parse(localStorage.getItem("ws-ink") || "null");
+    if (v && PENS[v.pen]) return { pen: v.pen, color: /^#[0-9a-f]{6}$/i.test(v.color) ? v.color : PENS[v.pen].color, k: SIZES.some((x) => x.k === v.k) ? v.k : 1, eraser: false };
+  } catch {}
+  return { pen: "marker", color: PENS.marker.color, k: 1, eraser: false };
+}
+function saveInk() {
+  try {
+    localStorage.setItem("ws-ink", JSON.stringify({ pen: S.ink.pen, color: S.ink.color, k: S.ink.k }));
+  } catch {}
+}
+export function choosePen(pen) {
+  S.ink.eraser = pen === "eraser";
+  if (PENS[pen]) {
+    // switching to the highlighter brings its yellow; switching away from it brings the pen's own ink back
+    if (pen === "highlighter" || S.ink.pen === "highlighter") S.ink.color = PENS[pen].color;
+    S.ink.pen = pen;
+  }
+  saveInk();
+  if (S.tool !== "draw") setTool("draw");
+  else renderTray();
+}
+function renderTray() {
+  const tray = $("inkTray");
+  if (!tray) return;
+  tray.hidden = S.tool !== "draw";
+  cv.classList.toggle("erasing", S.tool === "draw" && S.ink.eraser);
+  if (tray.hidden) return;
+  const ic = (d) => `<svg class="ic" viewBox="0 0 16 16" aria-hidden="true">${d}</svg>`;
+  const pens = Object.entries(PENS)
+    .map(([k, p], i) => `<button type="button" class="ib32${!S.ink.eraser && S.ink.pen === k ? " on" : ""}" data-pen="${k}" aria-pressed="${!S.ink.eraser && S.ink.pen === k}" aria-label="${p.label} · ${i + 1}" data-tip="${p.label} · ${i + 1}" data-tip-up>${ic(PEN_ICONS[k])}</button>`)
+    .join("");
+  const eraser = `<button type="button" class="ib32${S.ink.eraser ? " on" : ""}" data-pen="eraser" aria-pressed="${S.ink.eraser}" aria-label="Eraser · E" data-tip="Eraser · E" data-tip-up>${ic(PEN_ICONS.eraser)}</button>`;
+  const inks = INKS.map((c) => `<button type="button" class="inkdot${S.ink.color === c ? " on" : ""}" data-color="${c}" aria-label="Ink ${c}" aria-pressed="${S.ink.color === c}" style="--ink:${c}"></button>`).join("");
+  const sizes = SIZES.map((x, i) => `<button type="button" class="inksz${S.ink.k === x.k ? " on" : ""}" data-k="${x.k}" aria-label="${x.label}" aria-pressed="${S.ink.k === x.k}" data-tip="${x.label} · [ ]" data-tip-up><i style="--d:${4 + i * 4}px"></i></button>`).join("");
+  tray.innerHTML = `${pens}${eraser}<span class="vsep"></span>${inks}<span class="vsep"></span>${sizes}`;
+  for (const b of tray.querySelectorAll("[data-pen]")) b.onclick = () => choosePen(b.dataset.pen);
+  for (const b of tray.querySelectorAll("[data-color]")) b.onclick = () => ((S.ink.color = b.dataset.color), (S.ink.eraser = false), saveInk(), renderTray());
+  for (const b of tray.querySelectorAll("[data-k]")) b.onclick = () => ((S.ink.k = +b.dataset.k), saveInk(), renderTray());
+}
+const inkSize = () => (PENS[S.ink.pen]?.size || 6) * S.ink.k;
 export function setMode(m) {
   S.mode = m;
   cv.classList.toggle("mode-design", m === "design");
@@ -767,7 +845,7 @@ function drawWires() {
       g = document.createElementNS("http://www.w3.org/2000/svg", "g");
       g.dataset.item = a.id;
       g.innerHTML = `<path class="hitw"></path><path class="vis" marker-end="url(#ah)"></path>`;
-      wires.append(g);
+      wiresRoot.append(g);
     }
     const d = `M${e.p0.x} ${e.p0.y} L${e.p1.x} ${e.p1.y}`;
     for (const p of g.querySelectorAll("path")) p.setAttribute("d", d);
@@ -937,12 +1015,15 @@ export function drawHud() {
   if (s?.kind === "board" && item(s.item)) {
     selRect = screenRect(item(s.item));
     placeBox(HUD.sel, selRect, null);
+  } else if (s?.kind === "ink" && item(s.item)) {
+    placeBox(HUD.sel, screenRect(rectOf(item(s.item))), null);
   } else if (s?.kind === "el" && S.mode === "design") {
     selRect = elScreenRect(s.item, s.el);
     placeBox(HUD.sel, selRect, selRect ? s.info?.label || s.el.localName : null);
   } else placeBox(HUD.sel, null);
   const many = s?.kind === "multi" ? selIds() : [];
   for (const [id, el] of NEL) el.classList.toggle("on", s?.item === id || many.includes(id));
+  for (const [id, x] of INK) x.g.classList.toggle("on", s?.item === id || many.includes(id));
   // several selected: each one outlined, and a box around them all
   const boxes = many.map((id) => item(id)).filter((it) => it && it.type !== "arrow").map((it) => screenRect(rectOf(it)));
   while (HUD.multi.length < boxes.length + 1) {
@@ -1559,6 +1640,7 @@ function placeAll(list) {
     for (const k of ["x", "y", "w", "h", "from", "to"]) if (g[k] !== undefined) (it[k] = g[k]), (patch[k] = g[k]);
     const el = B.get(id)?.el || NEL.get(id);
     if (el && g.x !== undefined) (el.style.left = it.x + "px"), (el.style.top = it.y + "px");
+    if (g.x !== undefined) INK.get(id)?.g.setAttribute("transform", `translate(${it.x} ${it.y})`);
     if (B.get(id) && g.w !== undefined) (B.get(id).el.style.width = it.w + "px"), (B.get(id).el.style.height = it.h + "px");
     saveItem(id, patch);
   }
@@ -1688,7 +1770,7 @@ export async function duplicateSel() {
   await pasteList(collect(ids), { offset: 40, label: "duplicate" });
 }
 export function selectAll() {
-  selectMany([...pageItems("board"), ...pageItems("note"), ...pageItems("box"), ...pageItems("arrow")].map((i) => i.id));
+  selectMany([...pageItems("board"), ...pageItems("note"), ...pageItems("box"), ...pageItems("arrow"), ...pageItems("ink")].map((i) => i.id));
 }
 
 // ---------- align and distribute, for several boards and annotations ----------
@@ -1864,6 +1946,18 @@ function onDown(e) {
   } else if (S.tool === "arrow") {
     const from = under && S.items.get(under)?.type !== "arrow" ? { item: under } : onBoard ? { item: onBoard.dataset.item } : { x: Math.round(w.x), y: Math.round(w.y) };
     drag = { kind: "arrow", p0: p, from, w0: w };
+  } else if (S.tool === "draw") {
+    if (S.ink.eraser) {
+      drag = { kind: "erase", p0: p, hit: new Set() };
+      eraseAt(w, drag);
+    } else {
+      const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      g.innerHTML = `<path></path>`;
+      g.setAttribute("class", `draft${S.ink.pen === "highlighter" ? " hl" : ""}`);
+      inkRoot.append(g);
+      drag = { kind: "ink", p0: p, pts: [[w.x, w.y, e.pointerType === "pen" ? e.pressure : undefined]], g, pen: S.ink.pen, color: S.ink.color, size: inkSize() };
+      drawDraft(drag);
+    }
   } else if (S.tool === "comment") {
     if (ghost) return toast("That's main's screen", "Comment on it from main's page, or on this branch's screen below");
     const b = onBoard ? item(onBoard.dataset.item) : boardAtPoint(p);
@@ -1883,7 +1977,7 @@ function onDown(e) {
   } else if (label) {
     const id = label.dataset.item;
     selectBoard(id);
-    drag = { kind: "group", p0: p, group: [{ id, x: item(id).x, y: item(id).y }], moved: false };
+    drag = { kind: "group", p0: p, group: withMarks([{ id, x: item(id).x, y: item(id).y }]), moved: false };
   } else if (under && item(under)) {
     const it = item(under);
     selectItem(it.id);
@@ -1900,7 +1994,7 @@ function onDown(e) {
       const r = cur && elScreenRect(id, cur);
       const onCur = r && p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
       drag = { kind: "el", id, el: onCur ? cur : under, click: under, p0: p, moved: false };
-    } else drag = { kind: "board", id, p0: p, group: [{ id, x: item(id).x, y: item(id).y }], moved: false, el: under };
+    } else drag = { kind: "board", id, p0: p, group: withMarks([{ id, x: item(id).x, y: item(id).y }]), moved: false, el: under };
   } else {
     // an empty spot: drag a box to select what it touches (pan with Space, the hand, or scrolling)
     drag = { kind: "marquee", p0: p, w0: w, add: e.shiftKey ? selIds() : [], moved: false };
@@ -1929,6 +2023,30 @@ function onMove(e) {
     dy = p.y - drag.p0.y;
   const far = Math.abs(dx) + Math.abs(dy) > 4;
   const z = S.cam.z;
+  if (drag.kind === "ink") {
+    // every point the pointer passed through, not just one per frame: strokes stay smooth when fast
+    const evs = e.getCoalescedEvents?.() || [e];
+    for (const ev of evs.length ? evs : [e]) {
+      const w = toWorld(local(ev));
+      const lastP = drag.pts[drag.pts.length - 1];
+      if (Math.hypot(w.x - lastP[0], w.y - lastP[1]) * S.cam.z < 1) continue;
+      drag.pts.push([w.x, w.y, ev.pointerType === "pen" ? ev.pressure : undefined]);
+    }
+    // Shift: a straight line from where it started, snapped to the nearest 45°
+    if (e.shiftKey && drag.pts.length > 1) {
+      const a0 = drag.pts[0],
+        w = toWorld(p);
+      const ang = Math.round(Math.atan2(w.y - a0[1], w.x - a0[0]) / (Math.PI / 4)) * (Math.PI / 4);
+      const len = Math.hypot(w.x - a0[0], w.y - a0[1]);
+      const n = Math.max(2, Math.round((len * S.cam.z) / 6));
+      drag.pts = Array.from({ length: n + 1 }, (_, i) => [a0[0] + Math.cos(ang) * len * (i / n), a0[1] + Math.sin(ang) * len * (i / n), undefined]);
+    }
+    // Guard: the store keeps a drawing to 4000 points; end the stroke there rather than lose it
+    if (drag.pts.length > 3900) return void onUp(e);
+    drawDraft(drag);
+    return;
+  }
+  if (drag.kind === "erase") return void eraseAt(toWorld(p), drag);
   if (drag.kind === "marquee" && (far || drag.moved)) {
     drag.moved = true;
     if (!HUD.draft) (HUD.draft = h(`<div class="draftbox marquee"></div>`)), hud.append(HUD.draft);
@@ -1937,7 +2055,7 @@ function onMove(e) {
     const w1 = toWorld(p);
     const r = { x0: Math.min(drag.w0.x, w1.x), y0: Math.min(drag.w0.y, w1.y), x1: Math.max(drag.w0.x, w1.x), y1: Math.max(drag.w0.y, w1.y) };
     const hit = (q) => q.x < r.x1 && q.x + q.w > r.x0 && q.y < r.y1 && q.y + q.h > r.y0;
-    const ids = [...pageItems("board"), ...pageItems("note"), ...pageItems("box")].filter((it) => hit(rectOf(it))).map((it) => it.id);
+    const ids = [...pageItems("board"), ...pageItems("note"), ...pageItems("box"), ...pageItems("ink")].filter((it) => hit(rectOf(it))).map((it) => it.id);
     for (const a2 of pageItems("arrow")) {
       const en = arrowEnds(a2);
       if (en && [en.p0, en.p1].every((pt) => pt.x >= r.x0 && pt.x <= r.x1 && pt.y >= r.y0 && pt.y <= r.y1)) ids.push(a2.id);
@@ -1962,6 +2080,7 @@ function onMove(e) {
       it.y = snap.sy ? Math.round(g.y + dy / z + snap.dy) : Math.round((g.y + dy / z) / SNAP) * SNAP;
       const el = B.get(g.id)?.el || NEL.get(g.id);
       if (el) (el.style.left = it.x + "px"), (el.style.top = it.y + "px");
+      INK.get(g.id)?.g.setAttribute("transform", `translate(${it.x} ${it.y})`);
     }
     if (drag.kind === "board" && S.sel?.item !== drag.id) selectBoard(drag.id);
     setHover(null, null);
@@ -2003,7 +2122,7 @@ function onMove(e) {
       g = document.createElementNS("http://www.w3.org/2000/svg", "g");
       g.setAttribute("class", "draft");
       g.innerHTML = `<path class="vis draft" marker-end="url(#ah)"></path>`;
-      wires.append(g);
+      wiresRoot.append(g);
     }
     const a = drag.from.item ? endPoint(drag.from, w) : drag.from;
     g.querySelector("path").setAttribute("d", `M${a.x} ${a.y} L${w.x} ${w.y}`);
@@ -2036,6 +2155,12 @@ async function onUp(e) {
     const it = item(d.id);
     saveItem(it.id, { w: it.w, h: it.h });
     recordMove([{ id: d.id, w: d.w0, h: d.h0 }], "resize");
+    return;
+  }
+  if (d.kind === "ink") return finishInk(d);
+  if (d.kind === "erase") {
+    for (const id of d.hit) INK.get(id)?.g.classList.remove("erasing");
+    if (d.hit.size) await removeItems([...d.hit]);
     return;
   }
   if (d.kind === "marquee") {
@@ -2114,7 +2239,48 @@ function onWheel(e) {
 }
 
 function groupOf(ids) {
-  return ids.map((id) => S.items.get(id)).filter((it) => it && it.type !== "arrow").map((it) => ({ id: it.id, x: it.x, y: it.y }));
+  return withMarks(ids.map((id) => S.items.get(id)).filter((it) => it && it.type !== "arrow").map((it) => ({ id: it.id, x: it.x, y: it.y })));
+}
+// marks drawn on a screen move with it
+function withMarks(group) {
+  const ids = new Set(group.map((g) => g.id));
+  const boards = new Set(group.filter((g) => S.items.get(g.id)?.type === "board").map((g) => g.id));
+  if (!boards.size) return group;
+  return group.concat(pageItems("ink").filter((k) => boards.has(k.board) && !ids.has(k.id)).map((k) => ({ id: k.id, x: k.x, y: k.y })));
+}
+function drawDraft(d) {
+  const o = d.pts[0];
+  const rel = d.pts.map((q) => [q[0] - o[0], q[1] - o[1], q[2]]);
+  const path = d.g.firstChild;
+  d.g.setAttribute("transform", `translate(${o[0]} ${o[1]})`);
+  path.setAttribute("d", outline(rel, d.pen, d.size, S.cam.z));
+  path.setAttribute("fill", d.color);
+  path.setAttribute("opacity", String(PENS[d.pen]?.opacity ?? 1));
+}
+async function finishInk(d) {
+  const xs = d.pts.map((q) => q[0]),
+    ys = d.pts.map((q) => q[1]);
+  const x0 = Math.min(...xs),
+    y0 = Math.min(...ys);
+  const points = d.pts.map((q) => [q[0] - x0, q[1] - y0, q[2] === undefined ? 0.5 : q[2]]);
+  // marks belong to the screen under their middle, and move with it
+  const cx = (x0 + Math.max(...xs)) / 2,
+    cy = (y0 + Math.max(...ys)) / 2;
+  const on = pageItems("board").find((b) => cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h);
+  const it = await createItem({ type: "ink", x: Math.round(x0 * 10) / 10, y: Math.round(y0 * 10) / 10, pen: d.pen, color: d.color, size: Math.round(d.size * 10) / 10, points, board: on?.id || null });
+  d.g.remove();
+  void it;
+}
+function eraseAt(w, d) {
+  const pad = 6 / S.cam.z;
+  for (const k of pageItems("ink")) {
+    if (d.hit.has(k.id)) continue;
+    if (w.x < k.x - pad - k.size || w.y < k.y - pad - k.size || w.x > k.x + k.w + pad + k.size || w.y > k.y + k.h + pad + k.size) continue;
+    if (touches(k.points, k.size, w.x - k.x, w.y - k.y, pad)) {
+      d.hit.add(k.id);
+      INK.get(k.id)?.g.classList.add("erasing");
+    }
+  }
 }
 
 // ---------- smart guides ----------
@@ -2297,7 +2463,17 @@ function onKey(e) {
     } else clearSel();
     return;
   }
-  const tools = { v: "move", h: "hand", n: "note", b: "box", a: "arrow", c: "comment" };
+  if (S.tool === "draw") {
+    if (k === "e" || k === "E") return choosePen(S.ink.eraser ? S.ink.pen : "eraser");
+    const pick = Object.keys(PENS)[Number(k) - 1];
+    if (pick) return choosePen(pick);
+    if (k === "[" || k === "]") {
+      const i = SIZES.findIndex((x) => x.k === S.ink.k);
+      S.ink.k = SIZES[Math.max(0, Math.min(SIZES.length - 1, i + (k === "]" ? 1 : -1)))].k;
+      return saveInk(), renderTray();
+    }
+  }
+  const tools = { v: "move", h: "hand", n: "note", b: "box", a: "arrow", c: "comment", d: "draw" };
   if (tools[k.toLowerCase()] && !e.shiftKey) return setTool(S.tool === tools[k.toLowerCase()] && k.toLowerCase() !== "v" ? "move" : tools[k.toLowerCase()]);
   if (k === "p" || k === "P") return setMode(S.mode === "design" ? "prototype" : "design");
   if (k === "!" || (e.shiftKey && k === "1")) return fit();
@@ -2398,6 +2574,19 @@ export function initCanvas() {
   noteLayer = $("notes");
   rulerH = $("rulerH");
   rulerV = $("rulerV");
+  inkLayer = $("inks");
+  // The browser only hit-tests SVG inside its own box: these layers span the whole canvas, with
+  // their content shifted back to canvas coordinates, so marks and arrows can be clicked anywhere.
+  const SPAN = 50000;
+  const rootIn = (svg) => {
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.setAttribute("transform", `translate(${SPAN} ${SPAN})`);
+    svg.append(g);
+    return g;
+  };
+  inkRoot = rootIn(inkLayer);
+  wiresRoot = rootIn(wires);
+  S.ink = loadInk();
   G.initGfx($("gfx"), $("bgFrames"), {
     ready: () => (gfxDirty = true),
     frame: async (win, it) => {

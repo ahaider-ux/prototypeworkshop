@@ -121,6 +121,7 @@ export const IC = {
   agent: I('<rect x="3" y="4.5" width="10" height="8" rx="2"/><path d="M8 2v2.5M6 8.5v.5M10 8.5v.5M2 8v2M14 8v2"/>'),
   stop: I('<rect x="4.5" y="4.5" width="7" height="7" rx="1.5"/>'),
   sel: I('<path d="M3 5.5V4a1 1 0 0 1 1-1h1.5M10.5 3H12a1 1 0 0 1 1 1v1.5M13 10.5V12a1 1 0 0 1-1 1h-1.5M5.5 13H4a1 1 0 0 1-1-1v-1.5"/><path d="m7 7 4.5 1.6-1.9.7-.7 1.9Z"/>'),
+  draw: I('<path d="M10.6 2.9a1.6 1.6 0 0 1 2.3 2.3L6 12.1l-3.2.9.9-3.2Z"/><path d="m9.4 4.1 2.3 2.3"/>'),
   frame: I('<path d="M5 2.5v11M11 2.5v11M2.5 5h11M2.5 11h11"/>'),
   note: I('<path d="M3 3.5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1V10l-3.5 3.5H4a1 1 0 0 1-1-1Z"/><path d="M9.5 13.5V11a1 1 0 0 1 1-1H13"/>'),
   box: I('<rect x="2.5" y="2.5" width="11" height="11" rx="2" stroke-dasharray="2 2"/>'),

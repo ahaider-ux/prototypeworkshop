@@ -255,13 +255,36 @@ export class Store {
       };
       return { env: page, from: end(p.from, prev.from ?? { x: 0, y: 0 }), to: end(p.to, prev.to ?? { x: 100, y: 0 }), label: str(p.label, 200, prev.label ?? "") };
     }
-    throw new StoreError("bad_item", "Boards, notes, boxes and arrows go on the canvas");
+    if (type === "ink") {
+      // a hand-drawn mark: points relative to (x, y), each [x, y, pressure 0–1]
+      const raw = p.points === undefined ? prev.points : p.points;
+      // Guard: a stroke is a few hundred points; this caps a runaway one before it reaches the file.
+      if (!Array.isArray(raw) || raw.length < 1 || raw.length > 4000) throw new StoreError("bad_item", "A drawing needs between 1 and 4000 points");
+      const points = raw.map((q) => {
+        const [qx, qy, qp = 0.5] = Array.isArray(q) ? q : [];
+        if (![qx, qy, qp].every((v) => Number.isFinite(Number(v))) || Math.abs(qx) > 20000 || Math.abs(qy) > 20000) throw new StoreError("bad_item", "A drawing's points are off the canvas");
+        return [Math.round(qx * 10) / 10, Math.round(qy * 10) / 10, Math.round(Math.min(1, Math.max(0, qp)) * 100) / 100];
+      });
+      const pen = p.pen ?? prev.pen ?? "marker";
+      if (!["marker", "pen", "pencil", "highlighter"].includes(pen)) throw new StoreError("bad_item", "A drawing is made with a marker, pen, pencil or highlighter");
+      const color = String(p.color ?? prev.color ?? "#e03131");
+      if (!/^#[0-9a-f]{6}$/i.test(color)) throw new StoreError("bad_item", "A drawing's colour is a hex colour like #e03131");
+      const size = num(p.size, 1, 80, prev.size ?? 6);
+      const board = p.board === undefined ? prev.board ?? null : p.board === null ? null : assertRecord(String(p.board));
+      const xs = points.map((q) => q[0]),
+        ys = points.map((q) => q[1]);
+      // its box, for selecting, aligning and telling agents what it marks
+      const w = Math.max(1, Math.round(Math.max(...xs) - Math.min(0, ...xs))),
+        h = Math.max(1, Math.round(Math.max(...ys) - Math.min(0, ...ys)));
+      return { ...at, env: page, board, pen, color: color.toLowerCase(), size, points, w, h };
+    }
+    throw new StoreError("bad_item", "Boards, notes, boxes, arrows and drawings go on the canvas");
   }
 
   async addItem(p, author = null) {
     const type = String(p?.type || "");
     if ((await this.items()).length >= 2000) throw new StoreError("too_many", "This canvas holds as much as it can");
-    const prefix = { board: "b", note: "n", box: "x", arrow: "a" }[type] || "i";
+    const prefix = { board: "b", note: "n", box: "x", arrow: "a", ink: "k" }[type] || "i";
     const it = { id: newId(prefix), type, ...(await this.cleanItem(type, p)), author, createdAt: now() };
     return this.putItem(it);
   }

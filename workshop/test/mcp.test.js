@@ -92,3 +92,14 @@ test("MCP: list_canvas keeps each page's notes on that page", async () => {
   assert.ok(onBranch.notes[0].over.length && onBranch.notes[0].over.every((o) => o.env === br.id), "a note is over its own page's boards only");
   assert.deepEqual((await list(main.id)).notes.map((n) => n.text), ["On main"]);
 });
+
+test("MCP: agents see the marks drawn on a page", async () => {
+  const { callTool } = await import("../src/mcp.js");
+  const store = await Store.open(await fsp.mkdtemp(path.join(os.tmpdir(), "workshop-")));
+  const env = await store.createEnv({ html: HTML });
+  await store.addItem({ type: "ink", env: env.id, x: 10, y: 10, pen: "marker", color: "#e03131", points: [[0, 0], [50, 50]] });
+  const out = JSON.parse((await callTool(store, "list_canvas", { env: env.id })).content[0].text);
+  assert.equal(out.drawings.length, 1);
+  assert.equal(out.drawings[0].pen, "marker");
+  assert.ok(out.drawings[0].over.length, "it says which screen the mark is on");
+});

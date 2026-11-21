@@ -33,7 +33,7 @@ workspace/
   envs/<id>/env.json         name, theme, variants, text edits, and for a branch: its parent and base
   envs/<id>/overrides.css    design tweaks from the inspector and agents; loads after the page's styles
   canvas/<id>.json           what's on the canvas: boards (a prototype at a screen), and the notes,
-                             highlights and arrows made on each page
+                             highlights, arrows and drawings made on each page
   .workshop/                 this computer's own state (not committed): versions, trash, tasks,
                              comments, share links, the current selection, agent heartbeats
 ```
@@ -81,6 +81,14 @@ them all):
   edit — with **⌘Z** and **⌘⇧Z**.
 - **Right-click** anything for what you can do with it.
 - **View**: **⌘Y** outlines every element on the live boards, **⇧R** shows or hides the rulers.
+- **Draw** (**D**): give notes by hand, the way an atelier marks up a fitting — circle the problem,
+  underline what works, cross out what goes. A glass tray above the toolbar holds the marker, pen,
+  pencil and highlighter (**1–4**), the eraser (**E**, takes away whole marks), eight inks and three
+  weights (**[ ]**). Hold **⇧** for a straight line. A mark drawn over a screen moves with it; marks
+  can be selected, moved, recoloured, undone and removed like anything else, and agents see them in
+  `list_canvas` (as drawings, with the screen each one is on). The pens' behaviour follows Benji
+  Taylor's [Drawesome](https://github.com/benjitaylor/drawesome) (MIT): Atelier has its own
+  implementation of its approach in `ui/ink.js`.
 
 ### How it stays fast
 
