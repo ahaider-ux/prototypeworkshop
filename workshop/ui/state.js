@@ -36,7 +36,7 @@ export const S = {
   draftSel: true,
   presenting: null,
   outlines: false,
-  rulers: true,
+  rulers: false, // off for now: ⇧R or the view menu shows them
 };
 
 const subs = new Map();

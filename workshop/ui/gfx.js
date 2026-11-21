@@ -11,8 +11,9 @@
 const LEVEL = 0.5; // bitmaps are kept at half size: sharp up to 50% zoom on a 1× screen
 const POOL = 3; // background pages loading at once
 const MAX_BITMAPS = 160; // Guard: bitmaps are ~2 MB each at half size; past this the oldest go
-const SETTLE = 1600; // ms after load, at most, for the prototype to go to its screen, state and variants
+const SETTLE = 2200; // ms after load, at most, for the prototype to go to its screen, state and variants
 const SETTLE_MIN = 450; // ...and at least: its own start-up scripts run first
+const QUIET = 300; // ms without changes to the page before it counts as settled
 const SETTLE_TEXT = 2700; // text edits are re-applied up to ~2.5 s after load
 const LOAD_TIMEOUT = 25000;
 
@@ -59,7 +60,19 @@ async function loadSaved(k, w, h) {
   try {
     const r = await fetch(`/api/snapshots/${await hashOf(k)}`);
     if (r.status !== 200) return null;
-    return await svgToBitmap(URL.createObjectURL(await r.blob()), w, h);
+    const blob = await r.blob();
+    // The pictures inside a saved drawing finish decoding a moment after the drawing itself, and a
+    // bitmap made too early can come out empty: draw it again once they're in, and swap it in.
+    setTimeout(async () => {
+      if (!CACHE.has(k)) return;
+      const again = await svgToBitmap(URL.createObjectURL(blob), w, h).catch(() => null);
+      if (again && CACHE.has(k)) {
+        CACHE.get(k).bmp.close?.();
+        CACHE.set(k, { ...CACHE.get(k), bmp: again });
+        onReady(k);
+      }
+    }, 900);
+    return await svgToBitmap(URL.createObjectURL(blob), w, h);
   } catch {
     return null;
   }
@@ -78,6 +91,8 @@ async function svgToBitmap(url, w, h, scale = LEVEL) {
     const img = new Image();
     img.src = url;
     await img.decode();
+    // let the browser paint the drawing (its fonts and inner pictures) before taking the bitmap
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     const W = Math.max(1, Math.round(w * scale)),
       H = Math.max(1, Math.round(h * scale));
     try {
@@ -236,12 +251,10 @@ function store(k, bmp, w, h) {
 export async function captureLive(it, doc) {
   const k = keyOf(it);
   try {
-    const out = {};
-    const bmp = await rasterize(doc, it.w, it.h, LEVEL, out);
-    if (keyOf(it) === k) {
-      store(k, bmp, it.w, it.h);
-      save(k, out.svg);
-    }
+    // kept for this visit only: a live board shows whatever someone did in it (a menu left open,
+    // a screen mid-transition), which mustn't become the saved picture everyone else gets
+    const bmp = await rasterize(doc, it.w, it.h);
+    if (keyOf(it) === k) store(k, bmp, it.w, it.h);
     LAST.set(it.id, k);
     return true;
   } catch {
@@ -279,17 +292,25 @@ async function settle(win, it, textEdits) {
   try {
     await Promise.race([win.document.fonts?.ready, sleep(SETTLE - SETTLE_MIN)]);
   } catch {}
+  // ...and until the page stops changing (an intro overlay going away, a list filling in)
+  let changed = performance.now();
+  let mo = null;
+  try {
+    mo = new win.MutationObserver(() => (changed = performance.now()));
+    mo.observe(win.document, { subtree: true, childList: true, attributes: true, characterData: true });
+  } catch {}
   while (performance.now() - t0 < SETTLE) {
     try {
       const rt = win.__workshop;
       const ad = rt?.adapter();
       const there = !it.screen || !ad?.screens?.length || ad.screen === it.screen || !ad.screens.some((x) => x.name === it.screen);
-      if (rt && there) break;
+      if (rt && there && performance.now() - changed > QUIET) break;
     } catch {
       break;
     }
-    await sleep(100);
+    await sleep(80);
   }
+  mo?.disconnect();
   try {
     await frames(win);
   } catch {}

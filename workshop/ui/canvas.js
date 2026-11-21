@@ -1081,6 +1081,7 @@ function selWorldRect() {
   return { x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h };
 }
 function drawRulers() {
+  if (S.rulers === false) return; // hidden: nothing to draw
   const sr = selWorldRect();
   const col = rulerColors();
   const key = [S.cam.x.toFixed(1), S.cam.y.toFixed(1), S.cam.z.toFixed(5), cv.clientWidth, cv.clientHeight, rulerH.offsetLeft, col.theme, sr ? [sr.x0, sr.y0, sr.x1, sr.y1].map(Math.round).join(",") : ""].join("|");
