@@ -394,3 +394,23 @@ test("a board's look: shared by a branch nobody changed, new when anything it sh
   await assert.rejects(() => s.writeSnapshot(key, Buffer.from("<script>")), /board snapshot/);
   await assert.rejects(() => s.writeSnapshot("../x", Buffer.from("<svg></svg>")), /snapshot key/);
 });
+
+test("frames: an empty page of the prototype at any size, carried by branches and merges", async () => {
+  const s = await Store.open(await tmp());
+  const a = await s.createEnv({ html: HTML });
+  const f = await s.addFrame(a.id, { name: "Onboarding step 2", w: 390, h: 844, x: 0, y: 0 });
+  assert.equal(f.file, "frames/onboarding-step-2.html");
+  assert.deepEqual([f.w, f.h, f.name], [390, 844, "Onboarding step 2"]);
+  assert.match((await s.readFile(a.id, f.file)).toString(), /atelier:empty-frame/);
+  const g = await s.addFrame(a.id, { name: "Onboarding step 2" });
+  assert.equal(g.file, "frames/onboarding-step-2-2.html", "two frames never share a page");
+  // a branch gets the frame on its page, designs it, and the merge brings the page over
+  const b = await s.branchEnv(a.id, { name: "Design it" });
+  const bf = (await s.items()).find((i) => i.env === b.id && i.file === f.file);
+  assert.equal(bf.name, "Onboarding step 2");
+  await s.writeFile(b.id, f.file, "<!doctype html><title>Step 2</title><p>Designed</p>");
+  await s.mergeEnv(b.id, {});
+  assert.match((await s.readFile(a.id, f.file)).toString(), /Designed/);
+  // Guard: a frame's page stays an .html file inside the prototype
+  for (const bad of ["../x.html", "frames/.hidden.html", "frames/x.js", "/etc/passwd"]) await assert.rejects(() => s.updateItem(f.id, { file: bad }), /frame's page/);
+});

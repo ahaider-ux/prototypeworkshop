@@ -42,11 +42,13 @@ const SPACE = [0, 2, 4, 6, 8, 12, 16, 24, 32, 40];
 const RADII = [0, 4, 6, 8, 12, 16, 99];
 const SIZES = [10, 12, 14, 16, 20, 24, 36];
 export const DEVICES = [
+  { label: "Wide · 1920 × 1080", w: 1920, h: 1080 },
   { label: "Desktop · 1728 × 1117", w: 1728, h: 1117 },
   { label: "Desktop · 1440 × 900", w: 1440, h: 900 },
   { label: "Laptop · 1280 × 800", w: 1280, h: 800 },
   { label: "Small laptop · 1180 × 760", w: 1180, h: 760 },
   { label: "Tablet · 1024 × 768", w: 1024, h: 768 },
+  { label: "Tablet portrait · 834 × 1194", w: 834, h: 1194 },
   { label: "Phone · 390 × 844", w: 390, h: 844 },
 ];
 function hexOf(rgb) {
@@ -695,6 +697,65 @@ function designMulti(body, ids) {
   body.append(acts);
 }
 
+// A frame drawn on the canvas: its own page of the prototype, to design by hand or with an agent.
+// The panel redraws when the frame's page finishes loading; a name being typed survives that.
+let frameEdit = null; // {id, value, start, end}
+function designFrame(body, b, env) {
+  const bid = b.id;
+  const t = h(`<div class="isec"><div class="ih"><b>Frame</b><button type="button" class="ib24" aria-label="Open in a new tab" data-tip="Open in a new tab">${IC.ext}</button></div><div class="ititle"><div class="afld-in"><input aria-label="Frame name" value="${esc(b.name || "Frame")}" maxlength="120"></div><span class="pth"><span title="${esc(b.file)}">${esc(b.file)}</span><button type="button" class="ib24" aria-label="Copy the page's path" data-tip="Copy path">${IC.copy}</button></span></div></div>`);
+  const [open, copy] = t.querySelectorAll(".ib24");
+  open.onclick = () => window.open(`/env/${b.env}/${b.file}`, "_blank", "noopener");
+  copy.onclick = () => copyText(`${env.folder || ""}/${b.file}`);
+  const inp = t.querySelector("input");
+  const track = () => (frameEdit = { id: bid, value: inp.value, start: inp.selectionStart, end: inp.selectionEnd });
+  inp.addEventListener("input", track);
+  inp.addEventListener("keyup", track);
+  inp.addEventListener("focus", track);
+  inp.addEventListener("keydown", (e) => (e.key === "Enter" && inp.blur(), e.key === "Escape" && ((inp.value = b.name || "Frame"), inp.blur())));
+  inp.addEventListener("blur", async () => {
+    if (!inp.isConnected) return; // redrawn: the new field carries on
+    frameEdit = null;
+    const v = inp.value.trim();
+    if (!v || v === b.name) return void (inp.value = b.name || "Frame");
+    const next = await api(`canvas/items/${bid}`, { method: "PATCH", body: { name: v } }).catch((e) => toast("Couldn't rename the frame", e.message));
+    if (next) (S.items.set(bid, next), markDirty(), renderLeft());
+  });
+  if (frameEdit?.id === bid) {
+    const ed = frameEdit;
+    inp.value = ed.value;
+    requestAnimationFrame(() => (inp.focus(), inp.setSelectionRange(ed.start ?? ed.value.length, ed.end ?? ed.value.length)));
+  } else if (renderDesign.focusLabel) {
+    renderDesign.focusLabel = false;
+    // the panel may redraw before the next frame: focus whichever name field is there then
+    const go = (n) =>
+      requestAnimationFrame(() => {
+        const f = $("rBody")?.querySelector('input[aria-label="Frame name"]');
+        if (f && document.activeElement !== f) (f.focus(), f.select());
+        if (n) setTimeout(() => go(n - 1), 120);
+      });
+    go(3);
+  }
+  body.append(t);
+  const A = sec("Design it");
+  A.append(h(`<span class="lineage">An agent designs this page in ${esc((rootOf(env.id) || env).name)}'s own style, at ${b.w} × ${b.h}. Notes and drawings on the frame tell it more.</span>`));
+  const ask = h(`<button type="button" class="createbtn sm" style="align-self:flex-start">${IC.spark}Design with an agent</button>`);
+  ask.onclick = () =>
+    fire("ask-agent", {
+      prompt: `Design the frame "${b.name || "Frame"}" (${b.w} × ${b.h}): write its page ${b.file} in this prototype. Keep to the design system in index.html: its CSS variables, type, spacing and components. Read the notes and drawings on the frame first.`,
+    });
+  A.append(ask);
+  body.append(A);
+  const L = sec("Layout");
+  const cur = DEVICES.find((d) => d.w === b.w && d.h === b.h);
+  L.append(row("Size", dropdown({ value: cur ? `${cur.w}x${cur.h}` : "custom", options: [...DEVICES.map((d) => ({ label: d.label, value: `${d.w}x${d.h}` })), ...(cur ? [] : [{ label: `Custom · ${b.w} × ${b.h}`, value: "custom" }])], full: true, label: "Size", onChange: async (v) => {
+    if (v === "custom") return;
+    const [w, hh] = v.split("x").map(Number);
+    const next = await api(`canvas/items/${bid}`, { method: "PATCH", body: { w, h: hh } }).catch((e) => toast("Couldn't resize", e.message));
+    if (next) (S.items.set(bid, next), sync(), renderDesign());
+  } })));
+  L.append(h(`<div class="xyrow"><span class="xy"><i>X</i>${b.x}</span><span class="xy"><i>Y</i>${b.y}</span><span class="xy"><i>W</i>${b.w}</span><span class="xy"><i>H</i>${b.h}</span></div>`));
+  body.append(L);
+}
 function designBoard(body, bid) {
   const b = S.items.get(bid);
   const env = b && S.envs.get(b.env);
@@ -707,6 +768,7 @@ function designBoard(body, bid) {
       return null;
     }
   })();
+  if (b.file) return designFrame(body, b, env);
   const t = h(`<div class="isec"><div class="ih"><b>Frame</b><button type="button" class="ib24" aria-label="Open in a new tab" data-tip="Open in a new tab">${IC.ext}</button></div><div class="ititle"><span class="nm">${esc(screenName(b))}</span></div></div>`);
   t.querySelector(".ib24").onclick = () => window.open(`/env/${b.env}/?ws-screen=${encodeURIComponent(b.screen || "")}`, "_blank", "noopener");
   const screens = ad?.screens?.length ? ad.screens : env.catalog?.screens || rootOf(env.id)?.catalog?.screens || [];

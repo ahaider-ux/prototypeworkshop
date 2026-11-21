@@ -137,6 +137,18 @@ hidden parts of the page are left out and the wait ends as soon as the page has 
 screen. What's saved is the drawing (an SVG of the page, gzipped), because browsers don't let a
 page read back the pixels of such a drawing.
 
+## Frames
+
+Press **F** (or the frame button in the toolbar) and drag on the canvas to draw a frame, or pick
+a size in the tray: Phone, Tablet, Laptop, Desktop or Wide. A frame is a new, empty page of the
+prototype (`frames/<name>.html`) shown as its own board, at exactly that size. Name it in the
+Design panel, and choose **Design with an agent** to have an agent build it in the prototype's own
+style, reading the notes and drawings you put on it. You can also edit the file yourself.
+
+On a branch, a frame's page belongs to the branch, so merging brings it into main. Agents can draw
+frames too (`add_frame`), for example to propose a new screen or the same screen at phone size,
+and `list_canvas` lists the frames on each page.
+
 ## Editing elements
 
 Elements inside a board are edited like frames in a design tool, and every edit is saved as CSS in
@@ -215,7 +227,7 @@ notes, highlights and arrows), `place_screen`, `add_note`, `create_branch`, `rev
 `merge_branch`, `checkout_branch`, `read_file`, `write_file`, `create_environment`,
 `fork_environment`, `update_environment`, `set_style`, `set_text`, `save_version`, `list_versions`,
 `restore_version`, `screenshot`, `list_tasks`, `take_task`, `update_task`, `list_comments`,
-`reply_comment`, `resolve_comment`, `list_recipes`, `run_recipe`, `update_brief`.
+`reply_comment`, `resolve_comment`, `list_recipes`, `run_recipe`, `update_brief`, `add_frame`.
 
 ### Run requests automatically
 

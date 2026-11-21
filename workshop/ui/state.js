@@ -88,7 +88,8 @@ export const pageEnv = () => S.envs.get(S.page) || null;
 export const protoId = () => rootOf(S.page)?.id || null;
 export const selEnvId = () => S.sel?.env || (S.sel?.item && S.items.get(S.sel.item)?.env) || S.page || null;
 export const selEnv = () => S.envs.get(selEnvId()) || null;
-export const screenName = (b) => (b?.screen ? b.screen.replace(/^Settings › /, "Settings · ") : "Start screen");
+// what a board is called: a frame by its name, a screen by the screen it shows
+export const screenName = (b) => (b?.name ? b.name : b?.screen ? b.screen.replace(/^Settings › /, "Settings · ") : "Start screen");
 export const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 // The page an item belongs to. Boards belong to their prototype; annotations carry the page they

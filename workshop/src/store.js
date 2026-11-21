@@ -185,6 +185,32 @@ const STARTER_RECIPES = [
   },
 ];
 
+// A frame's page: an .html file inside the prototype, never outside it or in a dot folder.
+function frameFile(v) {
+  const f = String(v || "").replace(/\\/g, "/").replace(/^\/+/, "");
+  if (!/^[a-z0-9][a-z0-9 _./-]{0,160}\.html$/i.test(f) || f.split("/").some((seg) => !seg || seg === ".." || seg.startsWith("."))) throw new StoreError("bad_item", "A frame's page is an .html file in the prototype");
+  return f;
+}
+// The page a new frame starts with: empty, saying what it's for, until someone designs it.
+const frameHtml = (name, w, h) => `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${String(name).replace(/[<&>"]/g, "")}</title>
+<style>
+  html, body { margin: 0; height: 100%; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: #fff; color: #6b6b73; }
+  .empty { height: 100%; box-sizing: border-box; display: grid; place-items: center; padding: 24px; text-align: center; }
+  .empty b { display: block; color: #18181b; font-weight: 600; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<!-- atelier:empty-frame — replace this page with the design (${w} × ${h}) -->
+<div class="empty"><div><b>${String(name).replace(/[<&>"]/g, "")}</b>An empty ${w} × ${h} frame. Ask an agent to design it, or edit this file.</div></div>
+</body>
+</html>
+`;
+
 // instructions for an agent: a request typed on the canvas, or a recipe's text
 function cleanPrompt(text, emptyMsg) {
   const t = String(text || "").trim();
@@ -468,7 +494,9 @@ export class Store {
     if (type === "board") {
       const env = p.env ?? prev.env;
       const e = await this.getEnv(env);
-      return { ...at, env: e.id, screen: str(p.screen, 120, prev.screen ?? null), state: str(p.state, 60, prev.state ?? null), w: num(p.w, 240, 4096, prev.w ?? e.device.w), h: num(p.h, 240, 4096, prev.h ?? e.device.h) };
+      // a frame shows its own page (file) of the prototype instead of one of its screens
+      const file = p.file === undefined ? prev.file ?? null : p.file === null ? null : frameFile(p.file);
+      return { ...at, env: e.id, screen: str(p.screen, 120, prev.screen ?? null), state: str(p.state, 60, prev.state ?? null), file, name: str(p.name, 120, prev.name ?? null), w: num(p.w, 120, 4096, prev.w ?? e.device.w), h: num(p.h, 120, 4096, prev.h ?? e.device.h) };
     }
     if (type === "note") {
       const tone = p.tone ?? prev.tone ?? "warm";
@@ -541,6 +569,26 @@ export class Store {
     const bs = (items || (await this.items())).filter((i) => i.type === "board" && (!env || i.env === env));
     if (!bs.length) return null;
     return { x0: Math.min(...bs.map((b) => b.x)), y0: Math.min(...bs.map((b) => b.y)), x1: Math.max(...bs.map((b) => b.x + b.w)), y1: Math.max(...bs.map((b) => b.y + b.h)), boards: bs };
+  }
+
+  // A new frame: an empty page of the prototype (frames/<name>.html) at any size, for people or
+  // agents to design. On a branch it's the branch's own file, so merging brings it over.
+  async addFrame(env, { name = "Frame", w = 1440, h = 900, x, y, author = null } = {}) {
+    const e = await this.getEnv(env);
+    const title = String(name || "Frame").trim().slice(0, 120) || "Frame";
+    const have = new Set((await this.listFiles(e.id)).map((f) => f.path));
+    let file = `frames/${slug(title)}.html`;
+    for (let i = 2; have.has(file) && i < 1000; i++) file = `frames/${slug(title)}-${i}.html`;
+    const W = Math.round(Number(w)) || 1440,
+      H = Math.round(Number(h)) || 900;
+    await this.writeFile(e.id, file, frameHtml(title, W, H));
+    let at = {};
+    if (Number.isFinite(Number(x)) && Number.isFinite(Number(y))) at = { x: Math.round(x), y: Math.round(y) };
+    else {
+      const b = await this.boundsOf(e.id);
+      if (b) at = { x: b.x1 + 120, y: b.y0 };
+    }
+    return this.addItem({ type: "board", env: e.id, file, name: title, w: W, h: H, ...at }, author);
   }
 
   async addBoard(env, { screen = null, state = null, author = null, x, y } = {}) {
@@ -729,7 +777,7 @@ export class Store {
     const src = (await this.items()).filter((i) => i.type === "board" && i.env === from);
     if (!src.length) return [await this.addBoard(to, { author, x: 0, y: 0 })];
     const out = [];
-    for (const b of src) out.push(await this.addItem({ type: "board", env: to, screen: b.screen, state: b.state, x: b.x, y: b.y, w: b.w, h: b.h }, author));
+    for (const b of src) out.push(await this.addItem({ type: "board", env: to, screen: b.screen, state: b.state, file: b.file ?? null, name: b.name ?? null, x: b.x, y: b.y, w: b.w, h: b.h }, author));
     return out;
   }
 

@@ -35,6 +35,7 @@ export const TOOLS = [
   { name: "fork_environment", description: "Makes an independent copy of an environment (optionally from a saved version) — no link back to merge. Prefer create_branch for trying changes.", inputSchema: S({ env: ENV, name: str("Name for the copy"), version: num("Version number to copy from (optional)") }, ["env"]) },
   { name: "list_canvas", description: "What is on the canvas: boards (an environment at a screen and state), and the designer's annotations — notes, boxes, arrows and hand-drawn marks — on each environment's page, with the boards each one sits over. Read the annotations as feedback.", inputSchema: S({ env: str("Only boards and annotations for this environment") }) },
   { name: "place_screen", description: "Puts a board for one of an environment's screens on the canvas (screens are listed by get_environment under catalog).", inputSchema: S({ env: ENV, screen: str("Screen name, e.g. Chat"), state: str("Screen state, e.g. Empty (optional)") }, ["env", "screen"]) },
+  { name: "add_frame", description: "Draws a new frame on the canvas: an empty page of the environment (frames/<name>.html) at the size you give, shown as its own board. Design it by writing that file. Use it to propose a new screen, or the same screen at another size.", inputSchema: S({ env: ENV, name: str("What the frame is, e.g. 'Onboarding step 2'"), width: num("Width in px, e.g. 390 for a phone"), height: num("Height in px") }, ["env", "name"]) },
   { name: "add_note", description: "Pins a note on the canvas next to an environment's boards, e.g. to explain a change or ask a question.", inputSchema: S({ env: ENV, text: str("The note"), tone: { type: "string", enum: ["warm", "info", "plain"] } }, ["env", "text"]) },
   { name: "update_environment", description: "Changes an environment's settings: name, description, theme (light/dark/system), opening screen, screen state, board size, or variants (an object of variant label → option).", inputSchema: S({ env: ENV, name: str("New name"), description: str("New description"), theme: { type: "string", enum: ["light", "dark", "system"] }, screen: str("Screen to open on, e.g. Chat"), state: str("Screen state, e.g. Empty"), width: num("Board width in px"), height: num("Board height in px"), variants: { type: "object", additionalProperties: { type: "string" } } }, ["env"]) },
   { name: "set_style", description: "Sets CSS properties for a selector in the environment's overrides.css (rules there win over the prototype's styles). Pass null or '' to remove a property. Prefer the prototype's CSS variables, e.g. var(--text-secondary).", inputSchema: S({ env: ENV, selector: str("CSS selector, e.g. from get_selection"), props: { type: "object", description: "CSS property → value", additionalProperties: { type: ["string", "null"] } } }, ["env", "selector", "props"]) },
@@ -54,6 +55,7 @@ export const TOOLS = [
 const INSTRUCTIONS = `Atelier holds HTML prototypes ("environments") that a designer arranges on a canvas as boards, one per screen.
 Each environment is a folder with index.html; you can edit those files directly or through these tools, and the canvas reloads live.
 - list_environments shows ids, folders and branches. get_selection tells you what the designer is pointing at.
+- A board with a file is a frame: a page the designer (or you, with add_frame) drew to be designed. If its file still says atelier:empty-frame, design it by writing that file in the prototype's own style.
 - Each branch is a page of its own on the canvas, laid out like its parent. list_canvas shows the designer's notes, boxes, arrows and hand-drawn marks on each page: treat them as feedback on the boards they sit over (screenshot a board to see what a mark circles or crosses out).
 - Each prototype has a brief and a decision log; take_task's brief includes both. Respect them.
 - Recipes (list_recipes, run_recipe) are the team's shared instructions for recurring work; each run happens on a branch.
@@ -149,7 +151,7 @@ export async function callTool(store, name, a = {}, ctx = {}) {
       // without a page go with whatever they overlap.
       const over = (r) => boards.filter((b) => (!r.env || b.env === r.env) && r.x < b.x + b.w && r.x + (r.w || 1) > b.x && r.y < b.y + b.h && r.y + (r.h || 1) > b.y).map((b) => ({ board: b.id, env: b.env, screen: b.screen }));
       const out = {
-        boards: boards.filter((b) => !a.env || b.env === a.env).map((b) => ({ id: b.id, env: b.env, screen: b.screen || "start screen", state: b.state || "Default", x: b.x, y: b.y, w: b.w, h: b.h })),
+        boards: boards.filter((b) => !a.env || b.env === a.env).map((b) => (b.file ? { id: b.id, env: b.env, frame: b.name || "Frame", file: b.file, x: b.x, y: b.y, w: b.w, h: b.h } : { id: b.id, env: b.env, screen: b.screen || "start screen", state: b.state || "Default", x: b.x, y: b.y, w: b.w, h: b.h })),
         notes: items.filter((i) => i.type === "note").map((n) => ({ id: n.id, page: n.env || null, text: n.text, author: n.author, over: over({ ...n, h: 120 }) })),
         boxes: items.filter((i) => i.type === "box").map((x) => ({ id: x.id, page: x.env || null, label: x.label, author: x.author, over: over(x) })),
         arrows: items.filter((i) => i.type === "arrow").map((r) => ({ id: r.id, page: r.env || null, label: r.label, from: r.from, to: r.to })),
@@ -168,6 +170,10 @@ export async function callTool(store, name, a = {}, ctx = {}) {
     case "place_screen": {
       const b = await store.addBoard(a.env, { screen: String(a.screen), state: a.state ? String(a.state) : null, author: who });
       return text({ board: b.id, x: b.x, y: b.y });
+    }
+    case "add_frame": {
+      const f = await store.addFrame(a.env, { name: a.name, w: a.width || 1440, h: a.height || 900, author: who });
+      return text({ board: f.id, file: f.file, path: path.join(store.filesDir(a.env), f.file), width: f.w, height: f.h, next: "Write the design into that file. The board updates as you save." });
     }
     case "add_note": {
       const bounds = await store.boundsOf(a.env);

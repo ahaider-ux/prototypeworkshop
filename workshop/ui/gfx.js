@@ -42,7 +42,7 @@ export function invalidate(env) {
   REV.set(env, rev(env) + 1);
 }
 // what a board shows; without a look from the server yet, only this session can match it
-export const keyOf = (it) => `${lookOf(it.env) || `${it.env}@${rev(it.env)}`}|${it.screen || ""}|${it.state || ""}|${it.w}x${it.h}|${LEVEL}`;
+export const keyOf = (it) => `${lookOf(it.env) || `${it.env}@${rev(it.env)}`}|${it.file || ""}|${it.screen || ""}|${it.state || ""}|${it.w}x${it.h}|${LEVEL}`;
 
 // ---------- saved pictures ----------
 const HASHES = new Map();

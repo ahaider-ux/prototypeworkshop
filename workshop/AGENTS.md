@@ -15,7 +15,8 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
    and hand-drawn marks — read them as feedback; screenshot the screen under a mark to see it), `take_task` / `update_task` (requests typed in Chat),
    `create_branch` / `review_branch` / `merge_branch`, `set_style`, `read_file` / `write_file`,
    `save_version`, `screenshot`, `list_recipes` / `run_recipe` (the team's shared instructions for
-   recurring work). Read the prototype's brief and recent decisions (`take_task` and
+   recurring work), `add_frame` (a new empty page to design; a frame whose file still says
+   `atelier:empty-frame` is waiting for a design). Read the prototype's brief and recent decisions (`take_task` and
    `get_environment` include them) and keep to them. Work on a branch, not on main. A branch reads its parent's files
    until it changes them; `checkout_branch` (or `take_task`) copies them into its folder. Visual
    tweaks go in `overrides.css`; structure goes in `index.html`. Keep to the prototype's own design

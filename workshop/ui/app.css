@@ -871,3 +871,18 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 @media (prefers-reduced-motion:reduce){.shimmer{animation:none;-webkit-mask-image:none;mask-image:none;opacity:.7}.skel{animation:none}}
 .card .th.skel iframe{opacity:0}
 .card .th iframe{transition:opacity 200ms ease}
+
+/* ---------- frames ---------- */
+.draftbox.frame{border:1px solid var(--text-accent);border-radius:0;background:var(--accent-subtle)}
+.draftbox .tag{position:absolute;left:50%;top:100%;transform:translate(-50%,6px);padding:2px 6px;border-radius:4px;background:var(--text-accent);color:var(--on-accent);font:500 12px/16px var(--fakt);white-space:nowrap}
+.draftbox .tag:empty,.draftbox .tag[hidden]{display:none}
+.frametray{gap:4px;padding:6px 8px}
+.frametray .ftl{font-size:12px;color:var(--text-secondary);padding:0 8px 0 4px;white-space:nowrap}
+.frametray .fsz{height:36px;display:inline-flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:0;padding:0 12px;border-radius:99px;transition:background-color 120ms ease,transform 150ms var(--ease-out)}
+.frametray .fsz:hover{background:var(--bg-hover)}
+.frametray .fsz:active{transform:scale(.97)}
+.frametray .fsz b{font:500 12px/14px var(--fakt);color:var(--text-primary)}
+.frametray .fsz span{font:400 12px/14px var(--fakt);color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.cv.tool-frame{cursor:crosshair}
+.cv.tool-frame .bd .hit{pointer-events:auto!important}
+@media (max-width:1180px){.frametray .fsz{padding:0 10px;height:32px}.frametray .fsz span{display:none}}

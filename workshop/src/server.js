@@ -247,6 +247,12 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
         emit({ kind: "envs" });
         return json(res, 201, env);
       }
+      if (b && c === "frames" && m === "POST") {
+        const p = await body(req);
+        const it = await store.addFrame(b, { name: p.name, w: p.w, h: p.h, x: p.x, y: p.y, author: me });
+        emit({ kind: "canvas" });
+        return json(res, 201, it);
+      }
       if (b && c === "diff" && m === "GET") return json(res, 200, await store.diffEnv(b));
       if (b && c === "merge" && m === "POST") {
         const p = await body(req);

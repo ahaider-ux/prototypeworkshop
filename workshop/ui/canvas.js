@@ -325,6 +325,8 @@ export function sync() {
 
 function boardSrc(it) {
   const q = new URLSearchParams({ "ws-board": it.id });
+  // a frame shows its own page of the prototype
+  if (it.file) return `/env/${encodeURIComponent(it.env)}/${it.file.split("/").map(encodeURIComponent).join("/")}?${q}`;
   if (it.screen) q.set("ws-screen", it.screen);
   if (it.state) q.set("ws-state", it.state);
   return `/env/${encodeURIComponent(it.env)}/?${q}`;
@@ -748,7 +750,52 @@ export function choosePen(pen) {
   if (S.tool !== "draw") setTool("draw");
   else renderTray();
 }
+// ---------- the frame tray: sizes to place a frame at, like a design tool's frame presets ----------
+const FRAME_SIZES = [
+  { label: "Phone", w: 390, h: 844 },
+  { label: "Tablet", w: 834, h: 1194 },
+  { label: "Laptop", w: 1440, h: 900 },
+  { label: "Desktop", w: 1728, h: 1117 },
+  { label: "Wide", w: 1920, h: 1080 },
+];
+function renderFrameTray() {
+  const tray = $("frameTray");
+  if (!tray) return;
+  tray.hidden = S.tool !== "frame";
+  if (tray.hidden) return;
+  // drag on the canvas to draw one; or pick a size here to place one beside the boards
+  tray.innerHTML = FRAME_SIZES.map((f) => `<button type="button" class="fsz" data-w="${f.w}" data-h="${f.h}" aria-label="Place a ${f.label.toLowerCase()} frame, ${f.w} by ${f.h}" data-tip="Place a ${f.label.toLowerCase()} frame · or drag on the canvas" data-tip-up><b>${f.label}</b><span>${f.w} × ${f.h}</span></button>`).join("");
+  for (const b of tray.querySelectorAll(".fsz"))
+    // a size from the tray goes beside the page's boards, never on top of one, at exactly that size
+    b.onclick = () => addFrame({ w: +b.dataset.w, h: +b.dataset.h }, true);
+}
+const nextFrameName = () => `Frame ${pageItems("board").filter((b) => b.file).length + 1}`;
+// draws a frame: an empty page of this prototype at that size, ready for someone (or an agent) to design
+export async function addFrame(r, fit = false) {
+  const env = S.page;
+  if (!env) return null;
+  setTool("move");
+  const snap = (v) => Math.round(v / 8) * 8;
+  try {
+    // drawn frames snap to the 8 px grid; a size picked from the tray is kept exactly
+    const at = Number.isFinite(r.x) ? { x: snap(r.x), y: snap(r.y) } : {};
+    const size = r.drawn ? { w: Math.max(120, snap(r.w)), h: Math.max(120, snap(r.h)) } : { w: r.w, h: r.h };
+    const it = await api(`envs/${env}/frames`, { method: "POST", body: { name: nextFrameName(), ...at, ...size } });
+    S.items.set(it.id, it);
+    record({ label: "frame", undo: () => removeItems([rid(it.id)]), redo: () => toast("Draw the frame again", "A frame's page stays in its folder after undo") });
+    sync();
+    selectBoard(it.id);
+    if (fit) focusItem(it.id);
+    fire("focus-label");
+    return it;
+  } catch (e) {
+    toast("Couldn't add the frame", e.message);
+    return null;
+  }
+}
+
 function renderTray() {
+  renderFrameTray();
   const tray = $("inkTray");
   if (!tray) return;
   tray.hidden = S.tool !== "draw";
@@ -1943,6 +1990,8 @@ function onDown(e) {
     return;
   } else if (S.tool === "box") {
     drag = { kind: "box", p0: p, w0: w };
+  } else if (S.tool === "frame") {
+    drag = { kind: "frame", p0: p, w0: w };
   } else if (S.tool === "arrow") {
     const from = under && S.items.get(under)?.type !== "arrow" ? { item: under } : onBoard ? { item: onBoard.dataset.item } : { x: Math.round(w.x), y: Math.round(w.y) };
     drag = { kind: "arrow", p0: p, from, w0: w };
@@ -2108,11 +2157,13 @@ function onMove(e) {
     drag.moved = true;
     dirty = true;
     fire("board-size", drag.id);
-  } else if (drag.kind === "box") {
+  } else if (drag.kind === "box" || drag.kind === "frame") {
     const w = toWorld(p);
-    if (!HUD.draft) (HUD.draft = h(`<div class="draftbox"></div>`)), hud.append(HUD.draft);
+    if (!HUD.draft) (HUD.draft = h(`<div class="draftbox${drag.kind === "frame" ? " frame" : ""}"><span class="tag"></span></div>`)), hud.append(HUD.draft);
     const a = toScreen(drag.w0);
-    placeBox(HUD.draft, { x: Math.min(a.x, p.x), y: Math.min(a.y, p.y), w: Math.abs(p.x - a.x), h: Math.abs(p.y - a.y) });
+    const ww = Math.abs(w.x - drag.w0.x),
+      wh = Math.abs(w.y - drag.w0.y);
+    placeBox(HUD.draft, { x: Math.min(a.x, p.x), y: Math.min(a.y, p.y), w: Math.abs(p.x - a.x), h: Math.abs(p.y - a.y) }, drag.kind === "frame" ? `${Math.round(ww / 8) * 8} × ${Math.round(wh / 8) * 8}` : "");
     drag.w1 = w;
   } else if (drag.kind === "arrow") {
     const w = toWorld(p);
@@ -2184,6 +2235,17 @@ async function onUp(e) {
       }
     } else selectBoard(d.id);
     return;
+  }
+  if (d.kind === "frame") {
+    HUD.draft?.remove();
+    HUD.draft = null;
+    const a = d.w0,
+      b = d.w1 || a;
+    const w = Math.abs(b.x - a.x),
+      hh = Math.abs(b.y - a.y);
+    // a click places a laptop-sized frame there; a drag draws one exactly
+    if (w * S.cam.z < 8 || hh * S.cam.z < 8) return addFrame({ x: a.x, y: a.y, w: 1440, h: 900 });
+    return addFrame({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w, h: hh, drawn: true });
   }
   if (d.kind === "box") {
     HUD.draft?.remove();
@@ -2473,7 +2535,7 @@ function onKey(e) {
       return saveInk(), renderTray();
     }
   }
-  const tools = { v: "move", h: "hand", n: "note", b: "box", a: "arrow", c: "comment", d: "draw" };
+  const tools = { v: "move", h: "hand", f: "frame", n: "note", b: "box", a: "arrow", c: "comment", d: "draw" };
   if (tools[k.toLowerCase()] && !e.shiftKey) return setTool(S.tool === tools[k.toLowerCase()] && k.toLowerCase() !== "v" ? "move" : tools[k.toLowerCase()]);
   if (k === "p" || k === "P") return setMode(S.mode === "design" ? "prototype" : "design");
   if (k === "!" || (e.shiftKey && k === "1")) return fit();
