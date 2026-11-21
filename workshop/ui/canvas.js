@@ -443,12 +443,13 @@ function planSnapshots() {
   G.want(jobs.filter((j) => !(B.get(j.it.id)?.ready && !isGhost(j.it.id))));
 }
 let gfxCol = null;
+// an empty or loading frame is a blank page: white, like a browser tab, in either theme
 function gfxColors() {
   const theme = document.documentElement.getAttribute("data-ltheme");
   if (gfxCol?.theme === theme) return gfxCol;
   const cs = getComputedStyle(document.documentElement);
   const v = (n) => cs.getPropertyValue(n).trim();
-  return (gfxCol = { theme, edge: v("--border-subtle"), page: v("--skel"), shine: v("--skel-hi"), text: v("--text-placeholder"), font: v("--fakt") || "sans-serif", label: (it) => screenName(it) });
+  return (gfxCol = { theme, edge: v("--border-subtle"), page: "#fff", shine: v("--skel-hi"), text: v("--text-placeholder"), font: v("--fakt") || "sans-serif", label: (it) => screenName(it) });
 }
 function drawGfx() {
   // while a board waits for its picture, its shimmer keeps the canvas drawing
