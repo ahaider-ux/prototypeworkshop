@@ -1,0 +1,19 @@
+{
+  "id": "r-mwqak54c-4d7748",
+  "name": "Polish pass",
+  "description": "Brings the screens back to the prototype's own design system: tokens, spacing, radii, type and states.",
+  "trigger": "manual",
+  "order": 1,
+  "versions": [
+    {
+      "n": 1,
+      "prompt": "Review the screens on this page against the prototype's design system (read its CSS variables first).\nFix values that are off the system: colours that aren't tokens, spacing off the scale, odd radii, type sizes off the ramp, inconsistent control heights.\nMake every interactive element show hover, focus-visible, pressed and disabled states.\nUse overrides.css for visual fixes. Don't redesign anything. List what you changed and why.",
+      "status": "production",
+      "at": "2026-11-21T10:55:01.356Z",
+      "author": "Atelier",
+      "note": "First version"
+    }
+  ],
+  "createdAt": "2026-11-21T10:55:01.356Z",
+  "author": "Atelier"
+}

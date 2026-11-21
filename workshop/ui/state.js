@@ -11,6 +11,7 @@ export const S = {
   items: new Map(), // id → canvas item
   comments: [],
   tasks: [],
+  recipes: null, // the workspace's recipes with their run stats (null until loaded)
   versions: new Map(), // env id → [versions]
   diffs: new Map(), // branch id → review summary
   view: "home", // "home" | "proto"

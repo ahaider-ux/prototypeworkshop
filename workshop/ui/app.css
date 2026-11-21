@@ -811,3 +811,22 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 /* annotations sit above the screens' click layers (z-index 2), so they can always be picked */
 #inks,#wires{z-index:3}
 #notes{position:absolute;left:0;top:0;z-index:4}
+
+/* ---------- recipes, brief, decisions ---------- */
+.rcard{gap:8px}
+.rcard .ih b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rcs{display:flex;flex-direction:column;gap:6px}
+.rcbar{display:flex;gap:2px;height:4px;border-radius:99px;overflow:hidden;background:var(--tag-grey)}
+.rcbar i{display:block;height:100%}
+.rcbar .m{background:var(--text-success)}
+.rcbar .o{background:var(--text-accent)}
+.rcbar .d{background:var(--text-disabled)}
+.rcst{font-size:12px;line-height:16px;color:var(--text-secondary)}
+.rca{display:flex;gap:8px;flex-wrap:wrap}
+.dcrow{display:flex;gap:8px;padding:6px 8px;margin:0 -8px;border-radius:8px;transition:background-color 120ms ease}
+.dcrow:hover{background:var(--menu-hover)}
+.dcrow .tx{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:12px;line-height:16px}
+.dcrow .tx b{font-weight:500;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dcrow .tx .nt{color:var(--text-primary)}
+.dcrow .tx span:last-child{color:var(--text-secondary)}
+.rvwhy{padding:0 24px 12px}

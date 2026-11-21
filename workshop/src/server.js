@@ -46,6 +46,32 @@ function lanAddress() {
 export async function startServer({ workspace, port = 4600, host = "127.0.0.1", quiet = false, agent = true } = {}) {
   const store = await Store.open(workspace);
   const clients = new Set();
+  // Recipes that run when notes are added: only on a branch page (main never changes on its own),
+  // only after the designer pauses (Guard: one run per burst of marks, not one per stroke), and
+  // runRecipe skips a recipe that already has a run waiting on that branch.
+  const NOTE_PAUSE_MS = 15_000;
+  const noteTimers = new Map();
+  function noteAdded(envId) {
+    clearTimeout(noteTimers.get(envId));
+    noteTimers.set(
+      envId,
+      setTimeout(async () => {
+        noteTimers.delete(envId);
+        try {
+          const env = await store.getEnv(envId);
+          if (!env.parent || env.archived) return;
+          const auto = (await store.listRecipes()).filter((r) => r.trigger === "on-notes");
+          if (!auto.length) return;
+          const ws = await store.workspace();
+          for (const r of auto) {
+            const out = await store.runRecipe(r.id, envId, { author: "Recipe trigger", runner: ws.agent && runner ? "auto" : "harness" });
+            if (out.task.runner === "auto" && !out.already) runner.kick();
+          }
+          emit({ kind: "tasks" });
+        } catch {}
+      }, NOTE_PAUSE_MS).unref?.() ?? undefined,
+    );
+  }
   const emit = (event) => {
     const line = `event: change\ndata: ${JSON.stringify(event)}\n\n`;
     for (const res of clients) {
@@ -138,7 +164,11 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
     }
     if (a === "canvas" && b === "items") {
       if (!c && m === "GET") return json(res, 200, await store.items());
-      if (!c && m === "POST") return json(res, 201, await store.addItem(await body(req), me));
+      if (!c && m === "POST") {
+        const item = await store.addItem(await body(req), me);
+        if (item.env && ["note", "box", "arrow", "ink"].includes(item.type)) noteAdded(item.env);
+        return json(res, 201, item);
+      }
       if (c && m === "PATCH") return json(res, 200, await store.updateItem(c, await body(req)));
       if (c && m === "DELETE") return json(res, 200, await store.deleteItem(c));
     }
@@ -178,7 +208,7 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
       if (b && c === "diff" && m === "GET") return json(res, 200, await store.diffEnv(b));
       if (b && c === "merge" && m === "POST") {
         const p = await body(req);
-        const r = await store.mergeEnv(b, { take: p.take || {}, author: me });
+        const r = await store.mergeEnv(b, { take: p.take || {}, author: me, note: typeof p.note === "string" ? p.note : "" });
         emit({ kind: "envs" });
         return json(res, 200, r);
       }
@@ -278,6 +308,27 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
         const t = await store.updateTask(b, { status: "cancelled", log: "Stopped from the canvas", logKind: "note" });
         emit({ kind: "tasks" });
         return json(res, 200, t);
+      }
+    }
+    if (a === "recipes") {
+      if (!b && m === "GET") {
+        const [list, stats] = await Promise.all([store.listRecipes(), store.recipeStats()]);
+        return json(res, 200, list.map((r) => ({ ...r, stats: stats[r.id] || { runs: 0, merged: 0, open: 0, failed: 0, discarded: 0, byVersion: {} } })));
+      }
+      const done = (r) => (emit({ kind: "recipes" }), r);
+      if (!b && m === "POST") return json(res, 201, done(await store.addRecipe(await body(req), me)));
+      if (b && !c && m === "PATCH") return json(res, 200, done(await store.updateRecipe(b, await body(req))));
+      if (b && !c && m === "DELETE") return json(res, 200, done(await store.deleteRecipe(b)) ?? { ok: true });
+      if (b && c === "versions" && m === "POST") return json(res, 201, done(await store.addRecipeVersion(b, { ...(await body(req)), author: me })));
+      if (b && c === "promote" && m === "POST") return json(res, 200, done(await store.promoteRecipeVersion(b, (await body(req)).n)));
+      if (b && c === "run" && m === "POST") {
+        const p = await body(req);
+        const ws = await store.workspace();
+        const r = await store.runRecipe(b, p.env, { version: p.version ?? null, author: me, runner: ws.agent && runner ? "auto" : "harness" });
+        emit({ kind: "envs" });
+        emit({ kind: "tasks" });
+        if (r.task.runner === "auto" && !r.already) runner.kick();
+        return json(res, 201, r);
       }
     }
     if (a === "selection") {

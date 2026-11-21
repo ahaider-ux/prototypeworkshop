@@ -30,10 +30,12 @@ Open http://127.0.0.1:4600. The server only listens on this computer.
 workspace/
   workshop.json              name and the agent command
   envs/<id>/index.html       a prototype — edit it in anything
-  envs/<id>/env.json         name, theme, variants, text edits, and for a branch: its parent and base
+  envs/<id>/env.json         name, theme, variants, text edits, the brief and decision log, and for a
+                             branch: its parent and base
   envs/<id>/overrides.css    design tweaks from the inspector and agents; loads after the page's styles
   canvas/<id>.json           what's on the canvas: boards (a prototype at a screen), and the notes,
                              highlights, arrows and drawings made on each page
+  recipes/<id>.json          shared recipes: versioned instructions agents run on a branch
   .workshop/                 this computer's own state (not committed): versions, trash, tasks,
                              comments, share links, the current selection, agent heartbeats
 ```
@@ -133,6 +135,30 @@ pages keep the keyboard only in Interact mode or while you edit text in them.
 Other keys: **Space** drag to pan, **⇧1** fit, **⇧2** zoom to the selection, **⌘D** duplicate,
 **⌘K** search, **⌘\** hide the panels, **?** all shortcuts.
 
+## Brief, decisions and recipes
+
+Agents do better work with the context a team already has. Atelier keeps three kinds of it with the
+prototype, in files that are committed and shared:
+
+- **The brief.** One per prototype, in the Design panel when nothing is selected. Say what the
+  prototype is for, its design rules and what to keep. Every agent request starts with it, and its
+  branches read it too.
+- **The decision log.** Every merge records what changed, who merged it and, if you write one in
+  the merge dialog, why. History lists them. Agents read the ten most recent, so they don't undo
+  what was decided.
+- **Recipes.** The **Recipes** tab holds instructions for jobs you ask for often. A new workspace
+  starts with *Apply my notes*, *Polish pass* and *State audit*. Running one from Main makes a new
+  branch first, so its result is a draft you review and merge, never a change to Main. On a branch,
+  it runs there.
+  - **Versions.** Changing a recipe's instructions saves a new version as *testing*. Production
+    keeps running until you promote the new one. Use **Try** to run a testing version on a branch
+    first.
+  - **Results.** Each recipe shows its runs and what became of their branches: merged, still open,
+    or not kept. Run history lives in `.workshop/`, so each computer counts its own runs.
+  - **Run when notes are added.** This switch (off by default, because each run uses your agent)
+    queues the recipe on a branch 15 seconds after you stop adding notes, highlights, arrows or
+    drawings there. A recipe already waiting on that branch isn't queued twice.
+
 ## Connect a coding agent
 
 ### Claude Code over MCP
@@ -152,7 +178,7 @@ notes, highlights and arrows), `place_screen`, `add_note`, `create_branch`, `rev
 `merge_branch`, `checkout_branch`, `read_file`, `write_file`, `create_environment`,
 `fork_environment`, `update_environment`, `set_style`, `set_text`, `save_version`, `list_versions`,
 `restore_version`, `screenshot`, `list_tasks`, `take_task`, `update_task`, `list_comments`,
-`reply_comment`, `resolve_comment`.
+`reply_comment`, `resolve_comment`, `list_recipes`, `run_recipe`, `update_brief`.
 
 ### Run requests automatically
 
@@ -163,7 +189,8 @@ a time, in the prototype's folder, after saving a version:
 node bin/workshop.js agent claude -p {prompt} --permission-mode acceptEdits
 ```
 
-`{prompt}` is the full brief (request, selected element, how to work), `{request}` the words typed,
+`{prompt}` is the full brief (the prototype's brief, recent decisions, the request or recipe, the
+selected element, how to work), `{request}` the words typed,
 `{dir}` the folder and `{file}` its `index.html`. Without `{prompt}` the brief arrives on stdin, so
 any harness works. Turn it off with `node bin/workshop.js agent --off`. The same choice is in the
 canvas under **Connect an agent**.

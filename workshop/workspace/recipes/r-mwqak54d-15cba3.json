@@ -1,0 +1,19 @@
+{
+  "id": "r-mwqak54d-15cba3",
+  "name": "State audit",
+  "description": "Adds the states a real product needs: empty, loading, error, long text and no results.",
+  "trigger": "manual",
+  "order": 2,
+  "versions": [
+    {
+      "n": 1,
+      "prompt": "For every list, table, form and panel on this page's screens, check the states it would need in a real product: empty (saying what to do next), loading, error, one item, many items, very long text, and no search results.\nAdd the missing ones in the prototype's own style, reachable through its existing state switcher if it has one.\nDon't remove anything. Finish with a table of components and the states you added.",
+      "status": "production",
+      "at": "2026-11-21T10:55:01.357Z",
+      "author": "Atelier",
+      "note": "First version"
+    }
+  ],
+  "createdAt": "2026-11-21T10:55:01.357Z",
+  "author": "Atelier"
+}

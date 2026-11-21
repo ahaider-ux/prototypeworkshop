@@ -103,3 +103,29 @@ test("MCP: agents see the marks drawn on a page", async () => {
   assert.equal(out.drawings[0].pen, "marker");
   assert.ok(out.drawings[0].over.length, "it says which screen the mark is on");
 });
+
+test("MCP: recipes run on a branch, and the brief carries the prototype's brief and decisions", async () => {
+  const ws = await fsp.mkdtemp(path.join(os.tmpdir(), "workshop-"));
+  const store = await Store.open(ws);
+  const env = await store.createEnv({ html: HTML });
+  await store.updateEnv(env.id, { brief: "Never touch the header." });
+  const b = await store.branchEnv(env.id, { name: "Tone" });
+  await store.setStyle(b.id, ".t", { color: "red" });
+  await store.mergeEnv(b.id, { note: "Warmer headline" });
+  const c = client(ws);
+  await c.call("initialize", { protocolVersion: "2025-06-18", capabilities: {} });
+  const tool = async (name, args) => (await c.call("tools/call", { name, arguments: args })).result.content[0].text;
+  const recipes = JSON.parse(await tool("list_recipes", {}));
+  const audit = recipes.find((r) => r.name === "State audit");
+  assert.equal(audit.production, 1);
+  const run = JSON.parse(await tool("run_recipe", { recipe: audit.id, env: env.id }));
+  assert.notEqual(run.env, env.id, "a run from main gets its own branch");
+  const taken = JSON.parse(await tool("take_task", { id: run.task }));
+  assert.match(taken.brief, /Never touch the header/);
+  assert.match(taken.brief, /Warmer headline/);
+  assert.match(taken.brief, /Recipe: State audit \(version 1\)/);
+  assert.match(taken.brief, /empty \(saying what to do next\)/, "the recipe's own instructions are in the brief");
+  const info = JSON.parse(await tool("get_environment", { env: run.env }));
+  assert.equal(info.brief, "Never touch the header.");
+  await c.close();
+});

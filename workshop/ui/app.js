@@ -5,6 +5,7 @@ import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyTex
 import { initCanvas, sync, fit, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
 import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff } from "./panels.js";
 import { rulesFor, loadOverrides } from "./styles.js";
+import { loadRecipes } from "./recipes.js";
 
 const pageName = (e) => (e ? (isBranch(e) ? e.name : "Main") : "");
 const store = {
@@ -334,7 +335,7 @@ async function openReview(id) {
   }
   const parent = S.envs.get(env.parent);
   const take = {};
-  const md = modal(`<div class="md-h"><div class="tt"><h2>Review and merge</h2><p>${esc(env.name)} into ${esc(pageName(parent))} · ${d.changes.length} change${d.changes.length === 1 ? "" : "s"}${d.conflicts ? ` · ${d.conflicts} conflict${d.conflicts === 1 ? "" : "s"}: ${esc(pageName(parent))} changed the same thing since the branch was made` : ""}</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div><div class="md-b" id="rvB"></div><div class="md-f">${d.behind ? `<span style="font-size:12px;color:var(--text-secondary)">${d.behind} change${d.behind === 1 ? "" : "s"} on ${esc(pageName(parent))} stay as they are.</span>` : ""}<span class="sp"></span><button type="button" class="ghbtn" data-a="x2">Cancel</button><button type="button" class="createbtn" data-a="ok" ${d.changes.length ? "" : "disabled"}>Merge into ${esc(pageName(parent))}</button></div>`, { wide: true });
+  const md = modal(`<div class="md-h"><div class="tt"><h2>Review and merge</h2><p>${esc(env.name)} into ${esc(pageName(parent))} · ${d.changes.length} change${d.changes.length === 1 ? "" : "s"}${d.conflicts ? ` · ${d.conflicts} conflict${d.conflicts === 1 ? "" : "s"}: ${esc(pageName(parent))} changed the same thing since the branch was made` : ""}</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div><div class="md-b" id="rvB"></div><div class="rvwhy fld"><label class="lr" for="rvWhy">Why merge this? <span style="color:var(--text-secondary);font-weight:400">· optional, kept in the decision log that agents read</span></label><div class="afld-in"><input id="rvWhy" maxlength="2000" placeholder="The sidebar felt cramped"></div></div><div class="md-f">${d.behind ? `<span style="font-size:12px;color:var(--text-secondary)">${d.behind} change${d.behind === 1 ? "" : "s"} on ${esc(pageName(parent))} stay as they are.</span>` : ""}<span class="sp"></span><button type="button" class="ghbtn" data-a="x2">Cancel</button><button type="button" class="createbtn" data-a="ok" ${d.changes.length ? "" : "disabled"}>Merge into ${esc(pageName(parent))}</button></div>`, { wide: true });
   const b = $("rvB");
   if (!d.changes.length) b.append(h(`<div class="pempty" style="padding:0"><b>Nothing to merge yet</b>This branch is the same as ${esc(pageName(parent))} was when it was made.</div>`));
   const groups = [["setting", "Settings"], ["style", "Design overrides"], ["file", "Files"]];
@@ -367,7 +368,7 @@ async function openReview(id) {
     if (busy) return;
     busy = true;
     try {
-      const r = await api(`envs/${id}/merge`, { method: "POST", body: { take } });
+      const r = await api(`envs/${id}/merge`, { method: "POST", body: { take, note: $("rvWhy")?.value.trim() || "" } });
       closeModal();
       await loadWorkspace();
       go(parent.id);
@@ -854,7 +855,7 @@ function renameWorkspace() {
 }
 
 async function onEvent(ev) {
-  if (ev.kind === "envs") return loadWorkspace();
+  if (ev.kind === "envs") return loadWorkspace().then(() => S.recipes && loadRecipes()); // a merge or archive changes a recipe's results
   if (ev.kind === "canvas") return loadItems();
   if (ev.kind === "env") {
     if (!S.envs.has(ev.id)) return loadWorkspace();
@@ -876,7 +877,8 @@ async function onEvent(ev) {
     if (ev.id === S.page) (renderRight(), renderBanner());
     return;
   }
-  if (ev.kind === "tasks") return loadTasks();
+  if (ev.kind === "tasks") return loadTasks().then(() => S.recipes && loadRecipes());
+  if (ev.kind === "recipes") return loadRecipes();
   if (ev.kind === "comments") return loadComments();
   if (ev.kind === "versions") return S.page && loadVersions(S.page);
   if (ev.kind === "harness") {
@@ -994,7 +996,7 @@ async function boot() {
     $("frame").append(h(`<div class="winov open"><div class="md" style="width:480px"><div class="md-h"><div class="tt"><h2>The Workshop server isn't answering</h2><p>${esc(e.message)}. Start it with <span class="mono" style="font-size:12px;font-weight:400">npm start</span> in the workshop folder, then reload.</p></div></div></div></div>`));
     return;
   }
-  await Promise.all([loadComments(), loadTasks()]);
+  await Promise.all([loadComments(), loadTasks(), loadRecipes()]);
   // a fresh visit picks up where this browser left off
   if (!location.hash || location.hash === "#") {
     const last = store.get("ws-route", "");

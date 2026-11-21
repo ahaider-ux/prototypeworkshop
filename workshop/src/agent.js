@@ -13,15 +13,23 @@ import path from "node:path";
 const TIMEOUT_MS = 20 * 60 * 1000; // Guard: an agent that hangs is stopped after 20 minutes
 const FLUSH_MS = 400;
 
-export function taskPrompt(task, env, dir) {
+// ctx: {brief, decisions, recipe} from store.contextFor — the context every agent reads first
+export function taskPrompt(task, env, dir, ctx = {}) {
   const sel = task.selection;
   const lines = [
     `You are editing an HTML prototype in Atelier: "${env.name}".`,
     `Folder: ${dir}`,
     `Entry file: ${path.join(dir, "index.html")}`,
     "",
-    `Request from the designer: ${task.prompt}`,
   ];
+  if (ctx.brief) lines.push("The prototype's brief (read this first; it outranks your own taste):", ctx.brief, "");
+  if (ctx.decisions?.length) {
+    lines.push("Recent decisions on this prototype (don't undo them without being asked):");
+    for (const d of ctx.decisions) lines.push(`- ${String(d.at).slice(0, 10)} merged "${d.branchName}"${d.note ? `: ${d.note}` : ""}${d.changes?.length ? ` (${d.changes.slice(0, 6).join(", ")}${d.changes.length > 6 ? ", …" : ""})` : ""}`);
+    lines.push("");
+  }
+  if (ctx.recipe) lines.push(`Recipe: ${ctx.recipe.name} (version ${ctx.recipe.n})`, ctx.recipe.prompt);
+  else lines.push(`Request from the designer: ${task.prompt}`);
   if (sel && sel.selector) {
     lines.push("", "They selected this element on the canvas:", `- selector: ${sel.selector}`);
     if (sel.label) lines.push(`- element: ${sel.label}`);
@@ -111,7 +119,7 @@ export class AgentRunner {
     await s.updateTask(task.id, { status: "working", claimedBy: agent.name, beforeVersion: before.n, log: `${agent.name} started. Saved version ${before.n} first.`, logKind: "note" });
     this.emit({ kind: "tasks" });
     const files0 = await snapshot(dir);
-    const prompt = taskPrompt(task, env, dir);
+    const prompt = taskPrompt(task, env, dir, await s.contextFor(task.env, task).catch(() => ({})));
     const fill = (a) => a.replace(/\{prompt\}/g, prompt).replace(/\{request\}/g, task.prompt).replace(/\{env\}/g, task.env).replace(/\{dir\}/g, dir).replace(/\{file\}/g, path.join(dir, "index.html"));
     const args = agent.command.map(fill);
     const viaStdin = !agent.command.some((a) => /\{prompt\}|\{request\}/.test(a));

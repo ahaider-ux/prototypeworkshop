@@ -10,6 +10,7 @@ import { $, h, esc, api, toast, IC, dropdown, segmented, copyText, timeAgo, clam
 import { rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, setMode, docOf, winOf, flowOf, parseTranslate, exactSel, removeEl, selIds, toggleSel, alignSel, distributeSel, duplicateSel, removeItems } from "./canvas.js";
 import { PENS, INKS, SIZES as INK_SIZES } from "./ink.js";
 import { record, rid } from "./history.js";
+import { renderRecipes } from "./recipes.js";
 import { loadOverrides, cachedOverrides, forgetOverrides, rulesFor, boardsLive, commitRules, resetSelectors, preview, endPreview } from "./styles.js";
 
 // ---------- the prototype's design tokens the inspector offers (Libra's, for Libra prototypes) ----------
@@ -88,7 +89,7 @@ export async function loadVersions(id) {
 }
 
 // ======================= LEFT PANEL =======================
-const LEFT = { screens: "Screens", agents: "Agents", notes: "Notes", history: "History" };
+const LEFT = { screens: "Screens", agents: "Agents", recipes: "Recipes", notes: "Notes", history: "History" };
 export function renderLeft() {
   const head = $("lHead"),
     body = $("lBody"),
@@ -107,10 +108,11 @@ export function renderLeft() {
   if (!env) return;
   if (S.leftTab === "file") renderFile(head, body);
   else {
-    const sub = { screens: `To place on ${pageName(env)}`, agents: agentLine(), notes: S.notesAll ? `Everywhere in ${rootOf(env.id)?.name || ""}` : `On ${pageName(env)}`, history: `Versions of ${pageName(env)}` }[S.leftTab];
+    const sub = { screens: `To place on ${pageName(env)}`, agents: agentLine(), recipes: "Shared ways of working", notes: S.notesAll ? `Everywhere in ${rootOf(env.id)?.name || ""}` : `On ${pageName(env)}`, history: `Versions of ${pageName(env)}` }[S.leftTab];
     head.append(h(`<div class="ttl"><b>${LEFT[S.leftTab]}</b><span>${esc(sub)}</span></div>`));
     if (S.leftTab === "screens") renderScreens(body, foot, env);
     else if (S.leftTab === "agents") renderChat(body, foot, env);
+    else if (S.leftTab === "recipes") renderRecipes(head, body, env);
     else if (S.leftTab === "notes") renderNotes(head, body, env);
     else renderHistory(head, body, env);
   }
@@ -363,6 +365,35 @@ function renderNotes(head, body, env) {
 }
 
 // ----- history: versions of this page, and branches merged into the prototype -----
+// The brief: what every agent reads first. It belongs to the prototype; its branches read it.
+function briefSec(env) {
+  const root = rootOf(env.id) || env;
+  const L = sec("Brief", root.brief ? `<span class="tct">${root.brief.length > 999 ? `${Math.round(root.brief.length / 1000)}k` : root.brief.length}</span>` : "");
+  if (root.id !== env.id) {
+    L.append(h(`<span class="lineage">Agents here read the brief of ${esc(root.name)}${root.brief ? `: “${esc(root.brief.slice(0, 120))}${root.brief.length > 120 ? "…" : ""}”` : ". It has none yet."}</span>`));
+    return L;
+  }
+  L.append(h(`<span class="lineage">What every agent reads first: what this is for, the design rules, and what to keep.</span>`));
+  const ta = h(`<textarea class="afld-ta" aria-label="Brief" maxlength="20000" style="min-height:88px" placeholder="A banking app for small businesses. Use the Libra tokens only. Keep the sidebar and the chat composer as they are.">${esc(root.brief || "")}</textarea>`);
+  ta.addEventListener("blur", async () => {
+    if (ta.value !== (root.brief || "")) (await patchEnv(root.id, { brief: ta.value })) && toast("Saved the brief", "Agents read it before every request");
+  });
+  L.append(ta);
+  return L;
+}
+function decisionsSec(env) {
+  const root = rootOf(env.id) || env;
+  const ds = (root.decisions || []).slice().reverse();
+  if (!ds.length) return null;
+  const L = sec("Decisions", `<span class="tct">${ds.length}</span>`);
+  L.append(h(`<span class="lineage">Every merge, with why. Agents read the recent ones.</span>`));
+  for (const d of ds.slice(0, 20)) {
+    const r = h(`<div class="dcrow"><span class="tx"><b>${esc(d.branchName)}</b>${d.note ? `<span class="nt">${esc(d.note)}</span>` : ""}<span>${esc(d.author || "You")} · ${esc(timeAgo(d.at))} · ${plural(d.applied || 0, "change")}</span></span></div>`);
+    if (d.changes?.length) r.title = d.changes.join("\n");
+    L.append(r);
+  }
+  return L;
+}
 function renderHistory(head, body, env) {
   const sv = h(`<button type="button" class="dbtn sm">${IC.version}Save</button>`);
   sv.onclick = () => fire("save-version", env.id);
@@ -379,6 +410,8 @@ function renderHistory(head, body, env) {
     v.append(vr);
   }
   body.append(v);
+  const dec = decisionsSec(env);
+  if (dec) body.append(h(`<div class="pdiv"></div>`), dec);
   const merged = familyOf(rootOf(env.id)?.id).map((x) => x.env).filter((e) => e.archived);
   if (merged.length) {
     body.append(h(`<div class="pdiv"></div>`), h(`<div class="shd"><span>Merged and archived</span><span class="n">${merged.length}</span></div>`));
@@ -499,6 +532,7 @@ function designPage(body, env) {
   });
   t.querySelector(".ib24").onclick = () => copyText(`${S.ws.root}/envs/${id}`);
   body.append(t);
+  body.append(briefSec(env));
   if (branch) {
     const L = sec("Changes on this branch");
     L.append(h(`<div class="lineage"><span>Branch of <b>${esc(pageName(parent))}</b>, made ${esc(timeAgo(env.branch?.at || env.created))}${env.author ? ` by ${esc(env.author)}` : ""}. It reads ${esc(pageName(parent))}'s files until it changes them.</span></div>`));
@@ -1358,6 +1392,7 @@ export function initPanels() {
     if (S.leftTab === "file") renderLeft();
     if (S.sel?.item === id) renderRight();
   });
+  on("recipes", () => S.leftTab === "recipes" && renderLeft());
   on("catalog", () => (S.leftTab === "screens" && renderLeft(), S.rightTab === "prototype" && renderRight()));
   on("env-meta", (id) => {
     forgetOverrides(id);

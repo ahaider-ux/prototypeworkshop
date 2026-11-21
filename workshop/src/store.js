@@ -31,6 +31,9 @@ export const LIMITS = {
   textPatchChars: 10_000,
   commentChars: 4_000,
   promptChars: 20_000,
+  briefChars: 20_000,
+  decisions: 200, // the decision log keeps the most recent ones
+  recipes: 100,
   versionsPerEnv: 200,
   envs: 500,
 };
@@ -125,12 +128,50 @@ async function listFilesRec(dir, base = dir, out = []) {
 
 // ---------- the store ----------
 
+// Ready-made recipes a new workspace starts with: the atelier's standing instructions.
+const STARTER_RECIPES = [
+  {
+    name: "Apply my notes",
+    description: "Reads every note, highlight, arrow and drawing on this branch's page, and fixes what each one points at.",
+    // starts manual: running an agent on its own costs money, so someone switches this on deliberately
+    trigger: "manual",
+    prompt: [
+      "Call list_canvas for this branch's page and read every annotation as a direction from the designer: notes (what they say), highlights (the boxed area), arrows (from what to what) and drawings (a circle means look here, a line under means keep, a cross means remove).",
+      "For each one, screenshot the screen under it to see exactly what it marks, then make the change on this branch.",
+      "Reply to comment pins you resolved. Don't change anything no annotation asks for.",
+      "Finish with one line per annotation: what it asked and what you did.",
+    ].join("\n"),
+  },
+  {
+    name: "Polish pass",
+    description: "Brings the screens back to the prototype's own design system: tokens, spacing, radii, type and states.",
+    trigger: "manual",
+    prompt: [
+      "Review the screens on this page against the prototype's design system (read its CSS variables first).",
+      "Fix values that are off the system: colours that aren't tokens, spacing off the scale, odd radii, type sizes off the ramp, inconsistent control heights.",
+      "Make every interactive element show hover, focus-visible, pressed and disabled states.",
+      "Use overrides.css for visual fixes. Don't redesign anything. List what you changed and why.",
+    ].join("\n"),
+  },
+  {
+    name: "State audit",
+    description: "Adds the states a real product needs: empty, loading, error, long text and no results.",
+    trigger: "manual",
+    prompt: [
+      "For every list, table, form and panel on this page's screens, check the states it would need in a real product: empty (saying what to do next), loading, error, one item, many items, very long text, and no search results.",
+      "Add the missing ones in the prototype's own style, reachable through its existing state switcher if it has one.",
+      "Don't remove anything. Finish with a table of components and the states you added.",
+    ].join("\n"),
+  },
+];
+
 export class Store {
   constructor(root) {
     this.root = path.resolve(root);
     this.envsDir = path.join(this.root, "envs");
     this.metaDir = path.join(this.root, ".workshop");
     this.canvasDir = path.join(this.root, "canvas");
+    this.recipesDir = path.join(this.root, "recipes");
   }
 
   static async open(root) {
@@ -138,6 +179,10 @@ export class Store {
     await fsp.mkdir(s.envsDir, { recursive: true });
     for (const d of ["versions", "trash", "tasks", "comments", "shares", "harness"]) await fsp.mkdir(path.join(s.metaDir, d), { recursive: true });
     await fsp.mkdir(s.canvasDir, { recursive: true });
+    if (!(await exists(s.recipesDir))) {
+      await fsp.mkdir(s.recipesDir, { recursive: true });
+      for (const r of STARTER_RECIPES) await s.addRecipe(r, "Atelier");
+    }
     if (!(await exists(s.file("workshop.json")))) {
       await writeJson(s.file("workshop.json"), { name: path.basename(s.root) === "workspace" ? "Prototype workshop" : path.basename(s.root), agent: null });
     }
@@ -427,6 +472,8 @@ export class Store {
     const p = patch || {};
     if (typeof p.name === "string" && p.name.trim()) env.name = p.name.trim().slice(0, 120);
     if (typeof p.description === "string") env.description = p.description.slice(0, 400);
+    // the brief every agent reads first: what this prototype is, its rules, what to keep
+    if (typeof p.brief === "string") env.brief = p.brief.slice(0, LIMITS.briefChars);
     if (p.device) {
       const w = Math.round(Number(p.device.w)),
         h = Math.round(Number(p.device.h));
@@ -574,7 +621,7 @@ export class Store {
     return { branch: id, parent: parent.id, parentName: parent.name, changes, behind, conflicts: changes.filter((c) => c.conflict).length };
   }
 
-  async mergeEnv(id, { take = {}, author = null } = {}) {
+  async mergeEnv(id, { take = {}, author = null, note = "" } = {}) {
     const env = await this.getEnv(id);
     const d = await this.diffEnv(id);
     const before = await this.saveVersion(d.parent, { label: `Before merging ${env.name}`, author, kind: "auto" });
@@ -592,6 +639,9 @@ export class Store {
       }
       if (c.kind === "file") await writeAtomic(path.join(this.envDir(d.parent), ...c.key.split("/")), await this.readFile(id, c.key));
     }
+    // what was decided, kept with the prototype so people and agents can read the reasoning later
+    const kept = d.changes.filter((c) => !(c.conflict && take[c.key] === "main")).map((c) => c.label);
+    meta.decisions = [...(meta.decisions || []), { at: now(), branch: id, branchName: env.name, author, note: String(note || "").slice(0, 2000), changes: kept.slice(0, 40), applied }].slice(-LIMITS.decisions);
     await this.writeMeta(d.parent, meta);
     for (const [sel, props] of styles) await this.setStyle(d.parent, sel, props);
     const after = await this.saveVersion(d.parent, { label: `Merged ${env.name}`, author, kind: "manual" });
@@ -851,13 +901,14 @@ export class Store {
     return c;
   }
 
-  async addTask({ env, prompt, selection = null, author = "You", runner = "harness" }) {
+  async addTask({ env, prompt, selection = null, author = "You", runner = "harness", recipe = null }) {
     await this.getEnv(env);
     const p = String(prompt || "").trim();
     if (!p) throw new StoreError("empty", "Say what the agent should change");
     if (p.length > LIMITS.promptChars) throw new StoreError("too_big", "That request is too long");
     const sel = selection && typeof selection === "object" ? { selector: String(selection.selector || "").slice(0, LIMITS.selectorChars), label: String(selection.label || "").slice(0, 120), html: String(selection.html || "").slice(0, 4000), text: String(selection.text || "").slice(0, 600), styles: selection.styles && typeof selection.styles === "object" ? selection.styles : null } : null;
-    return this.putRecord("tasks", { id: newId("t"), env, prompt: p, selection: sel, author: String(author).slice(0, 80), runner, status: "queued", log: [], reply: null, claimedBy: null, beforeVersion: null, changed: [], createdAt: now(), updatedAt: now() });
+    const rec = recipe && typeof recipe === "object" && typeof recipe.id === "string" ? { id: assertRecord(recipe.id), n: Number.isInteger(recipe.n) ? recipe.n : null, name: String(recipe.name || "").slice(0, 120) } : null;
+    return this.putRecord("tasks", { id: newId("t"), env, prompt: p, selection: sel, recipe: rec, author: String(author).slice(0, 80), runner, status: "queued", log: [], reply: null, claimedBy: null, beforeVersion: null, changed: [], createdAt: now(), updatedAt: now() });
   }
 
   async updateTask(id, patch) {
@@ -875,6 +926,122 @@ export class Store {
     }
     t.updatedAt = now();
     return this.putRecord("tasks", t);
+  }
+
+  // ----- recipes: shared, versioned ways of working that agents run on a branch -----
+  // One file each in workspace/recipes/, committed with the workspace, so the whole team shares them.
+  // A recipe is specific (one kind of job), shared (anyone can run it), and scrutinised (its runs
+  // are counted and its instructions are versioned: testing, production, retired).
+
+  async listRecipes() {
+    const out = [];
+    for (const f of await fsp.readdir(this.recipesDir).catch(() => [])) {
+      if (!f.endsWith(".json")) continue;
+      const r = await readJson(path.join(this.recipesDir, f), null);
+      if (r?.id) out.push(r);
+    }
+    return out.sort((a, b) => (a.order ?? 1e9) - (b.order ?? 1e9) || String(a.createdAt).localeCompare(String(b.createdAt)));
+  }
+  async getRecipe(id) {
+    const r = await readJson(path.join(this.recipesDir, `${assertRecord(id)}.json`), null);
+    if (!r) throw new StoreError("not_found", "That recipe doesn't exist", 404);
+    return r;
+  }
+  async putRecipe(r) {
+    await writeJson(path.join(this.recipesDir, `${assertRecord(r.id)}.json`), r);
+    return r;
+  }
+  cleanRecipeText(prompt) {
+    const t = String(prompt || "").trim();
+    if (!t) throw new StoreError("empty", "Write the recipe's instructions");
+    if (t.length > LIMITS.promptChars) throw new StoreError("too_big", "Those instructions are too long");
+    return t;
+  }
+  async addRecipe({ name, description = "", prompt, trigger = "manual" }, author = "You") {
+    // Guard: recipes are shared instructions, not a dumping ground; a hundred is plenty for a team.
+    const existing = await this.listRecipes();
+    if (existing.length >= LIMITS.recipes) throw new StoreError("too_many", "This workspace has as many recipes as it can hold");
+    const nm = String(name || "").trim().slice(0, 80);
+    if (!nm) throw new StoreError("empty", "Give the recipe a name");
+    return this.putRecipe({ id: newId("r"), name: nm, description: String(description).slice(0, 400), trigger: trigger === "on-notes" ? "on-notes" : "manual", order: Math.max(-1, ...existing.map((r) => r.order ?? -1)) + 1, versions: [{ n: 1, prompt: this.cleanRecipeText(prompt), status: "production", at: now(), author, note: "First version" }], createdAt: now(), author });
+  }
+  async updateRecipe(id, patch = {}) {
+    const r = await this.getRecipe(id);
+    if (typeof patch.name === "string" && patch.name.trim()) r.name = patch.name.trim().slice(0, 80);
+    if (typeof patch.description === "string") r.description = patch.description.slice(0, 400);
+    if (patch.trigger === "manual" || patch.trigger === "on-notes") r.trigger = patch.trigger;
+    r.updatedAt = now();
+    return this.putRecipe(r);
+  }
+  // a new version starts in testing; production keeps running until someone promotes it
+  async addRecipeVersion(id, { prompt, note = "", author = "You" }) {
+    const r = await this.getRecipe(id);
+    const n = Math.max(0, ...r.versions.map((v) => v.n)) + 1;
+    r.versions = [...r.versions, { n, prompt: this.cleanRecipeText(prompt), status: "testing", at: now(), author, note: String(note).slice(0, 200) }].slice(-50);
+    r.updatedAt = now();
+    return this.putRecipe(r);
+  }
+  async promoteRecipeVersion(id, n) {
+    const r = await this.getRecipe(id);
+    const v = r.versions.find((x) => x.n === Number(n));
+    if (!v) throw new StoreError("not_found", "That version doesn't exist", 404);
+    for (const x of r.versions) if (x.status === "production") x.status = "retired";
+    v.status = "production";
+    r.updatedAt = now();
+    return this.putRecipe(r);
+  }
+  async deleteRecipe(id) {
+    await this.getRecipe(id);
+    await fsp.rm(path.join(this.recipesDir, `${assertRecord(id)}.json`), { force: true });
+  }
+  recipeVersion(r, n = null) {
+    return (n !== null && r.versions.find((v) => v.n === Number(n))) || r.versions.find((v) => v.status === "production") || r.versions[r.versions.length - 1];
+  }
+  // run a recipe: from main it works on a new branch (a shadow run you review and merge); on a branch, there
+  async runRecipe(id, env, { version = null, author = "You", runner = "harness" } = {}) {
+    const r = await this.getRecipe(id);
+    const v = this.recipeVersion(r, version);
+    const e = await this.getEnv(env);
+    const target = e.parent ? e.id : (await this.branchEnv(e.id, { name: r.name, author })).id;
+    const busy = (await this.records("tasks")).find((t) => t.env === target && t.recipe?.id === r.id && (t.status === "queued" || t.status === "working"));
+    if (busy) return { task: busy, env: target, already: true };
+    const task = await this.addTask({ env: target, prompt: `${r.name}${v.status === "testing" ? ` (testing v${v.n})` : ""}`, author, runner, recipe: { id: r.id, n: v.n, name: r.name } });
+    return { task, env: target, already: false };
+  }
+  // how a recipe is doing: runs, and what became of their branches
+  async recipeStats() {
+    const tasks = (await this.records("tasks")).filter((t) => t.recipe?.id);
+    const envs = new Map((await this.listEnvs()).map((e) => [e.id, e]));
+    const out = {};
+    for (const t of tasks) {
+      const s = (out[t.recipe.id] ||= { runs: 0, merged: 0, open: 0, failed: 0, discarded: 0, byVersion: {} });
+      const e = envs.get(t.env);
+      const outcome = t.status === "failed" || t.status === "cancelled" ? "failed" : e?.mergedAt ? "merged" : !e || e.archived ? "discarded" : "open";
+      s.runs++;
+      s[outcome]++;
+      const bv = (s.byVersion[t.recipe.n] ||= { runs: 0, merged: 0 });
+      bv.runs++;
+      if (outcome === "merged") bv.merged++;
+    }
+    return out;
+  }
+  // what an agent reads before working on a page: the prototype's brief, its recent decisions, and
+  // the recipe's instructions when the task came from one
+  async contextFor(envId, task = null) {
+    let e = await this.getEnv(envId);
+    let brief = e.brief || "";
+    for (let i = 0; e.parent && i < 8; i++) {
+      e = await this.getEnv(e.parent).catch(() => null);
+      if (!e) break;
+      if (!brief && e.brief) brief = e.brief;
+    }
+    const decisions = (e?.decisions || []).slice(-10);
+    let recipe = null;
+    if (task?.recipe?.id) {
+      const r = await this.getRecipe(task.recipe.id).catch(() => null);
+      if (r) recipe = { name: r.name, n: this.recipeVersion(r, task.recipe.n).n, prompt: this.recipeVersion(r, task.recipe.n).prompt };
+    }
+    return { brief, decisions, recipe };
   }
 
   async addShare({ env, role = "view", author = "You" }) {

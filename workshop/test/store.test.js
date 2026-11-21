@@ -261,3 +261,57 @@ test("a drawing is checked, kept relative to its spot, and measured", async () =
   const moved = await s.updateItem(k.id, { x: 300 });
   assert.deepEqual([moved.x, moved.points.length], [300, 3], "moving a drawing moves its spot, not its points");
 });
+
+test("recipes: a new workspace has starters, versions go testing → production, runs are counted", async () => {
+  const s = await Store.open(await tmp());
+  const list = await s.listRecipes();
+  assert.deepEqual(list.map((r) => r.name), ["Apply my notes", "Polish pass", "State audit"]);
+  assert.ok(list.every((r) => r.trigger === "manual"), "nothing runs an agent on its own until someone switches it on");
+  const polish = list.find((r) => r.name === "Polish pass");
+  const v2 = await s.addRecipeVersion(polish.id, { prompt: "Tighter polish", note: "shorter" });
+  assert.equal(v2.versions[1].status, "testing");
+  assert.equal(s.recipeVersion(v2).n, 1, "production keeps running until a new version is promoted");
+  const p = await s.promoteRecipeVersion(polish.id, 2);
+  assert.deepEqual(p.versions.map((v) => v.status), ["retired", "production"]);
+  await assert.rejects(() => s.addRecipeVersion(polish.id, { prompt: "  " }), /instructions/);
+  await assert.rejects(() => s.getRecipe("../x"), /id/i);
+
+  const a = await s.createEnv({ html: HTML });
+  const run = await s.runRecipe(polish.id, a.id);
+  assert.notEqual(run.env, a.id, "from main, a recipe runs on a new branch (a shadow run)");
+  assert.equal((await s.getEnv(run.env)).parent, a.id);
+  assert.deepEqual(run.task.recipe, { id: polish.id, n: 2, name: "Polish pass" });
+  const again = await s.runRecipe(polish.id, run.env);
+  assert.equal(again.already, true, "a recipe already waiting on that branch isn't queued twice");
+  await s.updateTask(run.task.id, { status: "done" });
+  await s.mergeEnv(run.env, {});
+  const run2 = await s.runRecipe(polish.id, a.id, { version: 1 });
+  await s.updateEnv(run2.env, { archived: true });
+  const st = (await s.recipeStats())[polish.id];
+  assert.equal(st.runs, 2);
+  assert.equal(st.merged, 1);
+  assert.equal(st.discarded, 1);
+  assert.deepEqual(st.byVersion, { 1: { runs: 1, merged: 0 }, 2: { runs: 1, merged: 1 } });
+});
+
+test("a merge is logged as a decision, and agents read the brief and recent decisions", async () => {
+  const s = await Store.open(await tmp());
+  const a = await s.createEnv({ html: HTML });
+  await s.updateEnv(a.id, { brief: "Keep the sidebar. Use tokens only." });
+  const b = await s.branchEnv(a.id, { name: "Quieter buttons" });
+  await s.setStyle(b.id, ".b", { opacity: "0.8" });
+  await s.mergeEnv(b.id, { note: "Primary actions were too loud", author: "Ada" });
+  const main = await s.getEnv(a.id);
+  assert.equal(main.decisions.length, 1);
+  assert.equal(main.decisions[0].branchName, "Quieter buttons");
+  assert.equal(main.decisions[0].note, "Primary actions were too loud");
+  assert.deepEqual(main.decisions[0].changes, [".b · opacity"]);
+  const c = await s.branchEnv(a.id, { name: "Next" });
+  const ctx = await s.contextFor(c.id);
+  assert.equal(ctx.brief, "Keep the sidebar. Use tokens only.", "a branch reads its prototype's brief");
+  assert.equal(ctx.decisions[0].note, "Primary actions were too loud");
+  const { taskPrompt } = await import("../src/agent.js");
+  const text = taskPrompt({ prompt: "Do it" }, c, "/x", ctx);
+  assert.match(text, /Keep the sidebar/);
+  assert.match(text, /Primary actions were too loud/);
+});

@@ -1,0 +1,19 @@
+{
+  "id": "r-mwqak54a-2d74fe",
+  "name": "Apply my notes",
+  "description": "Reads every note, highlight, arrow and drawing on this branch's page, and fixes what each one points at.",
+  "trigger": "manual",
+  "order": 0,
+  "versions": [
+    {
+      "n": 1,
+      "prompt": "Call list_canvas for this branch's page and read every annotation as a direction from the designer: notes (what they say), highlights (the boxed area), arrows (from what to what) and drawings (a circle means look here, a line under means keep, a cross means remove).\nFor each one, screenshot the screen under it to see exactly what it marks, then make the change on this branch.\nReply to comment pins you resolved. Don't change anything no annotation asks for.\nFinish with one line per annotation: what it asked and what you did.",
+      "status": "production",
+      "at": "2026-11-21T10:55:01.354Z",
+      "author": "Atelier",
+      "note": "First version"
+    }
+  ],
+  "createdAt": "2026-11-21T10:55:01.354Z",
+  "author": "Atelier"
+}

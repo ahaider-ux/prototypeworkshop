@@ -12,7 +12,9 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
    `get_selection` (what the designer is pointing at), `list_canvas` (their notes, highlights, arrows
    and hand-drawn marks — read them as feedback; screenshot the screen under a mark to see it), `take_task` / `update_task` (requests typed in Chat),
    `create_branch` / `review_branch` / `merge_branch`, `set_style`, `read_file` / `write_file`,
-   `save_version`, `screenshot`. Work on a branch, not on main. A branch reads its parent's files
+   `save_version`, `screenshot`, `list_recipes` / `run_recipe` (the team's shared instructions for
+   recurring work). Read the prototype's brief and recent decisions (`take_task` and
+   `get_environment` include them) and keep to them. Work on a branch, not on main. A branch reads its parent's files
    until it changes them; `checkout_branch` (or `take_task`) copies them into its folder. Visual
    tweaks go in `overrides.css`; structure goes in `index.html`. Keep to the prototype's own design
    system (Libra tokens for Libra prototypes).
@@ -47,7 +49,10 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
 - **Tests.** `npm test` runs `node --test`. A fix comes with a test that fails without it. For UI
   changes, look at the result in a browser (`npm start`, open http://127.0.0.1:4600).
 - **Don't commit `workspace/.workshop/`** — it is one computer's local state (versions, trash,
-  tasks, comments, share links). `workspace/canvas/` and `workspace/envs/` are shared and committed.
+  tasks, comments, share links). `workspace/canvas/`, `workspace/envs/` and `workspace/recipes/`
+  are shared and committed.
+- **Nothing runs an agent on its own by default.** Recipe triggers start off; switching one on is
+  the person's choice, because each run costs them.
 
 ## Libra assets
 
