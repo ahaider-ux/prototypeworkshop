@@ -6,6 +6,7 @@ import { addLink, addPicture, initCanvas, sync, fit, focusItem, fitRect, selectB
 import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff } from "./panels.js";
 import { rulesFor, loadOverrides } from "./styles.js";
 import { loadRecipes } from "./recipes.js";
+import { playIntro } from "./intro.js";
 
 const store = {
   get(k, d) {
@@ -861,6 +862,7 @@ function wsMenu() {
     { label: "Copy folder path", icon: IC.copy, onClick: () => copyText(S.ws.home || S.ws.root) },
     { label: "Rename space", icon: IC.board, onClick: renameWorkspace },
     { label: "Hide panels", kbd: "⌘\\", onClick: toggleUi },
+    { label: "Play the intro", onClick: () => playIntro({ force: true }) },
     { label: "Keyboard shortcuts", kbd: "?", onClick: openShortcuts },
     "-",
     { head: "Appearance" },
@@ -1203,6 +1205,8 @@ async function boot() {
     return;
   }
   await Promise.all([loadComments(), loadTasks(), loadActivity()]); // loading the tasks loads the recipes too
+  // the first time this browser opens Atelier (or with ?intro): the intro, then the app
+  playIntro({ force: new URLSearchParams(location.search).has("intro") });
   // a fresh visit picks up where this browser left off
   if (!location.hash || location.hash === "#") {
     const last = store.get("ws-route", "");

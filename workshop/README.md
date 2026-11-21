@@ -26,6 +26,12 @@ npm start
 
 Open http://127.0.0.1:4600. The server only listens on this computer.
 
+The first time a browser opens Atelier, a six-second intro plays: one tile cutting through what
+people bring (avatars, a frame, an ink mark, an agent), the studio bursting in around it (frames,
+notes, branches, agents at work, cursors), then everything cutting away to the mark and the name
+typed on. Click, press Esc or **Skip** to go straight in; replay it from the Atelier menu (**Play
+the intro**) or by opening `/?intro`. With reduced motion, only the final lockup shows.
+
 ## Spaces: work in your own project folders
 
 Open the **Atelier** menu (top left) and choose **Connect a folder…**, or click **Connect a
