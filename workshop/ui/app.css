@@ -467,14 +467,16 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .ruler.rh{left:20px;top:0;width:calc(100% - 20px);height:20px;box-shadow:inset 0 -1px 0 var(--border-subtle)}
 .ruler.rv{left:0;top:20px;width:20px;height:calc(100% - 20px);box-shadow:inset -1px 0 0 var(--border-subtle)}
 .rcorner{position:absolute;left:0;top:0;width:20px;height:20px;z-index:7;background:var(--bg-layer);box-shadow:inset -1px -1px 0 var(--border-subtle)}
-.bd{position:absolute;background:var(--bg-layer);box-shadow:var(--sh-sm),0 0 0 .5px var(--border-subtle);overflow:hidden}
-.bd iframe{display:block;border:0;width:100%;height:100%;background:#fff}
+/* boards are drawn by the graphics layer; a board's element is its hit area, and holds its page while live */
+.gfx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.bd{position:absolute;overflow:hidden}
+.bd iframe{display:block;border:0;width:100%;height:100%;background:#fff;opacity:0;transition:opacity 120ms ease}
+.bd.ready iframe{opacity:1}
+#bgFrames{position:fixed;left:-40000px;top:0;width:1px;height:1px;overflow:visible;pointer-events:none}
 .bd .hit{position:absolute;inset:0;z-index:2}
 .cv.mode-prototype.tool-move .bd .hit{pointer-events:none}
 .cv.tool-hand .bd .hit,.cv.panning .bd .hit,.cv.tool-comment .bd .hit,.cv.tool-note .bd .hit,.cv.tool-box .bd .hit,.cv.tool-arrow .bd .hit{pointer-events:auto!important}
 .bd.editing .hit{pointer-events:none!important}
-.bd .boot{position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center;background:var(--bg-layer);color:var(--text-secondary);font-size:24px;transition:opacity 200ms ease}
-.bd.ready .boot{opacity:0;pointer-events:none}
 /* annotations live in the world, so they sit with what they point at */
 .note{position:absolute;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--bg-warm);box-shadow:var(--sh-md),0 0 0 .5px var(--border-crumb);transform-origin:0 0;cursor:default}
 .note.info{background:var(--accent-subtle);box-shadow:var(--sh-md),0 0 0 .5px var(--tag-info-bg)}
@@ -513,6 +515,16 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .hdl{position:absolute;width:8px;height:8px;margin:-4px 0 0 -4px;background:#fff;border:1px solid var(--text-accent);pointer-events:auto;border-radius:0}
 .hdl.e,.hdl.w{cursor:ew-resize}.hdl.n,.hdl.s{cursor:ns-resize}.hdl.se,.hdl.nw{cursor:nwse-resize}.hdl.ne,.hdl.sw{cursor:nesw-resize}
 .insline{position:absolute;background:var(--text-accent);border-radius:1px;pointer-events:none}
+.guide{position:absolute;background:var(--text-error);pointer-events:none}
+.draftbox.marquee{border:1px solid var(--text-accent);border-radius:0;background:var(--accent-subtle);opacity:.6}
+.selbox.group{border-style:dashed}
+.ctxa{position:absolute;width:1px;height:1px;pointer-events:none}
+.stage.no-rulers .ruler,.stage.no-rulers .rcorner{display:none}
+.albar{display:grid;grid-template-columns:repeat(6,1fr);gap:2px;padding:2px;border-radius:8px;background:var(--bg-input);box-shadow:var(--sh-field)}
+.albar .ib32{width:100%;height:28px;border-radius:6px}
+.kgrid{display:grid;grid-template-columns:1fr 1fr;gap:24px 32px}
+.kgrp{display:flex;flex-direction:column}
+.kgrp .kbdl{font-size:12px;gap:8px 12px}
 .pin{position:absolute;width:28px;height:28px;margin:-28px 0 0 0;border-radius:99px 99px 99px 0;background:var(--bg-primary);color:var(--bg-layer);border:2px solid var(--bg-layer);box-shadow:var(--sh-md);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;pointer-events:auto;cursor:pointer;transition:transform 150ms var(--ease-out)}
 :root[data-ltheme="dark"] .pin{color:#161615}
 .pin:hover{transform:scale(1.06)}
@@ -552,7 +564,7 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 /* present: one board fills the window */
 .prsbar{position:absolute;left:50%;top:12px;transform:translateX(-50%);display:flex;align-items:center;gap:6px;padding:4px;background:var(--bg-layer);border:.5px solid var(--border-subtle);border-radius:12px;box-shadow:var(--sh-md);z-index:30;transition:opacity 160ms ease}
 .app.present .top,.app.present .rail,.app.present .lp,.app.present .rp,.app.present .tb,.app.present .banner,.app.present .ruler,.app.present .rcorner,.app.present .hud .blabel,.app.present .note,.app.present .box,.app.present .wires,.app.present .pin,.app.present .selbox,.app.present .hdl,.app.present .alabel,.app.present .sizetag{display:none!important}
-.app.present .bd:not(.presenting){visibility:hidden}
+.app.present .bd:not(.presenting),.app.present .gfx{visibility:hidden}
 .app.present .cv{background:var(--bg-shell)}
 
 /* ═══ Home: your prototypes ═══ */

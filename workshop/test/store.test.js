@@ -240,3 +240,11 @@ test("several style rules land in one write, or none do", async () => {
   assert.equal(await s.getOverrides(e.id), r.css);
   await assert.rejects(s.setStyles(e.id, []), /between 1 and 100/);
 });
+
+test("an empty screen list never replaces a known one", async () => {
+  const s = await Store.open(await tmp());
+  const e = await s.createEnv({ html: HTML });
+  await s.updateEnv(e.id, { catalog: { adapter: "Tools", screens: [{ group: "App", name: "Inbox" }], states: [], variants: [] } });
+  const after = await s.updateEnv(e.id, { catalog: { adapter: "", screens: [], states: [], variants: [] } });
+  assert.deepEqual(after.catalog.screens.map((x) => x.name), ["Inbox"]);
+});

@@ -35,6 +35,7 @@
 
     <section class="stage" id="stage">
       <div class="cv mode-design tool-move" id="cv" tabindex="0" aria-label="Canvas">
+        <canvas class="gfx" id="gfx" aria-hidden="true"></canvas>
         <div class="world" id="world"><div id="boards"></div><svg class="wires" id="wires" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0 0 10 5 0 10Z" fill="currentColor"/></marker></defs></svg><div id="notes"></div></div>
         <div class="hud" id="hud"></div>
         <div class="cvempty" id="cvEmpty" hidden><div class="in"><b>This page is empty</b><span>Place a screen from the Screens panel, or drop an HTML file here to add a prototype.</span><button type="button" class="dbtn sm" id="cvScreens">Show screens</button></div></div>
@@ -64,6 +65,7 @@
     <div class="rs" id="palRs" role="listbox"></div>
   </div>
 </div>
+<div id="bgFrames" aria-hidden="true" inert></div>
 <input type="file" id="fileIn" accept=".html,.htm,text/html" hidden>
 <script type="module" src="/ui/app.js"></script>
 </body>

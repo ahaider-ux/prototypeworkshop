@@ -62,6 +62,35 @@ The toolbar: **V** select, **H** hand, **N** note, **B** highlight (drag a box),
 from a note, box or board to what it's about), **C** comment on a board, **P** Interact (the pointer
 goes to the page: use it like the app).
 
+## Working on the canvas
+
+These follow FigCraft's canvas commands and the shortcuts you know from design tools (**?** lists
+them all):
+
+- **Select**: click; **Shift**-click adds or removes; drag on an empty spot to select everything
+  the box touches; **⌘A** selects everything on the page. Pan with **Space**-drag, the hand (**H**),
+  or by scrolling.
+- **Move**: drag (several at once move together), or nudge with the arrow keys (**Shift** 8 px).
+  Smart guides line things up with the rest of the page as you drag; hold **⌥** to move freely.
+- **Align and distribute** several boards and annotations: in the Design panel, the right-click
+  menu, or **⌥A / ⌥H / ⌥D** (left, centre, right), **⌥W / ⌥V / ⌥S** (top, middle, bottom) and
+  **⌥⇧H / ⌥⇧V** (distribute).
+- **Copy, cut, paste, duplicate** boards and annotations (**⌘C / ⌘X / ⌘V / ⌘D**), on the same page
+  or onto another branch: a pasted board shows that page's version of the prototype.
+- **Undo and redo** everything — moves, resizes, adding and removing, alignment and every element
+  edit — with **⌘Z** and **⌘⇧Z**.
+- **Right-click** anything for what you can do with it.
+- **View**: **⌘Y** outlines every element on the live boards, **⇧R** shows or hides the rulers.
+
+### How it stays fast
+
+The canvas draws boards as pictures on a graphics layer, so a page of dozens of screens pans and
+zooms smoothly. The real pages run in the background: a few hidden frames load each board, let
+the prototype settle on its screen, and turn it into a picture. Only the boards you're working in
+are live — the one you selected, the one under the pointer, and the few in view once you zoom in
+close — so they're ready to click into, edit or use, and a live board hands back a fresh picture
+when you leave it. Any change to a prototype's files or settings redraws its pictures.
+
 ## Editing elements
 
 Elements inside a board are edited like frames in a design tool, and every edit is saved as CSS in
@@ -84,13 +113,17 @@ Present, in a new tab and in share links. On a branch it is one of the changes y
   step with the arrow keys or scrub by dragging their label.
 - **This element or all like it**: an edit applies to the selected element, or to every element
   like it, as a component would. Moves always apply to the one you moved.
-- **Undo**: **⌘Z** undoes element edits one at a time. **Changes on this element** lists what the
-  page changed on it, with **Reset**.
+- **Structure**: **Enter** selects the first child, **⇧Enter** the parent, **Tab / ⇧Tab** the next or
+  previous sibling. **]** / **[** bring to front or send to back, **⌘]** / **⌘[** forward or backward
+  (saved as `z-index`). Right-click → **Copy CSS** copies its styles.
+- **Undo**: **⌘Z** and **⌘⇧Z**, one edit at a time. **Changes on this element** lists what the page
+  changed on it, with **Reset**.
 
-Drag a frame by its title, or select the frame first (**Esc** from an element) and drag it.
+Drag a frame by its title, or select the frame first (**Esc** from an element) and drag it. Live
+pages keep the keyboard only in Interact mode or while you edit text in them.
 
 Other keys: **Space** drag to pan, **⇧1** fit, **⇧2** zoom to the selection, **⌘D** duplicate,
-**⌘K** search, **⌘\** hide the panels, **⌘Z** undo an element edit.
+**⌘K** search, **⌘\** hide the panels, **?** all shortcuts.
 
 ## Connect a coding agent
 

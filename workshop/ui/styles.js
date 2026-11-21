@@ -6,6 +6,7 @@
 import { S, fire, boardsOf } from "./state.js";
 import { api, toast } from "./lib.js";
 import { rt, refreshSelInfo, markDirty } from "./canvas.js";
+import { record, undo } from "./history.js";
 
 const OV = new Map(); // env id → overrides.css text
 export async function loadOverrides(id, force = false) {
@@ -44,7 +45,6 @@ export function rulesFor(env, selectors) {
 }
 
 // ---------- writing ----------
-const UNDO = [];
 let writing = Promise.resolve();
 // rules: [{selector, props: {prop: value | null}}]
 export function commitRules(env, rules, label) {
@@ -58,13 +58,8 @@ export function commitRules(env, rules, label) {
       return { selector: r.selector, props: Object.fromEntries(Object.keys(r.props).map((p) => [p, had?.decls.find(([k]) => k === p)?.[1] ?? null])) };
     });
     try {
-      const res = await api(`envs/${env}/styles`, { method: "PATCH", body: { rules } });
-      OV.set(env, res.css);
-      for (const x of boardsLive(env)) x.setOverrides(res.css);
-      UNDO.push({ env, rules: prev, label });
-      if (UNDO.length > 100) UNDO.shift();
-      S.diffs.delete(env);
-      settle();
+      await writeRules(env, rules);
+      record({ label, undo: () => writeRules(env, prev), redo: () => writeRules(env, rules) });
       return true;
     } catch (e) {
       toast(`Couldn't change the ${label}`, e.message);
@@ -81,21 +76,17 @@ function settle() {
     fire("styles-changed");
   });
 }
-export async function undoStyle() {
-  const u = UNDO.pop();
-  if (!u) return false;
-  try {
-    const res = await api(`envs/${u.env}/styles`, { method: "PATCH", body: { rules: u.rules } });
-    OV.set(u.env, res.css);
-    for (const x of boardsLive(u.env)) x.setOverrides(res.css);
-    S.diffs.delete(u.env);
-    toast(`Undid ${u.label}`);
-    settle();
-  } catch (e) {
-    toast("Couldn't undo", e.message);
-  }
-  return true;
+async function writeRules(env, rules) {
+  const res = await api(`envs/${env}/styles`, { method: "PATCH", body: { rules } });
+  OV.set(env, res.css);
+  for (const x of boardsLive(env)) x.setOverrides(res.css);
+  S.diffs.delete(env);
+  settle();
 }
+// resolves once every queued write has landed
+export const idle = () => writing.catch(() => {});
+// kept for older callers: undo is one history now
+export const undoStyle = () => undo();
 export async function resetSelectors(env, selectors) {
   const mine = rulesFor(env, selectors);
   if (!mine.length) return false;

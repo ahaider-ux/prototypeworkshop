@@ -431,12 +431,14 @@ export class Store {
       // what the prototype offers (screens, states, variants), remembered so the Screens panel and agents can list them
       const c = p.catalog;
       const s = (v, n) => String(v ?? "").slice(0, n);
-      env.catalog = {
+      const next = {
         adapter: s(c.adapter, 60),
         screens: (Array.isArray(c.screens) ? c.screens : []).slice(0, 200).map((x) => ({ group: s(x?.group, 60), name: s(x?.name, 120) })).filter((x) => x.name),
         states: (Array.isArray(c.states) ? c.states : []).slice(0, 20).map((x) => s(x, 60)),
         variants: (Array.isArray(c.variants) ? c.variants : []).slice(0, 60).map((x) => ({ label: s(x?.label, 120), options: (Array.isArray(x?.options) ? x.options : []).slice(0, 20).map((o) => s(o, 120)) })),
       };
+      // Guard: a page read before it was ready lists no screens; that never replaces a catalog we know
+      if (next.screens.length || !env.catalog?.screens?.length) env.catalog = next;
     }
     await this.writeMeta(id, env);
     return this.getEnv(id);

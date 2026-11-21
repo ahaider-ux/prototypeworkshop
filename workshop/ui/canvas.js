@@ -4,17 +4,23 @@
 // screens above the branch's, live. Design mode puts a hit layer over each board to select elements
 // inside it; Interact hands the pointer to the page.
 
-import { S, on, fire, itemsOf, isBranch, screenName, pageItems, pageEnv } from "./state.js";
+import { S, on, fire, itemsOf, isBranch, screenName, pageItems, pageEnv, plural } from "./state.js";
 import { $, h, esc, clamp, frScale, api, toast, IC, menu, rmo, timeAgo } from "./lib.js";
-import { commitRules, preview, endPreview, undoStyle } from "./styles.js";
+import { commitRules, preview, endPreview, undoStyle, idle as stylesIdle } from "./styles.js";
+import * as G from "./gfx.js";
+import { record, rid, remap, undo as histUndo, redo as histRedo } from "./history.js";
 
-const B = new Map(); // board item id → {id, env, el, frame, hit, ready, loaded}
+const B = new Map(); // board item id → {id, el, hit, frame, live, ready} — frame only while mounted live
 const NEL = new Map(); // note/box item id → element
 const GH = new Map(); // compare boards: main's screens above a branch's, not saved anywhere
-const HUD = { labels: new Map(), alabels: new Map(), pins: new Map(), sel: null, hover: null, size: null, handles: [], ehandles: [], ins: null, draft: null };
+const HUD = { labels: new Map(), alabels: new Map(), pins: new Map(), sel: null, hover: null, size: null, handles: [], ehandles: [], ins: null, draft: null, multi: [], guides: [] };
 let cv, world, hud, wires, boardLayer, noteLayer, rulerH, rulerV;
 const RULER = 20;
-const KEEP_LOADED = 24; // boards of other pages stay loaded so switching back is instant, up to this many
+const MAX_LIVE = 3; // Guard: live pages are costly to pan and zoom; everything else is a bitmap
+let gfxDirty = true;
+let hoverBoard = null,
+  hoverT = 0;
+let pendingPick = null; // a click on a board that wasn't live yet: picked once its page is ready
 let pop = null;
 let dirty = true;
 let lastZ = 0;
@@ -26,14 +32,14 @@ const MINZ = 0.05,
 export const boardOf = (id) => B.get(id);
 export const docOf = (id) => {
   try {
-    return B.get(id)?.frame.contentDocument || null;
+    return B.get(id)?.frame?.contentDocument || null;
   } catch {
     return null;
   }
 };
 export const winOf = (id) => {
   try {
-    return B.get(id)?.frame.contentWindow || null;
+    return B.get(id)?.frame?.contentWindow || null;
   } catch {
     return null;
   }
@@ -45,7 +51,7 @@ export const rt = (id) => {
     return null;
   }
 };
-export const markDirty = () => (dirty = true);
+export const markDirty = () => ((dirty = true), (gfxDirty = true));
 export const isDragging = () => !!drag;
 const item = (id) => S.items.get(id) || GH.get(id);
 export const isGhost = (id) => GH.has(id);
@@ -63,8 +69,9 @@ export const toScreen = (w) => ({ x: w.x * S.cam.z + S.cam.x, y: w.y * S.cam.z +
 // the part of the canvas the rulers, the page banner and the toolbar don't cover
 export function viewRect() {
   if ($("frame").classList.contains("present")) return { x0: 0, y0: 0, x1: cv.clientWidth, y1: cv.clientHeight };
-  const banner = $("banner").childElementCount ? 80 : RULER;
-  return { x0: RULER, y0: banner, x1: cv.clientWidth, y1: cv.clientHeight - 72 };
+  const r = S.rulers === false ? 0 : RULER;
+  const banner = $("banner").childElementCount ? 80 : r;
+  return { x0: r, y0: banner, x1: cv.clientWidth, y1: cv.clientHeight - 72 };
 }
 
 function boardAtPoint(p) {
@@ -77,18 +84,32 @@ function elAt(id, p) {
     b = item(id);
   if (!d || !b) return null;
   const w = toWorld(p);
-  let el = null;
+  let hits = [];
   try {
-    el = d.elementFromPoint(w.x - b.x, w.y - b.y);
+    hits = d.elementsFromPoint(w.x - b.x, w.y - b.y);
   } catch {
     return null;
   }
-  if (!el || el === d.documentElement || el === d.body || el.closest?.(".ws-ghost")) return null;
-  return el;
+  // the topmost element you can actually see: pages often keep transparent overlays on top
+  const win = d.defaultView;
+  const seen = (el) => {
+    for (let x = el; x && x !== d.documentElement; x = x.parentElement) {
+      const cs = win.getComputedStyle(x);
+      if (cs.visibility === "hidden" || parseFloat(cs.opacity) < 0.05) return false;
+    }
+    return true;
+  };
+  for (const el of hits.slice(0, 12)) {
+    if (el === d.documentElement || el === d.body) return null;
+    if (el.closest?.(".ws-ghost") || !seen(el)) continue;
+    return el;
+  }
+  return null;
 }
 
 // ---------- camera ----------
 function applyCam() {
+  gfxDirty = true;
   world.style.transform = `translate(${S.cam.x}px, ${S.cam.y}px) scale(${S.cam.z})`;
   $("zPct").textContent = Math.round(S.cam.z * 100) + "%";
   dirty = true;
@@ -221,30 +242,25 @@ function buildGhosts() {
 export function sync() {
   buildGhosts();
   const want = new Set(pageBoards().map((b) => b.id));
-  // boards: this page's are shown; other pages' stay loaded, hidden, so switching back is instant
+  // boards: this page's; other pages' keep their bitmaps in the graphics layer, not their pages
   for (const [id, b] of B) {
-    const it = item(id);
-    if (!it || (!want.has(id) && (B.size > KEEP_LOADED || id.startsWith("cmp-")))) {
-      b.el.remove();
-      B.delete(id);
-      HUD.labels.get(id)?.remove();
-      HUD.labels.delete(id);
-      continue;
-    }
-    b.el.hidden = !want.has(id);
+    if (item(id) && want.has(id)) continue;
+    unmount(id, true);
+    b.el.remove();
+    B.delete(id);
+    HUD.labels.get(id)?.remove();
+    HUD.labels.delete(id);
   }
   for (const it of pageBoards()) {
     let b = B.get(it.id);
     if (!b) b = makeBoard(it);
-    b.el.hidden = false;
     b.el.style.left = it.x + "px";
     b.el.style.top = it.y + "px";
     b.el.style.width = it.w + "px";
     b.el.style.height = it.h + "px";
-    b.frame.title = `${S.envs.get(it.env)?.name || it.env} · ${screenName(it)}`;
-    const next = boardSrc(it);
-    if (b.loaded && b.src !== next && b.srcStale !== next) b.srcStale = next; // takes effect on the next reload
+    if (b.live && b.src !== boardSrc(it)) reloadBoard(it.id);
   }
+  gfxDirty = true;
   // notes and boxes on this page
   const anns = [...pageItems("note"), ...pageItems("box")];
   const live = new Set(anns.map((a) => a.id));
@@ -285,37 +301,194 @@ function boardSrc(it) {
 }
 
 function makeBoard(it) {
-  const env = S.envs.get(it.env);
-  const el = h(`<div class="bd${it.ghost ? " ghost" : ""}" data-item="${esc(it.id)}"><iframe title="${esc(env?.name || it.env)}" allow="clipboard-read; clipboard-write; fullscreen"></iframe><div class="boot">${esc(screenName(it))}</div><div class="hit"></div></div>`);
-  const b = { id: it.id, el, frame: el.querySelector("iframe"), hit: el.querySelector(".hit"), ready: false, loaded: false, src: "" };
-  b.frame.addEventListener("load", () => b.loaded && onBoardLoad(b));
+  const el = h(`<div class="bd${it.ghost ? " ghost" : ""}" data-item="${esc(it.id)}"><div class="hit"></div></div>`);
+  const b = { id: it.id, el, hit: el.querySelector(".hit"), frame: null, live: false, ready: false, src: "" };
   boardLayer.append(el);
   B.set(it.id, b);
   return b;
 }
 
-// Boards load when they come into view, so a canvas of many screens opens quickly.
-function loadVisible() {
-  const v = viewRect();
-  const m = 600;
-  for (const [id, b] of B) {
-    if (b.loaded || b.el.hidden) continue;
-    const it = item(id);
-    if (!it) continue;
-    const a = toScreen(it),
-      w = it.w * S.cam.z,
-      hh = it.h * S.cam.z;
-    if (a.x + w < v.x0 - m || a.x > v.x1 + m || a.y + hh < -m || a.y > cv.clientHeight + m) continue;
-    b.loaded = true;
-    b.src = boardSrc(it);
-    b.frame.src = b.src;
+// ---------- live pages: only where you're working ----------
+function mount(id) {
+  const b = B.get(id),
+    it = item(id);
+  if (!b || !it || b.live) return;
+  const env = S.envs.get(it.env);
+  const fr = h(`<iframe title="${esc(env?.name || it.env)} · ${esc(screenName(it))}" allow="clipboard-read; clipboard-write; fullscreen"></iframe>`);
+  b.frame = fr;
+  b.live = true;
+  b.ready = false;
+  b.touched = false;
+  b.src = boardSrc(it);
+  fr.addEventListener("load", () => b.frame === fr && onBoardLoad(b));
+  b.el.insertBefore(fr, b.hit);
+  b.el.classList.add("live");
+  fr.src = b.src;
+  gfxDirty = true;
+}
+// put a live page away; it leaves a fresh bitmap behind if it changed while live
+function unmount(id, now = false) {
+  const b = B.get(id);
+  if (!b?.live) return;
+  const it = item(id);
+  const fr = b.frame;
+  const done = () => {
+    if (b.frame !== fr) return;
+    b.frame = null;
+    b.live = false;
+    b.ready = false;
+    b.shown = false;
+    b.el.classList.remove("live", "ready");
+    fr.src = "about:blank";
+    fr.remove();
+    gfxDirty = true;
+  };
+  if (!now && it && b.ready && (b.touched || !G.hasFresh(it))) {
+    b.leaving = true;
+    G.captureLive(it, fr.contentDocument).finally(() => ((b.leaving = false), done()));
+  } else done();
+}
+// which boards are live: the selected one, the one under the pointer, the one presenting, and —
+// when zoomed in close enough to read — the few in view
+function planLive() {
+  const wantLive = [];
+  const add = (id) => id && B.has(id) && !isGhost(id) && !wantLive.includes(id) && wantLive.push(id);
+  add(S.presenting);
+  if (S.sel?.item && item(S.sel.item)?.type === "board") add(S.sel.item);
+  add(pop?.board);
+  add(pendingPick?.id);
+  add(hoverBoard);
+  const dpr = window.devicePixelRatio || 1;
+  if (S.cam.z * dpr >= 0.55) {
+    const v = viewRect();
+    const seen = pageItems("board")
+      .map((it) => {
+        const a = toScreen(it);
+        const w = Math.max(0, Math.min(a.x + it.w * S.cam.z, v.x1) - Math.max(a.x, v.x0)),
+          hh = Math.max(0, Math.min(a.y + it.h * S.cam.z, v.y1) - Math.max(a.y, v.y0));
+        return { id: it.id, area: w * hh };
+      })
+      .filter((x) => x.area > 0)
+      .sort((a, b) => b.area - a.area);
+    for (const x of seen) if (wantLive.length < MAX_LIVE) add(x.id);
   }
+  const keep = new Set(wantLive.slice(0, Math.max(MAX_LIVE, wantLive.indexOf(hoverBoard) + 1)));
+  for (const id of keep) mount(id);
+  const now = performance.now();
+  for (const [id, b] of B) {
+    if (!b.live || keep.has(id) || b.leaving) {
+      b.idleSince = 0;
+      continue;
+    }
+    // a short grace period, so sweeping the pointer across boards doesn't thrash them
+    if (!b.idleSince) b.idleSince = now;
+    else if (now - b.idleSince > 1500) unmount(id);
+  }
+}
+// what the background pool should render next: this page's boards, the ones in view first
+function planSnapshots() {
+  const v = viewRect();
+  const jobs = pageBoards()
+    .filter((it) => !G.hasFresh(it))
+    .map((it) => {
+      const a = toScreen(it);
+      const inView = a.x < v.x1 && a.y < v.y1 && a.x + it.w * S.cam.z > v.x0 && a.y + it.h * S.cam.z > v.y0;
+      const cx = a.x + (it.w * S.cam.z) / 2 - (v.x0 + v.x1) / 2,
+        cy = a.y + (it.h * S.cam.z) / 2 - (v.y0 + v.y1) / 2;
+      return { it, prio: (inView ? 0 : 1e9) + Math.hypot(cx, cy) };
+    })
+    .sort((a, b) => a.prio - b.prio)
+    .map(({ it }) => ({ key: G.keyOf(it), it: { ...it }, src: boardSrc({ ...it, id: `snap-${it.id}` }), textEdits: !!S.envs.get(it.env)?.patches?.length }));
+  // a ready live board renders itself; no need to load it twice
+  G.want(jobs.filter((j) => !(B.get(j.it.id)?.ready && !isGhost(j.it.id))));
+}
+let gfxCol = null;
+function gfxColors() {
+  const theme = document.documentElement.getAttribute("data-ltheme");
+  if (gfxCol?.theme === theme) return gfxCol;
+  const cs = getComputedStyle(document.documentElement);
+  const v = (n) => cs.getPropertyValue(n).trim();
+  return (gfxCol = { theme, edge: v("--border-subtle"), page: v("--bg-layer"), text: v("--text-placeholder"), font: v("--fakt") || "sans-serif", label: (it) => screenName(it) });
+}
+function drawGfx() {
+  gfxDirty = false;
+  G.draw(
+    pageBoards().map((it) => ({ it, covered: !!B.get(it.id)?.shown })),
+    S.cam,
+    gfxColors(),
+  );
+}
+// the live page and its bitmap must agree: once the page has settled, it renders itself
+function captureSoon(b) {
+  clearTimeout(b.capT);
+  b.capT = setTimeout(() => {
+    const it = item(b.id);
+    if (b.ready && it) G.captureLive(it, b.frame?.contentDocument);
+  }, 1600);
+}
+// While designing, the keyboard belongs to the canvas: prototypes often focus a field of their own
+// (a chat box, a search) when they load or change screen. In Interact mode the page keeps it, and so
+// does a text edit in progress.
+function guardKeys() {
+  const a = document.activeElement;
+  if (S.mode !== "design" || a?.tagName !== "IFRAME" || document.querySelector(".bd.editing")) return;
+  try {
+    a.contentDocument?.activeElement?.blur?.();
+  } catch {}
+  cv.focus({ preventScroll: true });
+}
+// A prototype can go back to its own first screen while it starts up (an intro finishing, a saved
+// screen restored). Once it has settled, put the board back on its screen and state if it wandered.
+function ensureScreen(win, it) {
+  try {
+    const rtw = win?.__workshop;
+    if (!rtw || !it) return false;
+    const ad = rtw.adapter();
+    let moved = false;
+    if (it.screen && ad.screen && ad.screen !== it.screen && ad.screens?.some((x) => x.name === it.screen)) {
+      rtw.go(it.screen);
+      moved = true;
+    }
+    if (moved && it.state && it.state !== "Default") setTimeout(() => rtw.setState(it.state), 400);
+    return moved;
+  } catch {
+    return false;
+  }
+}
+function captureCatalog(win, it) {
+  if (!it || catalogSent.has(it.env)) return;
+  let ad = null;
+  try {
+    ad = win?.__workshop?.adapter() || null;
+  } catch {
+    ad = null;
+  }
+  // Guard: a page read before its tools are ready offers nothing; never let that replace what we know
+  if (!ad || !ad.screens?.length) return;
+  catalogSent.add(it.env);
+  const env = S.envs.get(it.env);
+  const cat = { adapter: ad.name, screens: ad.screens, states: ad.states, variants: ad.variants.map((v) => ({ label: v.label, options: v.options })) };
+  if (JSON.stringify(env?.catalog || null) !== JSON.stringify(cat))
+    api(`envs/${it.env}`, { method: "PATCH", body: { catalog: cat } })
+      .then((next) => {
+        S.envs.set(it.env, next);
+        fire("catalog", it.env);
+      })
+      .catch(() => {});
 }
 
 const catalogSent = new Set();
 function onBoardLoad(b) {
   b.ready = true;
-  b.el.classList.add("ready");
+  // the bitmap stays in front until the page has settled on its screen, so going live never flashes
+  clearTimeout(b.showT);
+  const fr0 = b.frame;
+  b.showT = setTimeout(() => {
+    if (b.frame !== fr0) return;
+    b.shown = true;
+    b.el.classList.add("ready");
+    gfxDirty = true;
+  }, 2000);
   const it = item(b.id);
   const d = docOf(b.id);
   if (d) {
@@ -331,7 +504,19 @@ function onBoardLoad(b) {
       if (fwd.defaultPrevented) e.preventDefault();
     }, true);
     d.addEventListener("keyup", onKeyUp, true);
+    // A page that focuses its own field on load (a chat box, a search) would take the keyboard from
+    // the canvas. While designing, the canvas keeps it — unless you're editing text in the page.
+    const keepKeys = () => {
+      if (S.mode !== "design" || b.el.classList.contains("editing") || document.activeElement !== b.frame) return;
+      try {
+        d.activeElement?.blur?.();
+      } catch {}
+      cv.focus({ preventScroll: true });
+    };
+    d.addEventListener("focusin", () => setTimeout(keepKeys, 0), true);
+    for (const ms of [0, 400, 1500, 3000]) setTimeout(keepKeys, ms);
     d.addEventListener("pointerdown", () => {
+      b.touched = true;
       if (S.mode === "prototype" && S.sel?.item !== b.id && !GH.has(b.id)) selectBoard(b.id, { quiet: true });
     }, true);
   }
@@ -339,27 +524,19 @@ function onBoardLoad(b) {
   const env0 = it && S.envs.get(it.env);
   if (env0) setTimeout(() => rt(b.id)?.apply({ theme: env0.theme, variants: env0.variants, patches: env0.patches }, {}), 300);
   // remember what the prototype offers, for the Screens panel and for agents
-  if (it && !catalogSent.has(it.env)) {
+  setTimeout(() => captureCatalog(winOf(b.id), it), 900);
+  for (const ms of [800, 1800, 3200]) setTimeout(() => b.ready && ensureScreen(winOf(b.id), item(b.id)) && captureSoon(b), ms);
+  if (S.outlines) applyOutlines(b);
+  captureSoon(b);
+  // a click that arrived before the page did
+  if (pendingPick?.id === b.id) {
+    const pk = pendingPick;
+    pendingPick = null;
     setTimeout(() => {
-      const ad = (() => {
-        try {
-          return rt(b.id)?.adapter();
-        } catch {
-          return null;
-        }
-      })();
-      if (!ad) return;
-      catalogSent.add(it.env);
-      const env = S.envs.get(it.env);
-      const cat = { adapter: ad.name, screens: ad.screens, states: ad.states, variants: ad.variants.map((v) => ({ label: v.label, options: v.options })) };
-      if (JSON.stringify(env?.catalog || null) !== JSON.stringify(cat))
-        api(`envs/${it.env}`, { method: "PATCH", body: { catalog: cat } })
-          .then((next) => {
-            S.envs.set(it.env, next);
-            fire("catalog", it.env);
-          })
-          .catch(() => {});
-    }, 900);
+      if (S.mode !== "design" || S.sel?.item !== b.id) return;
+      const el = elAt(b.id, toScreen(pk.w));
+      if (el) selectEl(b.id, el);
+    }, 250);
   }
   if (S.sel?.kind === "el" && S.sel.item === b.id && !S.sel.el.isConnected) {
     const sel = S.sel.info?.exactSelector;
@@ -382,6 +559,8 @@ const safeQuery = (d, sel) => {
 
 // Something changed in a prototype's folder: swap the overrides in place, or reload its boards.
 export async function reloadEnv(env, files = []) {
+  G.invalidate(env);
+  gfxDirty = true;
   const f = files.filter(Boolean);
   const onlyMeta = f.length && f.every((x) => x === "env.json" || x === "overrides.css");
   const bs = [...B.values()].filter((b) => item(b.id)?.env === env);
@@ -395,6 +574,7 @@ export async function reloadEnv(env, files = []) {
         for (const b of bs) rt(b.id)?.setOverrides(css);
       } catch {}
     }
+    for (const b of bs) if (b.ready) captureSoon(b);
     fire("env-meta", env);
     return;
   }
@@ -403,11 +583,12 @@ export async function reloadEnv(env, files = []) {
 export function reloadBoard(id) {
   const b = B.get(id),
     it = item(id);
-  if (!b || !it || !b.loaded) return;
+  gfxDirty = true;
+  if (!b || !it || !b.live) return;
   b.ready = false;
+  b.shown = false;
   b.el.classList.remove("ready");
   b.src = boardSrc(it);
-  b.srcStale = null;
   b.frame.src = b.src;
   flash(id, "Updated");
 }
@@ -436,7 +617,8 @@ function pushSelection() {
         const i = s.info;
         Object.assign(body, { selector: S.scope === "exact" ? i.exactSelector : i.selector, exactSelector: i.exactSelector, matches: i.matches, label: i.label, text: i.text, html: i.html, styles: i.styles, rect: i.rect });
       }
-    } else if (s && s.item && item(s.item)) body = { kind: s.kind, item: item(s.item) };
+    } else if (s?.kind === "multi") body = { kind: "multi", items: s.items.map((id) => S.items.get(id)).filter(Boolean) };
+    else if (s && s.item && item(s.item)) body = { kind: s.kind, item: item(s.item) };
     api("selection", { method: "PUT", body: { selection: body } }).catch(() => {});
   }, 200);
 }
@@ -458,7 +640,25 @@ export function selectEl(id, el, { quiet = false } = {}) {
 }
 export function selectItem(id, { quiet = false } = {}) {
   const it = item(id);
-  if (it) setSel({ kind: it.type, item: id }, quiet);
+  if (it) setSel({ kind: it.type, item: id, ...(it.type === "board" ? { env: it.env } : {}) }, quiet);
+}
+// what's selected on the canvas, as item ids (an element counts as nothing here)
+export function selIds() {
+  const s = S.sel;
+  if (!s) return [];
+  if (s.kind === "multi") return s.items.filter((id) => S.items.has(id));
+  return s.kind !== "el" && s.item && S.items.has(s.item) ? [s.item] : [];
+}
+export function selectMany(ids, { quiet = false } = {}) {
+  const list = [...new Set(ids)].filter((id) => S.items.has(id));
+  if (!list.length) return clearSel();
+  if (list.length === 1) return selectItem(list[0], { quiet });
+  setSel({ kind: "multi", items: list }, quiet);
+}
+// Shift-click: add to the selection or take out of it
+export function toggleSel(id) {
+  const cur = selIds();
+  selectMany(cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]);
 }
 export function clearSel() {
   if (S.sel) setSel(null, false);
@@ -737,7 +937,26 @@ export function drawHud() {
     selRect = elScreenRect(s.item, s.el);
     placeBox(HUD.sel, selRect, selRect ? s.info?.label || s.el.localName : null);
   } else placeBox(HUD.sel, null);
-  for (const [id, el] of NEL) el.classList.toggle("on", s?.item === id);
+  const many = s?.kind === "multi" ? selIds() : [];
+  for (const [id, el] of NEL) el.classList.toggle("on", s?.item === id || many.includes(id));
+  // several selected: each one outlined, and a box around them all
+  const boxes = many.map((id) => item(id)).filter((it) => it && it.type !== "arrow").map((it) => screenRect(rectOf(it)));
+  while (HUD.multi.length < boxes.length + 1) {
+    const d = h(`<div class="selbox"></div>`);
+    hud.append(d);
+    HUD.multi.push(d);
+  }
+  HUD.multi.forEach((d, k) => {
+    if (k < boxes.length) return placeBox(d, boxes[k], null);
+    if (k === boxes.length && boxes.length) {
+      const x0 = Math.min(...boxes.map((r) => r.x)),
+        y0 = Math.min(...boxes.map((r) => r.y));
+      placeBox(d, { x: x0, y: y0, w: Math.max(...boxes.map((r) => r.x + r.w)) - x0, h: Math.max(...boxes.map((r) => r.y + r.h)) - y0 }, plural(many.length, "item"));
+      return d.classList.add("group");
+    }
+    placeBox(d, null);
+  });
+  drawGuides();
   const br = s?.kind === "board" ? selRect : null;
   const er = s?.kind === "el" && S.mode === "design" ? selRect : null;
   HUD.size.hidden = !(br || er);
@@ -751,9 +970,11 @@ export function drawHud() {
   // an element's resize handles, as on a frame
   const eh = er && S.tool === "move" && drag?.mode !== "reorder" ? er : null;
   for (const d of HUD.ehandles) {
-    d.hidden = !eh;
-    if (!eh) continue;
     const k = d.dataset.h;
+    // on a small element the handles would cover it: keep its middle free to drag
+    const tooSmall = eh && ((k.length === 1 && (/[ns]/.test(k) ? eh.h : eh.w) < 28) || (k.length === 2 && Math.min(eh.w, eh.h) < 14));
+    d.hidden = !eh || tooSmall;
+    if (d.hidden) continue;
     d.style.left = (k.includes("w") ? eh.x : k.includes("e") ? eh.x + eh.w : eh.x + eh.w / 2) + "px";
     d.style.top = (k.includes("n") ? eh.y : k.includes("s") ? eh.y + eh.h : eh.y + eh.h / 2) + "px";
   }
@@ -791,7 +1012,6 @@ export function drawHud() {
   });
   for (const [id, p] of HUD.pins) if (!pins.has(id)) (p.remove(), HUD.pins.delete(id));
   placePop();
-  loadVisible();
 }
 
 function tracking() {
@@ -1042,8 +1262,18 @@ export async function removeEl() {
   if (parent && d && parent !== d.body && parent !== d.documentElement) selectEl(s.item, parent);
   else selectBoard(s.item);
 }
+let planAt = 0;
 function loop() {
   if (tracking()) drawHud();
+  // which pages are live and which bitmaps to render next: a few times a second, idle or not
+  const now = performance.now();
+  if (now - planAt > 200 && S.page) {
+    planAt = now;
+    planLive();
+    planSnapshots();
+    guardKeys();
+  }
+  if (gfxDirty) drawGfx();
   requestAnimationFrame(loop);
 }
 
@@ -1237,24 +1467,109 @@ export function editNote(id) {
 }
 
 // ---------- creating and moving things ----------
-async function createItem(body) {
+// ---------- creating, moving and removing things — each one a step in the undo history ----------
+const strip = ({ id, createdAt, updatedAt, author, ...rest }) => rest;
+const kindName = (it) => (it.type === "board" ? "board" : it.type === "box" ? "highlight" : it.type);
+async function postItem(body) {
+  const it = await api("canvas/items", { method: "POST", body });
+  S.items.set(it.id, it);
+  return it;
+}
+async function deleteRaw(id) {
+  await api(`canvas/items/${id}`, { method: "DELETE" });
+  S.items.delete(id);
+  // the server takes arrows pinned to it too
+  for (const a of itemsOf("arrow")) if (a.from?.item === id || a.to?.item === id) S.items.delete(a.id);
+}
+const refresh = () => (sync(), fire("items-changed"));
+async function createItem(body, { track = true } = {}) {
   try {
     // annotations belong to the page they're made on
     if (body.type !== "board") body = { ...body, env: S.page };
-    const it = await api("canvas/items", { method: "POST", body });
-    S.items.set(it.id, it);
-    sync();
-    fire("items-changed");
+    const it = await postItem(body);
+    refresh();
+    if (track)
+      record({
+        label: `add ${kindName(it)}`,
+        undo: async () => (await deleteRaw(rid(it.id)), clearSel(), refresh()),
+        redo: async () => {
+          const n = await postItem(strip(it));
+          remap(rid(it.id), n.id);
+          refresh();
+        },
+      });
     return it;
   } catch (e) {
     toast("Couldn't add that", e.message);
     return null;
   }
 }
+// several new items as one step: paste, duplicate
+async function createMany(bodies, label) {
+  const made = [];
+  const idOf = new Map();
+  try {
+    for (const b0 of bodies.filter((b) => b.type !== "arrow").concat(bodies.filter((b) => b.type === "arrow"))) {
+      const b = { ...b0 };
+      if (b.type === "arrow") for (const k of ["from", "to"]) if (b[k]?.item) b[k] = { item: idOf.get(b[k].item) || b[k].item };
+      const it = await postItem(b.type === "board" ? b : { ...b, env: S.page });
+      if (b0._src) idOf.set(b0._src, it.id);
+      made.push(it);
+    }
+  } catch (e) {
+    toast("Couldn't add all of it", e.message);
+  }
+  refresh();
+  if (made.length)
+    record({
+      label,
+      undo: async () => {
+        for (const it of made) if (S.items.has(rid(it.id))) await deleteRaw(rid(it.id));
+        clearSel();
+        refresh();
+      },
+      redo: async () => {
+        for (const it of made) {
+          const b = strip(it);
+          if (b.type === "arrow") for (const k of ["from", "to"]) if (b[k]?.item) b[k] = { item: rid(b[k].item) };
+          const n = await postItem(b);
+          remap(rid(it.id), n.id);
+        }
+        refresh();
+      },
+    });
+  return made;
+}
 const saveT = new Map();
 function saveItem(id, patch) {
   clearTimeout(saveT.get(id));
   saveT.set(id, setTimeout(() => api(`canvas/items/${id}`, { method: "PATCH", body: patch }).then((n) => S.items.set(id, n)).catch((e) => toast("Couldn't save that", e.message)), 150));
+}
+// put items at these positions now, and save them
+function placeAll(list) {
+  for (const g of list) {
+    const id = rid(g.id);
+    const it = item(id);
+    if (!it) continue;
+    const patch = {};
+    for (const k of ["x", "y", "w", "h", "from", "to"]) if (g[k] !== undefined) (it[k] = g[k]), (patch[k] = g[k]);
+    const el = B.get(id)?.el || NEL.get(id);
+    if (el && g.x !== undefined) (el.style.left = it.x + "px"), (el.style.top = it.y + "px");
+    if (B.get(id) && g.w !== undefined) (B.get(id).el.style.width = it.w + "px"), (B.get(id).el.style.height = it.h + "px");
+    saveItem(id, patch);
+  }
+  sync();
+}
+// a move (or resize) from `before` to the items' current geometry, as one undo step
+function recordMove(before, label = "move") {
+  const after = before.map((g) => {
+    const it = item(g.id);
+    const o = { id: g.id };
+    for (const k of Object.keys(g)) if (k !== "id") o[k] = it ? JSON.parse(JSON.stringify(it[k])) : g[k];
+    return o;
+  });
+  if (JSON.stringify(before) === JSON.stringify(after)) return;
+  record({ label, undo: async () => placeAll(before), redo: async () => placeAll(after) });
 }
 export async function placeScreen(env, screen, state = null, at = null) {
   const e = S.envs.get(env);
@@ -1267,46 +1582,229 @@ export async function placeScreen(env, screen, state = null, at = null) {
     x = last.x + last.w + 120;
     y = last.y;
   }
-  const it = await createItem({ type: "board", env, screen: screen || null, state: state && state !== "Default" ? state : null, ...(x !== undefined ? { x, y } : {}) });
-  return it;
+  return createItem({ type: "board", env, screen: screen || null, state: state && state !== "Default" ? state : null, ...(x !== undefined ? { x, y } : {}) });
 }
-async function removeItems(ids) {
+export async function removeItems(ids) {
   const gone = [];
-  for (const id of ids) {
-    const it = item(id);
+  for (const id0 of ids) {
+    const id = rid(id0);
+    const it = S.items.get(id);
     if (!it) continue;
+    const pinned = itemsOf("arrow").filter((a) => a.id !== id && (a.from?.item === id || a.to?.item === id) && !ids.includes(a.id));
     try {
-      await api(`canvas/items/${id}`, { method: "DELETE" });
-      S.items.delete(id);
-      for (const a of itemsOf("arrow")) if (a.from?.item === id || a.to?.item === id) S.items.delete(a.id);
-      gone.push(it);
+      await deleteRaw(id);
+      gone.push(it, ...pinned);
     } catch (e) {
       toast("Couldn't remove that", e.message);
     }
   }
   if (!gone.length) return;
   clearSel();
-  sync();
-  fire("items-changed");
-  const what = gone.length > 1 ? `${gone.length} items` : gone[0].type === "board" ? `${screenName(gone[0])} board` : gone[0].type;
-  toast(`Removed ${what}`, gone.some((g) => g.type === "board") ? "The page keeps its files; only the board left the canvas" : "", {
-    label: "Undo",
-    fn: async () => {
-      for (const g of gone) {
-        const { id, createdAt, updatedAt, author, ...rest } = g;
-        await createItem(rest);
-      }
-    },
+  refresh();
+  const putBack = async () => {
+    for (const g of gone.filter((x) => x.type !== "arrow").concat(gone.filter((x) => x.type === "arrow"))) {
+      const b = strip(g);
+      if (b.type === "arrow") for (const k of ["from", "to"]) if (b[k]?.item) b[k] = { item: rid(b[k].item) };
+      const n = await postItem(b);
+      remap(rid(g.id), n.id);
+    }
+    refresh();
+  };
+  const what = gone.length > 1 ? `${gone.length} items` : gone[0].type === "board" ? `${screenName(gone[0])} board` : kindName(gone[0]);
+  record({ label: `removal of ${what}`, undo: putBack, redo: async () => (await removeQuiet(gone.map((g) => g.id)), refresh()) });
+  toast(`Removed ${what}`, gone.some((g) => g.type === "board") ? "The page keeps its files; only the board left the canvas" : "", { label: "Undo", fn: () => undoAll() });
+}
+async function removeQuiet(ids) {
+  for (const id of ids) if (S.items.has(rid(id))) await deleteRaw(rid(id)).catch(() => {});
+  clearSel();
+}
+
+// ---------- the clipboard: boards and annotations, within and across pages ----------
+let CLIP = null;
+let pasteN = 0;
+let lastWorld = null; // where the pointer last was on the canvas, for paste
+function collect(ids) {
+  const set = new Set(ids);
+  const list = ids.map((id) => S.items.get(id)).filter(Boolean);
+  // arrows come along when both ends do, or when they end on points
+  for (const a of pageItems("arrow")) if (!set.has(a.id) && [a.from, a.to].every((e) => !e?.item || set.has(e.item)) && [a.from, a.to].some((e) => e?.item && set.has(e.item))) list.push(a);
+  return list.map((it) => ({ ...strip(it), _src: it.id }));
+}
+export function copySel() {
+  const ids = selIds();
+  if (!ids.length) return false;
+  CLIP = collect(ids);
+  pasteN = 0;
+  try {
+    navigator.clipboard?.writeText(JSON.stringify({ workshop: 1, items: CLIP })).catch(() => {});
+  } catch {}
+  toast(`Copied ${plural(ids.length, "item")}`);
+  return true;
+}
+export async function cutSel() {
+  if (copySel()) await removeItems(selIds());
+}
+async function pasteList(list, { offset = 40, label = "paste" } = {}) {
+  if (!list?.length) return;
+  const rects = list.filter((x) => x.type !== "arrow");
+  const bx = Math.min(...rects.map((r) => r.x)),
+    by = Math.min(...rects.map((r) => r.y));
+  // onto the pointer when it's over the canvas, otherwise just beside the original
+  let dx = offset,
+    dy = offset;
+  if (label === "paste" && lastWorld) (dx = Math.round(lastWorld.x - bx)), (dy = Math.round(lastWorld.y - by));
+  const bodies = list.map((x) => {
+    const b = { ...x };
+    if (b.type === "board") b.env = S.page; // a pasted screen shows this page's version of the prototype
+    if (b.type === "arrow") {
+      for (const k of ["from", "to"]) if (b[k] && !b[k].item) b[k] = { x: b[k].x + dx, y: b[k].y + dy };
+    } else (b.x += dx), (b.y += dy);
+    return b;
   });
+  const made = await createMany(bodies, label === "paste" ? `paste of ${plural(made0(list), "item")}` : `duplicate`);
+  if (made.length) selectMany(made.map((m) => m.id));
 }
-export function duplicateSel() {
+const made0 = (list) => list.filter((x) => x.type !== "arrow").length;
+export async function pasteClip() {
+  if (!CLIP) {
+    try {
+      const t = await navigator.clipboard?.readText();
+      const j = JSON.parse(t || "null");
+      if (j?.workshop && Array.isArray(j.items)) CLIP = j.items;
+    } catch {}
+  }
+  if (!CLIP) return toast("Nothing to paste", "Copy boards, notes or highlights first (⌘C)");
+  pasteN++;
+  await pasteList(CLIP, { offset: 40 * pasteN });
+}
+export async function duplicateSel() {
+  if (S.sel?.kind === "el") return toast("Duplicating an element changes the page's HTML", "Ask an agent to do it, or duplicate the whole board");
+  const ids = selIds();
+  if (!ids.length) return;
+  await pasteList(collect(ids), { offset: 40, label: "duplicate" });
+}
+export function selectAll() {
+  selectMany([...pageItems("board"), ...pageItems("note"), ...pageItems("box"), ...pageItems("arrow")].map((i) => i.id));
+}
+
+// ---------- align and distribute, for several boards and annotations ----------
+function rectOf(it) {
+  if (it.type === "note") {
+    const el = NEL.get(it.id);
+    return { x: it.x, y: it.y, w: it.w, h: el?.offsetHeight || 120 };
+  }
+  return { x: it.x, y: it.y, w: it.w, h: it.h };
+}
+export function alignSel(how) {
+  const its = selIds().map((id) => S.items.get(id)).filter((i) => i && i.type !== "arrow");
+  if (its.length < 2) return;
+  const rs = its.map(rectOf);
+  const x0 = Math.min(...rs.map((r) => r.x)),
+    x1 = Math.max(...rs.map((r) => r.x + r.w)),
+    y0 = Math.min(...rs.map((r) => r.y)),
+    y1 = Math.max(...rs.map((r) => r.y + r.h));
+  const before = its.map((i) => ({ id: i.id, x: i.x, y: i.y }));
+  const next = its.map((i, k) => {
+    const r = rs[k];
+    const o = { id: i.id, x: i.x, y: i.y };
+    if (how === "left") o.x = x0;
+    if (how === "right") o.x = x1 - r.w;
+    if (how === "hcenter") o.x = Math.round((x0 + x1) / 2 - r.w / 2);
+    if (how === "top") o.y = y0;
+    if (how === "bottom") o.y = y1 - r.h;
+    if (how === "vcenter") o.y = Math.round((y0 + y1) / 2 - r.h / 2);
+    return o;
+  });
+  placeAll(next);
+  recordMove(before, "alignment");
+}
+export function distributeSel(axis) {
+  const its = selIds().map((id) => S.items.get(id)).filter((i) => i && i.type !== "arrow");
+  if (its.length < 3) return toast("Distribute needs three or more", "Select at least three boards or annotations");
+  const k = axis === "h" ? "x" : "y",
+    d = axis === "h" ? "w" : "h";
+  const rs = its.map((i) => ({ i, r: rectOf(i) })).sort((a, b) => a.r[k] - b.r[k]);
+  const first = rs[0].r,
+    last = rs[rs.length - 1].r;
+  const total = rs.reduce((n, x) => n + x.r[d], 0);
+  const gap = (last[k] + last[d] - first[k] - total) / (rs.length - 1);
+  const before = its.map((i) => ({ id: i.id, x: i.x, y: i.y }));
+  let at = first[k];
+  const next = rs.map(({ i, r }) => {
+    const o = { id: i.id, x: i.x, y: i.y };
+    o[k] = Math.round(at);
+    at += r[d] + gap;
+    return o;
+  });
+  placeAll(next);
+  recordMove(before, "distribution");
+}
+
+// ---------- element structure: walk the tree, and stack order ----------
+const visibleKids = (el) => [...(el?.children || [])].filter((c) => !c.classList.contains("ws-ghost") && c.getBoundingClientRect().width + c.getBoundingClientRect().height > 0);
+export function walkEl(dir) {
   const s = S.sel;
-  const it = s?.item && item(s.item);
-  if (!it) return;
-  if (it.type === "board") return placeScreen(it.env, it.screen, it.state);
-  if (it.type === "note") return createItem({ type: "note", x: it.x + 40, y: it.y + 40, w: it.w, text: it.text, tone: it.tone });
-  if (it.type === "box") return createItem({ type: "box", x: it.x + 40, y: it.y + 40, w: it.w, h: it.h, label: it.label });
+  if (s?.kind === "board") {
+    const first = visibleKids(docOf(s.item)?.body)[0];
+    if (first && dir === "child") selectEl(s.item, first);
+    return;
+  }
+  if (s?.kind !== "el") return;
+  const d = docOf(s.item);
+  if (dir === "parent") {
+    const p = s.el.parentElement;
+    return p && p !== d.body && p !== d.documentElement ? selectEl(s.item, p) : selectBoard(s.item);
+  }
+  if (dir === "child") {
+    const k = visibleKids(s.el)[0];
+    return k ? selectEl(s.item, k) : toast("No layers inside this one");
+  }
+  const sibs = visibleKids(s.el.parentElement);
+  const i = sibs.indexOf(s.el);
+  if (sibs.length < 2 || i < 0) return;
+  selectEl(s.item, sibs[(i + (dir === "next" ? 1 : -1) + sibs.length) % sibs.length]);
 }
+export async function arrangeEl(how) {
+  const s = S.sel;
+  if (s?.kind !== "el") return;
+  const cs = cssOf(s.item, s.el);
+  if (!cs) return;
+  const z = parseInt(cs.zIndex, 10) || 0;
+  const sibZ = visibleKids(s.el.parentElement)
+    .filter((x) => x !== s.el)
+    .map((x) => parseInt(cssOf(s.item, x)?.zIndex, 10) || 0);
+  const next = how === "forward" ? z + 1 : how === "backward" ? z - 1 : how === "front" ? Math.max(z, ...sibZ) + 1 : Math.min(z, ...sibZ) - 1;
+  // stacking order only applies to positioned elements
+  const props = { "z-index": String(next), ...(cs.position === "static" ? { position: "relative" } : {}) };
+  await commitRules(s.env, [{ selector: s.info?.exactSelector || exactSel(s.item, s.el), props }], how === "front" ? "bring to front" : how === "back" ? "send to back" : how === "forward" ? "bring forward" : "send backward");
+}
+
+// ---------- view: outlines and rulers ----------
+const OUTLINE_CSS = "*{outline:1px solid rgba(82,102,186,.55)!important;outline-offset:-1px!important}";
+function applyOutlines(b) {
+  try {
+    const d = b.frame?.contentDocument;
+    if (!d) return;
+    let st = d.getElementById("ws-outlines");
+    if (S.outlines && !st) {
+      st = d.createElement("style");
+      st.id = "ws-outlines";
+      st.textContent = OUTLINE_CSS;
+      (d.head || d.documentElement).append(st);
+    } else if (!S.outlines && st) st.remove();
+  } catch {}
+}
+export function toggleOutlines() {
+  S.outlines = !S.outlines;
+  for (const b of B.values()) applyOutlines(b);
+  toast(S.outlines ? "Outlines on" : "Outlines off", S.outlines ? "Every element's box shows on the live boards · ⌘Y" : "");
+}
+export function toggleRulers() {
+  S.rulers = !S.rulers;
+  $("stage").classList.toggle("no-rulers", !S.rulers);
+  dirty = gfxDirty = true;
+}
+const undoAll = () => histUndo();
 
 // ---------- pointer ----------
 let drag = null;
@@ -1370,6 +1868,14 @@ function onDown(e) {
     composeComment(b.id, Math.round(w.x - b.x), Math.round(w.y - b.y), el ? rt(b.id)?.selectorFor(el, true) || null : null);
     e.preventDefault();
     return;
+  } else if (e.shiftKey && S.tool === "move" && (label || (under && item(under)) || (onBoard && S.mode === "design"))) {
+    // Shift-click adds to the selection, or takes out of it
+    toggleSel(label?.dataset.item || (under && item(under) ? under : null) || onBoard.dataset.item);
+    e.preventDefault();
+    return;
+  } else if ((label || under || onBoard) && selIds().length > 1 && selIds().includes(label?.dataset.item || under || onBoard?.dataset.item)) {
+    // dragging one of several selected moves them all
+    drag = { kind: "group", p0: p, group: groupOf(selIds()), moved: false };
   } else if (label) {
     const id = label.dataset.item;
     selectBoard(id);
@@ -1392,7 +1898,8 @@ function onDown(e) {
       drag = { kind: "el", id, el: onCur ? cur : under, click: under, p0: p, moved: false };
     } else drag = { kind: "board", id, p0: p, group: [{ id, x: item(id).x, y: item(id).y }], moved: false, el: under };
   } else {
-    drag = { kind: "empty", p0: p, c0: { ...S.cam }, moved: false };
+    // an empty spot: drag a box to select what it touches (pan with Space, the hand, or scrolling)
+    drag = { kind: "marquee", p0: p, w0: w, add: e.shiftKey ? selIds() : [], moved: false };
   }
   cv.setPointerCapture?.(e.pointerId);
   e.preventDefault();
@@ -1400,10 +1907,16 @@ function onDown(e) {
 
 function onMove(e) {
   const p = local(e);
+  lastWorld = toWorld(p);
   if (!drag) {
+    const over = e.target.closest?.(".bd:not(.ghost)")?.dataset.item || null;
+    // the board under the pointer goes live after a moment, so it's ready to pick from or use
+    if (over !== hoverBoard) {
+      clearTimeout(hoverT);
+      if (over) hoverT = setTimeout(() => ((hoverBoard = over), (dirty = true)), S.mode === "prototype" ? 60 : 160);
+    }
     if (S.mode === "design" && S.tool === "move" && !spaceDown) {
-      const onBoard = e.target.closest?.(".bd:not(.ghost)");
-      if (onBoard) setHover(onBoard.dataset.item, elAt(onBoard.dataset.item, p));
+      if (over) setHover(over, elAt(over, p));
       else setHover(null, null);
     }
     return;
@@ -1412,7 +1925,22 @@ function onMove(e) {
     dy = p.y - drag.p0.y;
   const far = Math.abs(dx) + Math.abs(dy) > 4;
   const z = S.cam.z;
-  if (drag.kind === "pan" || (drag.kind === "empty" && far)) {
+  if (drag.kind === "marquee" && (far || drag.moved)) {
+    drag.moved = true;
+    if (!HUD.draft) (HUD.draft = h(`<div class="draftbox marquee"></div>`)), hud.append(HUD.draft);
+    const a = toScreen(drag.w0);
+    placeBox(HUD.draft, { x: Math.min(a.x, p.x), y: Math.min(a.y, p.y), w: Math.abs(p.x - a.x), h: Math.abs(p.y - a.y) });
+    const w1 = toWorld(p);
+    const r = { x0: Math.min(drag.w0.x, w1.x), y0: Math.min(drag.w0.y, w1.y), x1: Math.max(drag.w0.x, w1.x), y1: Math.max(drag.w0.y, w1.y) };
+    const hit = (q) => q.x < r.x1 && q.x + q.w > r.x0 && q.y < r.y1 && q.y + q.h > r.y0;
+    const ids = [...pageItems("board"), ...pageItems("note"), ...pageItems("box")].filter((it) => hit(rectOf(it))).map((it) => it.id);
+    for (const a2 of pageItems("arrow")) {
+      const en = arrowEnds(a2);
+      if (en && [en.p0, en.p1].every((pt) => pt.x >= r.x0 && pt.x <= r.x1 && pt.y >= r.y0 && pt.y <= r.y1)) ids.push(a2.id);
+    }
+    const key = ids.join(",");
+    if (key !== drag.key) (drag.key = key), selectMany([...drag.add, ...ids], { quiet: true });
+  } else if (drag.kind === "pan") {
     drag.moved = true;
     cv.classList.add("grabbing");
     S.cam.x = drag.c0.x + dx;
@@ -1420,11 +1948,14 @@ function onMove(e) {
     applyCam();
   } else if ((drag.kind === "group" || drag.kind === "board") && (far || drag.moved)) {
     drag.moved = true;
+    // smart guides: line the group up with the other things on the page
+    const snap = e.altKey ? { dx: 0, dy: 0, lines: [] } : guideSnap(drag.group, dx / z, dy / z);
+    guideLines = snap.lines;
     for (const g of drag.group) {
       const it = item(g.id);
       if (!it) continue;
-      it.x = Math.round((g.x + dx / z) / SNAP) * SNAP;
-      it.y = Math.round((g.y + dy / z) / SNAP) * SNAP;
+      it.x = snap.sx ? Math.round(g.x + dx / z + snap.dx) : Math.round((g.x + dx / z) / SNAP) * SNAP;
+      it.y = snap.sy ? Math.round(g.y + dy / z + snap.dy) : Math.round((g.y + dy / z) / SNAP) * SNAP;
       const el = B.get(g.id)?.el || NEL.get(g.id);
       if (el) (el.style.left = it.x + "px"), (el.style.top = it.y + "px");
     }
@@ -1481,22 +2012,33 @@ async function onUp(e) {
   cv.classList.remove("grabbing");
   if (!d) return;
   const p = local(e);
+  guideLines = [];
+  dirty = true;
   if ((d.kind === "group" || d.kind === "board") && d.moved) {
     for (const g of d.group) {
       const it = item(g.id);
       if (it) saveItem(it.id, { x: it.x, y: it.y });
     }
+    recordMove(d.group.map((g) => ({ id: g.id, x: g.x, y: g.y })));
     return;
   }
   if (d.kind === "arrowmove" && d.moved) {
     const it = item(d.id);
     saveItem(it.id, { from: it.from, to: it.to });
+    recordMove([{ id: d.id, from: d.from, to: d.to }]);
     return;
   }
   if (d.kind === "resize" && d.moved) {
     const it = item(d.id);
     saveItem(it.id, { w: it.w, h: it.h });
+    recordMove([{ id: d.id, w: d.w0, h: d.h0 }], "resize");
     return;
+  }
+  if (d.kind === "marquee") {
+    HUD.draft?.remove();
+    HUD.draft = null;
+    if (!d.moved) return clearSel();
+    return fire("sel", {});
   }
   if (d.kind === "el") {
     if (d.moved) return endElDrag(d);
@@ -1507,7 +2049,10 @@ async function onUp(e) {
     if (S.mode === "design" && S.tool === "move") {
       const el = d.el || elAt(d.id, p);
       if (el) selectEl(d.id, el);
-      else selectBoard(d.id);
+      else {
+        if (!B.get(d.id)?.ready) pendingPick = { id: d.id, w: toWorld(p) };
+        selectBoard(d.id);
+      }
     } else selectBoard(d.id);
     return;
   }
@@ -1536,7 +2081,6 @@ async function onUp(e) {
     if (it) selectItem(it.id);
     return;
   }
-  if (d.kind === "empty" && !d.moved) clearSel();
 }
 
 function onDbl(e) {
@@ -1565,6 +2109,143 @@ function onWheel(e) {
   }
 }
 
+function groupOf(ids) {
+  return ids.map((id) => S.items.get(id)).filter((it) => it && it.type !== "arrow").map((it) => ({ id: it.id, x: it.x, y: it.y }));
+}
+
+// ---------- smart guides ----------
+let guideLines = [];
+function guideSnap(group, dx, dy) {
+  const ids = new Set(group.map((g) => g.id));
+  const moving = group.map((g) => item(g.id)).filter(Boolean).map((it, k) => ({ ...rectOf(it), x: group[k].x + dx, y: group[k].y + dy }));
+  if (!moving.length) return { dx: 0, dy: 0, lines: [] };
+  const mb = { x0: Math.min(...moving.map((r) => r.x)), y0: Math.min(...moving.map((r) => r.y)), x1: Math.max(...moving.map((r) => r.x + r.w)), y1: Math.max(...moving.map((r) => r.y + r.h)) };
+  const others = [...pageItems("board"), ...pageItems("note"), ...pageItems("box")].filter((it) => !ids.has(it.id)).map(rectOf);
+  const tol = 6 / S.cam.z;
+  let best = { x: null, y: null };
+  const xs = [mb.x0, (mb.x0 + mb.x1) / 2, mb.x1],
+    ys = [mb.y0, (mb.y0 + mb.y1) / 2, mb.y1];
+  for (const o of others) {
+    for (const t of [o.x, o.x + o.w / 2, o.x + o.w])
+      for (const m of xs) {
+        const dd = t - m;
+        if (Math.abs(dd) <= tol && (best.x === null || Math.abs(dd) < Math.abs(best.x.d))) best.x = { d: dd, at: t, o };
+      }
+    for (const t of [o.y, o.y + o.h / 2, o.y + o.h])
+      for (const m of ys) {
+        const dd = t - m;
+        if (Math.abs(dd) <= tol && (best.y === null || Math.abs(dd) < Math.abs(best.y.d))) best.y = { d: dd, at: t, o };
+      }
+  }
+  const lines = [];
+  if (best.x) lines.push({ x: best.x.at, y0: Math.min(mb.y0, best.x.o.y), y1: Math.max(mb.y1, best.x.o.y + best.x.o.h) });
+  if (best.y) lines.push({ y: best.y.at, x0: Math.min(mb.x0, best.y.o.x), x1: Math.max(mb.x1, best.y.o.x + best.y.o.w) });
+  return { dx: best.x?.d || 0, dy: best.y?.d || 0, sx: !!best.x, sy: !!best.y, lines };
+}
+function drawGuides() {
+  while (HUD.guides.length < guideLines.length) {
+    const d = h(`<div class="guide"></div>`);
+    hud.append(d);
+    HUD.guides.push(d);
+  }
+  HUD.guides.forEach((d, k) => {
+    const g = guideLines[k];
+    d.hidden = !g;
+    if (!g) return;
+    if (g.x !== undefined) {
+      const a = toScreen({ x: g.x, y: g.y0 });
+      Object.assign(d.style, { left: a.x + "px", top: a.y + "px", width: "1px", height: (g.y1 - g.y0) * S.cam.z + "px" });
+    } else {
+      const a = toScreen({ x: g.x0, y: g.y });
+      Object.assign(d.style, { left: a.x + "px", top: a.y + "px", width: (g.x1 - g.x0) * S.cam.z + "px", height: "1px" });
+    }
+  });
+}
+
+// ---------- right-click ----------
+let ctxAnchor = null;
+function onContext(e) {
+  e.preventDefault();
+  const p = local(e);
+  lastWorld = toWorld(p);
+  const t = e.target;
+  const label = t.closest(".blabel:not(.ghost)");
+  const onBoard = t.closest(".bd:not(.ghost)");
+  const under = itemUnder(t) || t.closest(".alabel")?.dataset.item;
+  const K = (k) => (navigator.platform?.startsWith("Mac") ? k : k.replace("⌘", "Ctrl+").replace("⌥", "Alt+").replace("⇧", "Shift+"));
+  let items;
+  if (onBoard && !label && S.mode === "design" && S.tool === "move") {
+    const id = onBoard.dataset.item;
+    const el = (S.sel?.kind === "el" && S.sel.item === id && S.sel.el) || elAt(id, p);
+    if (el && !(S.sel?.kind === "el" && S.sel.el === el)) selectEl(id, el);
+  }
+  if (!S.sel?.kind && (label || under || onBoard)) selectItem(label?.dataset.item || under || onBoard.dataset.item);
+  if ((label || under) && !selIds().includes(label?.dataset.item || under)) selectItem(label?.dataset.item || under);
+  const s = S.sel;
+  const many = selIds().length > 1;
+  if (s?.kind === "el") {
+    items = [
+      { head: s.info?.label || "Element" },
+      { label: "Select parent", kbd: K("⇧Enter"), onClick: () => walkEl("parent") },
+      { label: "Select first child", kbd: "Enter", onClick: () => walkEl("child") },
+      { label: "Select next", kbd: "Tab", onClick: () => walkEl("next") },
+      "-",
+      { label: "Bring to front", kbd: "]", onClick: () => arrangeEl("front") },
+      { label: "Bring forward", kbd: K("⌘]"), onClick: () => arrangeEl("forward") },
+      { label: "Send backward", kbd: K("⌘["), onClick: () => arrangeEl("backward") },
+      { label: "Send to back", kbd: "[", onClick: () => arrangeEl("back") },
+      "-",
+      { label: "Copy CSS", onClick: () => fire("copy-css") },
+      { label: "Ask an agent about this", onClick: () => fire("ask-agent", {}) },
+      { label: "Select the frame", kbd: "Esc", onClick: () => selectBoard(s.item) },
+      "-",
+      { label: "Remove", kbd: "Delete", danger: true, onClick: () => removeEl() },
+    ];
+  } else if (selIds().length) {
+    const one = !many && S.items.get(selIds()[0]);
+    items = [
+      { head: many ? plural(selIds().length, "item") : one.type === "board" ? screenName(one) : kindName(one) },
+      { label: "Copy", kbd: K("⌘C"), onClick: copySel },
+      { label: "Cut", kbd: K("⌘X"), onClick: cutSel },
+      { label: "Paste here", kbd: K("⌘V"), disabled: !CLIP, onClick: pasteClip },
+      { label: "Duplicate", kbd: K("⌘D"), onClick: duplicateSel },
+      ...(many
+        ? [
+            "-",
+            { label: "Align left", kbd: K("⌥A"), onClick: () => alignSel("left") },
+            { label: "Align centre", kbd: K("⌥H"), onClick: () => alignSel("hcenter") },
+            { label: "Align right", kbd: K("⌥D"), onClick: () => alignSel("right") },
+            { label: "Align top", kbd: K("⌥W"), onClick: () => alignSel("top") },
+            { label: "Align middle", kbd: K("⌥V"), onClick: () => alignSel("vcenter") },
+            { label: "Align bottom", kbd: K("⌥S"), onClick: () => alignSel("bottom") },
+            { label: "Distribute horizontally", kbd: K("⌥⇧H"), onClick: () => distributeSel("h") },
+            { label: "Distribute vertically", kbd: K("⌥⇧V"), onClick: () => distributeSel("v") },
+          ]
+        : one?.type === "board"
+          ? ["-", { label: "Present", onClick: () => fire("present", one.id) }, { label: "Open in a new tab", onClick: () => window.open(`/env/${one.env}/?ws-screen=${encodeURIComponent(one.screen || "")}`, "_blank", "noopener") }, { label: "Zoom to it", kbd: "⇧2", onClick: () => focusItem(one.id) }]
+          : []),
+      "-",
+      { label: "Delete", kbd: "Delete", danger: true, onClick: () => removeItems(selIds()) },
+    ];
+  } else {
+    items = [
+      { label: "Paste here", kbd: K("⌘V"), disabled: !CLIP, onClick: pasteClip },
+      { label: "Select all", kbd: K("⌘A"), onClick: selectAll },
+      "-",
+      { label: "Zoom to fit", kbd: "⇧1", onClick: () => fit() },
+      { label: S.outlines ? "Hide outlines" : "Show outlines", kbd: K("⌘Y"), onClick: toggleOutlines },
+      { label: S.rulers === false ? "Show rulers" : "Hide rulers", kbd: "⇧R", onClick: toggleRulers },
+      "-",
+      { label: "Keyboard shortcuts", kbd: "?", onClick: () => fire("shortcuts") },
+    ];
+  }
+  if (!ctxAnchor) (ctxAnchor = h(`<span class="ctxa" aria-hidden="true"></span>`)), $("frame").append(ctxAnchor);
+  const fr = $("frame").getBoundingClientRect();
+  ctxAnchor.style.left = e.clientX - fr.left + "px";
+  ctxAnchor.style.top = e.clientY - fr.top + "px";
+  menu(ctxAnchor, items, { width: 248 });
+}
+
 // ---------- keys ----------
 export function isTyping(t) {
   return !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
@@ -1579,10 +2260,23 @@ function onKey(e) {
     e.preventDefault();
     return;
   }
-  if (mod && (k === "d" || k === "D")) {
+  if (mod && (k === "d" || k === "D")) return e.preventDefault(), duplicateSel();
+  if (mod && (k === "z" || k === "Z")) {
     e.preventDefault();
-    if (S.sel?.kind === "el") return toast("Duplicating an element changes the page's HTML", "Ask an agent to do it, or duplicate the whole board from its frame");
-    return duplicateSel();
+    // finish what's still on its way (a nudge, a write) so undo steps back from where you are
+    const go = e.shiftKey ? histRedo : histUndo;
+    return void (async () => (await flushNudge(), await stylesIdle(), go()))();
+  }
+  if (mod && (k === "c" || k === "C") && selIds().length) return e.preventDefault(), copySel();
+  if (mod && (k === "x" || k === "X") && selIds().length) return e.preventDefault(), cutSel();
+  if (mod && (k === "v" || k === "V")) return e.preventDefault(), pasteClip();
+  if (mod && (k === "a" || k === "A")) return e.preventDefault(), selectAll();
+  if (mod && (k === "y" || k === "Y")) return e.preventDefault(), toggleOutlines();
+  if (mod && (k === "]" || k === "[") && S.sel?.kind === "el") return e.preventDefault(), arrangeEl(k === "]" ? "forward" : "backward");
+  if (e.altKey && !mod && selIds().length > 1) {
+    const al = { KeyA: "left", KeyD: "right", KeyH: "hcenter", KeyW: "top", KeyS: "bottom", KeyV: "vcenter" }[e.code];
+    if (al && !e.shiftKey) return e.preventDefault(), alignSel(al);
+    if (e.shiftKey && (e.code === "KeyH" || e.code === "KeyV")) return e.preventDefault(), distributeSel(e.code === "KeyH" ? "h" : "v");
   }
   if (mod && (k === "=" || k === "+")) return e.preventDefault(), zoomBy(1.25);
   if (mod && k === "-") return e.preventDefault(), zoomBy(0.8);
@@ -1606,6 +2300,20 @@ function onKey(e) {
   if (k === "@" || (e.shiftKey && k === "2")) return S.sel && focusItem(S.sel.item);
   if (k === "=" || k === "+") return zoomBy(1.25);
   if (k === "-" || k === "_") return zoomBy(0.8);
+  if ((k === "]" || k === "[") && S.sel?.kind === "el") return e.preventDefault(), arrangeEl(k === "]" ? "front" : "back");
+  if (k === "Tab" && (S.sel?.kind === "el" || S.sel?.kind === "board") && S.mode === "design") return e.preventDefault(), walkEl(e.shiftKey ? "prev" : "next");
+  if (k === "Enter" && e.shiftKey && S.sel?.kind === "el") return e.preventDefault(), walkEl("parent");
+  if (k === "Enter" && S.sel?.kind === "el" && S.mode === "design") return e.preventDefault(), walkEl("child");
+  if ((k === "R" || (e.shiftKey && k === "r")) && !e.altKey) return toggleRulers();
+  if (k === "?") return fire("shortcuts");
+  // several boards or annotations: arrow keys move them all
+  if (selIds().length > 1 && /^Arrow(Left|Right|Up|Down)$/.test(k)) {
+    e.preventDefault();
+    const st = e.shiftKey ? 8 : 1;
+    const before = groupOf(selIds());
+    placeAll(before.map((g) => ({ id: g.id, x: g.x + (k === "ArrowLeft" ? -st : k === "ArrowRight" ? st : 0), y: g.y + (k === "ArrowUp" ? -st : k === "ArrowDown" ? st : 0) })));
+    return recordMove(before);
+  }
   if (S.sel?.kind === "el" && S.mode === "design" && /^Arrow(Left|Right|Up|Down)$/.test(k)) {
     e.preventDefault();
     return nudge(k, e.shiftKey);
@@ -1614,9 +2322,9 @@ function onKey(e) {
     e.preventDefault();
     return removeEl();
   }
-  if ((k === "Backspace" || k === "Delete") && S.sel?.item && S.sel.kind !== "el") {
+  if ((k === "Backspace" || k === "Delete") && selIds().length) {
     e.preventDefault();
-    return removeItems([S.sel.item]);
+    return removeItems(selIds());
   }
   if (k === "Enter" && S.sel?.kind === "board" && S.mode === "design") {
     const first = docOf(S.sel.item)?.body?.firstElementChild;
@@ -1686,6 +2394,13 @@ export function initCanvas() {
   noteLayer = $("notes");
   rulerH = $("rulerH");
   rulerV = $("rulerV");
+  G.initGfx($("gfx"), $("bgFrames"), {
+    ready: () => (gfxDirty = true),
+    frame: async (win, it) => {
+      captureCatalog(win, it);
+      if (ensureScreen(win, it)) await new Promise((r) => setTimeout(r, it.state ? 1100 : 700));
+    },
+  });
   window.__workshopCanvas = true; // the runtime in each board checks this to know it is on the canvas
   applyCam();
   cv.addEventListener("pointerdown", onDown);
@@ -1699,7 +2414,8 @@ export function initCanvas() {
     if (d?.kind === "el" && d.started) endPreview([d.el], ["translate", "opacity"]);
     if (d?.kind === "elresize") endPreview([...d.targets, d.el], [...Object.keys(d.props || {}), "translate"]);
   });
-  cv.addEventListener("pointerleave", () => !drag && setHover(null, null));
+  cv.addEventListener("pointerleave", () => (!drag && setHover(null, null), (lastWorld = null)));
+  cv.addEventListener("contextmenu", onContext);
   cv.addEventListener("dblclick", onDbl);
   cv.addEventListener("wheel", onWheel, { passive: false });
   hud.addEventListener("click", (e) => {
@@ -1709,6 +2425,16 @@ export function initCanvas() {
   document.addEventListener("keydown", (e) => !isTyping(e.target) && onKey(e));
   document.addEventListener("keyup", onKeyUp);
   window.addEventListener("blur", () => ((spaceDown = false), cv.classList.remove("panning")));
+  // a background page that focuses itself on load would take the keyboard: hand it straight back
+  window.addEventListener("blur", () =>
+    setTimeout(() => {
+      const a = document.activeElement;
+      if (a?.closest?.("#bgFrames")) {
+        a.blur();
+        cv.focus({ preventScroll: true });
+      }
+    }, 0),
+  );
   for (const b of document.querySelectorAll("#tb [data-tool]")) b.addEventListener("click", () => setTool(b.dataset.tool));
   $("interactBtn").onclick = () => setMode(S.mode === "design" ? "prototype" : "design");
   $("zPct").onclick = () =>
@@ -1720,8 +2446,10 @@ export function initCanvas() {
       { label: "Zoom to fit", kbd: "⇧1", onClick: () => fit() },
       { label: "Zoom to selection", kbd: "⇧2", disabled: !S.sel, onClick: () => S.sel && focusItem(S.sel.item) },
     ], { align: "right", width: 220 });
-  new ResizeObserver(() => (dirty = true)).observe(cv);
-  window.addEventListener("resize", () => (dirty = true));
+  new ResizeObserver(() => ((dirty = true), (gfxDirty = true))).observe(cv);
+  window.addEventListener("resize", () => ((dirty = true), (gfxDirty = true)));
+  // a theme change redraws the canvas in the new colours
+  new MutationObserver(() => (gfxDirty = true)).observe(document.documentElement, { attributes: true, attributeFilter: ["data-ltheme"] });
   initDrop();
   requestAnimationFrame(loop);
 }

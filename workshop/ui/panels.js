@@ -7,7 +7,7 @@
 
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, familyOf, pageEnv, protoId, pageItems, pageOf, nearestBoard, screenName, plural } from "./state.js";
 import { $, h, esc, api, toast, IC, dropdown, segmented, copyText, timeAgo, clamp } from "./lib.js";
-import { rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, setMode, docOf, winOf, flowOf, parseTranslate, exactSel, removeEl } from "./canvas.js";
+import { rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, setMode, docOf, winOf, flowOf, parseTranslate, exactSel, removeEl, selIds, toggleSel, alignSel, distributeSel, duplicateSel, removeItems } from "./canvas.js";
 import { loadOverrides, cachedOverrides, forgetOverrides, rulesFor, boardsLive, commitRules, resetSelectors, preview, endPreview } from "./styles.js";
 
 // ---------- Libra tokens offered by the inspector ----------
@@ -185,15 +185,17 @@ function renderFile(head, body) {
   if (s?.kind === "el") EXP.add(s.item);
   for (const b of boards) {
     const d = docOf(b.id);
-    const canOpen = !!d?.body;
-    const open = canOpen && EXP.has(b.id);
-    const r = h(`<div class="lrow frame${s?.item === b.id && s.kind === "board" ? " on" : ""}" role="treeitem" aria-expanded="${open}" tabindex="0" style="padding-left:4px"><span class="tw${canOpen ? (open ? " open" : "") : " none"}">${IC.chevr}</span>${IC.frame}<span class="t">${esc(screenName(b))}${b.state && b.state !== "Default" ? ` · ${esc(b.state)}` : ""}</span></div>`);
+    const canOpen = true;
+    const open = !!d?.body && EXP.has(b.id);
+    const r = h(`<div class="lrow frame${selIds().includes(b.id) ? " on" : ""}" role="treeitem" aria-expanded="${open}" tabindex="0" style="padding-left:4px"><span class="tw${canOpen ? (open ? " open" : "") : " none"}">${IC.chevr}</span>${IC.frame}<span class="t">${esc(screenName(b))}${b.state && b.state !== "Default" ? ` · ${esc(b.state)}` : ""}</span></div>`);
     r.querySelector(".tw").onclick = (e) => {
       e.stopPropagation();
       EXP.has(b.id) ? EXP.delete(b.id) : EXP.add(b.id);
+      // its landmarks come from the live page: selecting the frame brings it live
+      if (!docOf(b.id)?.body) selectBoard(b.id);
       renderLeft();
     };
-    r.onclick = () => (selectBoard(b.id), !isVisible(b.id) && focusItem(b.id, { maxZ: 0.6 }));
+    r.onclick = (e) => (e.shiftKey ? toggleSel(b.id) : (selectBoard(b.id), !isVisible(b.id) && focusItem(b.id, { maxZ: 0.6 })));
     r.onkeydown = (e) => e.key === "Enter" && r.click();
     tree.append(r);
     if (open) landmarkRows(tree, b.id, d);
@@ -202,8 +204,8 @@ function renderFile(head, body) {
     const kind = { note: ["Note", IC.note], box: ["Highlight", IC.box], arrow: ["Arrow", IC.arrow] };
     for (const a of anns) {
       const [k, ic] = kind[a.type];
-      const r = h(`<div class="lrow${s?.item === a.id ? " on" : ""}" role="treeitem" tabindex="0" style="padding-left:4px"><span class="tw none"></span>${ic}<span class="t">${esc(a.text || a.label || k)}</span></div>`);
-      r.onclick = () => (selectItem(a.id), a.type !== "arrow" && !isVisible(a.id) && focusItem(a.id, { maxZ: 0.8 }));
+      const r = h(`<div class="lrow${selIds().includes(a.id) ? " on" : ""}" role="treeitem" tabindex="0" style="padding-left:4px"><span class="tw none"></span>${ic}<span class="t">${esc(a.text || a.label || k)}</span></div>`);
+      r.onclick = (e) => (e.shiftKey ? toggleSel(a.id) : (selectItem(a.id), a.type !== "arrow" && !isVisible(a.id) && focusItem(a.id, { maxZ: 0.8 })));
       r.onkeydown = (e) => e.key === "Enter" && r.click();
       tree.append(r);
     }
@@ -459,6 +461,7 @@ export function renderDesign() {
 function renderDesignInto(body) {
   const s = S.sel;
   if (!s) return designPage(body, pageEnv());
+  if (s.kind === "multi") return designMulti(body, selIds());
   if (s.kind === "board") return designBoard(body, s.item);
   if (s.kind === "el") return designEl(body, s);
   return designAnnotation(body, s.item);
@@ -550,6 +553,41 @@ function designPage(body, env) {
   const ar = del.querySelector('[data-a="arch"]');
   if (ar) ar.onclick = () => fire("archive", id);
   body.append(del);
+}
+
+// several boards and annotations: line them up
+const AL = (d) => `<svg class="ic" viewBox="0 0 16 16" aria-hidden="true">${d}</svg>`;
+const ALIGN = [
+  ["left", "Align left · ⌥A", AL('<path d="M2.5 2v12"/><rect x="5" y="4" width="8" height="3" rx=".5"/><rect x="5" y="9" width="5" height="3" rx=".5"/>')],
+  ["hcenter", "Align centre · ⌥H", AL('<path d="M8 2v12"/><rect x="3" y="4" width="10" height="3" rx=".5"/><rect x="5" y="9" width="6" height="3" rx=".5"/>')],
+  ["right", "Align right · ⌥D", AL('<path d="M13.5 2v12"/><rect x="3" y="4" width="8" height="3" rx=".5"/><rect x="6" y="9" width="5" height="3" rx=".5"/>')],
+  ["top", "Align top · ⌥W", AL('<path d="M2 2.5h12"/><rect x="4" y="5" width="3" height="8" rx=".5"/><rect x="9" y="5" width="3" height="5" rx=".5"/>')],
+  ["vcenter", "Align middle · ⌥V", AL('<path d="M2 8h12"/><rect x="4" y="3" width="3" height="10" rx=".5"/><rect x="9" y="5" width="3" height="6" rx=".5"/>')],
+  ["bottom", "Align bottom · ⌥S", AL('<path d="M2 13.5h12"/><rect x="4" y="3" width="3" height="8" rx=".5"/><rect x="9" y="6" width="3" height="5" rx=".5"/>')],
+];
+function designMulti(body, ids) {
+  const its = ids.map((id) => S.items.get(id)).filter(Boolean);
+  const n = (t) => its.filter((i) => i.type === t).length;
+  const parts = [n("board") && plural(n("board"), "board"), n("note") && plural(n("note"), "note"), n("box") && plural(n("box"), "highlight"), n("arrow") && plural(n("arrow"), "arrow")].filter(Boolean);
+  const t = h(`<div class="isec"><div class="ititle"><span class="nm">${plural(its.length, "item")} selected</span><span class="pth"><span>${esc(parts.join(" · "))}</span></span></div></div>`);
+  body.append(t);
+  const A = sec("Align");
+  const bar = h(`<div class="albar" role="toolbar" aria-label="Align"></div>`);
+  for (const [k, tip, ic] of ALIGN) {
+    const b = h(`<button type="button" class="ib32" aria-label="${esc(tip)}" data-tip="${esc(tip)}">${ic}</button>`);
+    b.onclick = () => alignSel(k);
+    bar.append(b);
+  }
+  A.append(bar);
+  const dist = h(`<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="h" ${its.length < 3 ? "disabled" : ""}>Distribute horizontally</button><button type="button" class="dbtn sm" data-a="v" ${its.length < 3 ? "disabled" : ""}>Distribute vertically</button></div>`);
+  dist.querySelector('[data-a="h"]').onclick = () => distributeSel("h");
+  dist.querySelector('[data-a="v"]').onclick = () => distributeSel("v");
+  A.append(dist);
+  body.append(A);
+  const acts = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="dup">${IC.copy}Duplicate</button><button type="button" class="dbtn sm err" data-a="del">${IC.trash}Delete</button></div><span class="lineage">Drag any of them to move them all; arrow keys nudge. Shift-click adds or removes one.</span></div>`);
+  acts.querySelector('[data-a="dup"]').onclick = () => duplicateSel();
+  acts.querySelector('[data-a="del"]').onclick = () => removeItems(ids);
+  body.append(acts);
 }
 
 function designBoard(body, bid) {

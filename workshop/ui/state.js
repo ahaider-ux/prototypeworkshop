@@ -33,6 +33,8 @@ export const S = {
   chatOnBranch: true,
   draftSel: true,
   presenting: null,
+  outlines: false,
+  rulers: true,
 };
 
 const subs = new Map();

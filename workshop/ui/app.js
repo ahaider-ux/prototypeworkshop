@@ -4,7 +4,7 @@ import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, famil
 import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented } from "./lib.js";
 import { initCanvas, sync, fit, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
 import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff } from "./panels.js";
-import { undoStyle } from "./styles.js";
+import { rulesFor, loadOverrides } from "./styles.js";
 
 const pageName = (e) => (e ? (isBranch(e) ? e.name : "Main") : "");
 const store = {
@@ -777,6 +777,33 @@ function setPal(i) {
   qa("#palRs button")[i]?.scrollIntoView({ block: "nearest" });
 }
 
+// ---------- keyboard shortcuts ----------
+function openShortcuts() {
+  const mac = navigator.platform?.startsWith("Mac");
+  const K = (k) => (mac ? k : k.replace(/⌘/g, "Ctrl+").replace(/⌥/g, "Alt+").replace(/⇧/g, "Shift+"));
+  const groups = [
+    ["Tools", [["Select", "V"], ["Hand", "H · Space"], ["Note", "N"], ["Highlight", "B"], ["Arrow", "A"], ["Comment", "C"], ["Interact with the prototype", "P"], ["Ask an agent", "Toolbar"]]],
+    ["Edit", [["Undo", K("⌘Z")], ["Redo", K("⌘⇧Z")], ["Copy · cut · paste", K("⌘C · ⌘X · ⌘V")], ["Duplicate", K("⌘D")], ["Delete", "Delete"], ["Select all", K("⌘A")], ["Add to the selection", "⇧ click"], ["Select by dragging", "Drag on empty canvas"]]],
+    ["Elements", [["Parent · first child", "Esc · Enter"], ["Next · previous", "Tab · ⇧Tab"], ["Move or reorder", "Drag · arrows (⇧ 8 px)"], ["Bring forward · send backward", K("⌘] · ⌘[")], ["Bring to front · send to back", "] · ["], ["Edit text", "Double-click"]]],
+    ["Arrange several", [["Align left · centre · right", K("⌥A · ⌥H · ⌥D")], ["Align top · middle · bottom", K("⌥W · ⌥V · ⌥S")], ["Distribute", K("⌥⇧H · ⌥⇧V")], ["Move without snapping", K("hold ⌥")]]],
+    ["View", [["Zoom to fit · selection", "⇧1 · ⇧2"], ["Zoom in · out · 100%", K("+ · − · ⌘0")], ["Outlines", K("⌘Y")], ["Rulers", "⇧R"], ["Hide panels", K("⌘\\")], ["Search", K("⌘K")]]],
+  ];
+  const md = modal(`<div class="md-h"><div class="tt"><h2>Keyboard shortcuts</h2><p>The canvas follows the shortcuts you know from design tools.</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div><div class="md-b"><div class="kgrid">${groups.map(([g, rows]) => `<div class="kgrp"><div class="rvh">${esc(g.toUpperCase())}</div><div class="kbdl">${rows.map(([a, b]) => `<span>${esc(a)}</span><kbd>${esc(b)}</kbd>`).join("")}</div></div>`).join("")}</div></div>`, { wide: true });
+  md.querySelector('[data-a="x"]').onclick = closeModal;
+}
+// the element's CSS, as the browser applies it, plus this page's own rules for it
+async function copyCss() {
+  const s = S.sel;
+  if (s?.kind !== "el") return;
+  const st = s.info?.styles || {};
+  await loadOverrides(s.env);
+  const own = rulesFor(s.env, [s.info?.selector, s.info?.exactSelector]).flatMap((r) => r.decls);
+  const keep = ["display", "position", "width", "height", "padding-top", "padding-right", "padding-bottom", "padding-left", "gap", "flex-direction", "align-items", "justify-content", "border-radius", "background-color", "color", "font-size", "font-weight", "line-height", "opacity", "box-shadow"];
+  const lines = keep.filter((k) => st[k] && !/^(normal|none|0px|auto|static|rgba\(0, 0, 0, 0\))$/.test(st[k])).map((k) => `  ${k}: ${st[k]};`);
+  const text = `${s.info?.exactSelector || s.info?.label} {\n${lines.join("\n")}${own.length ? `\n  /* changed on this page */\n${own.map(([k, v]) => `  ${k}: ${v};`).join("\n")}` : ""}\n}`;
+  copyText(text);
+}
+
 // ---------- the rest ----------
 function toggleUi() {
   $("frame").classList.toggle("ui-off");
@@ -801,6 +828,7 @@ function wsMenu() {
     { label: "Connect an agent", icon: IC.agent, onClick: openConnect },
     { label: "Copy folder path", icon: IC.copy, onClick: () => copyText(S.ws.root) },
     { label: "Rename workspace", icon: IC.board, onClick: renameWorkspace },
+    { label: "Keyboard shortcuts", kbd: "?", onClick: openShortcuts },
     "-",
     { head: "Appearance" },
     ...["light", "dark", "system"].map((t) => ({ label: t[0].toUpperCase() + t.slice(1), checked: pref === t, onClick: () => setTheme(t) })),
@@ -890,10 +918,6 @@ async function boot() {
     if (mod && (e.key === "k" || e.key === "K")) return e.preventDefault(), $("pal").classList.contains("open") ? closePal() : openPal();
     if (S.view !== "proto") return;
     if (mod && e.key === "\\") return e.preventDefault(), toggleUi();
-    if (mod && !e.shiftKey && (e.key === "z" || e.key === "Z") && !isTyping(e.target)) {
-      e.preventDefault();
-      undoStyle().then((did) => !did && toast("Nothing to undo", "Edits to elements undo here; everything else has its own Undo"));
-    }
   });
   window.addEventListener("hashchange", applyRoute);
   on("go", go);
@@ -914,6 +938,8 @@ async function boot() {
   });
   on("archive", (id) => patchArchived(id, true));
   on("unarchive", (id) => patchArchived(id, false));
+  on("shortcuts", openShortcuts);
+  on("copy-css", copyCss);
   on("branch", createBranch);
   on("review", openReview);
   on("update-from-main", updateFromMain);
