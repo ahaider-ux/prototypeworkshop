@@ -29,6 +29,11 @@ export function taskPrompt(task, env, dir, ctx = {}) {
     for (const d of ctx.decisions) lines.push(`- ${String(d.at).slice(0, 10)} merged "${d.branchName}"${d.note ? `: ${d.note}` : ""}${d.changes?.length ? ` (${d.changes.slice(0, 6).join(", ")}${d.changes.length > 6 ? ", …" : ""})` : ""}`);
     lines.push("");
   }
+  if (ctx.activity?.length) {
+    lines.push("What people and other agents did here recently (don't redo or undo their work; post_update to tell them what you're doing):");
+    for (const e of ctx.activity) lines.push(`- ${String(e.at).slice(5, 16).replace("T", " ")} ${e.by || "Someone"}: ${e.text}`);
+    lines.push("");
+  }
   if (ctx.recipe) lines.push(`Recipe: ${ctx.recipe.name} (version ${ctx.recipe.n})`, ctx.recipe.prompt);
   else lines.push(`Request from the designer: ${task.prompt}`);
   if (sel && sel.selector) {

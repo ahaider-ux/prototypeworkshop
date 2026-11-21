@@ -295,6 +295,7 @@ export function sync() {
       el.querySelector(".lb span").textContent = it.label || "Highlight";
     }
   }
+  syncEmbeds();
   // hand-drawn marks on this page
   const inks = pageItems("ink");
   const liveInk = new Set(inks.map((k) => k.id));
@@ -750,6 +751,146 @@ export function choosePen(pen) {
   if (S.tool !== "draw") setTool("draw");
   else renderTray();
 }
+// ---------- work brought in from elsewhere: live links (Figma, running apps) and pictures ----------
+const EMB = new Map(); // id → {el, frame}
+const MAX_LIVE_LINKS = 4; // Guard: each live link is a whole web page running in the canvas
+const hostOf = (url) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+};
+export const isFigma = (url) => /(^|\.)figma\.com$/.test(hostOf(url));
+// Figma files show through Figma's own embed; anything else is shown as it is
+function embedUrl(url) {
+  if (isFigma(url) && !/\/embed\b/.test(url)) return `https://www.figma.com/embed?embed_host=atelier&url=${encodeURIComponent(url)}`;
+  return url;
+}
+export const embedLabel = (it) => it.name || (it.type === "image" ? "Picture" : isFigma(it.url) ? "Figma file" : hostOf(it.url) || "Link");
+function syncEmbeds() {
+  const its = [...pageItems("web"), ...pageItems("image")];
+  const keep = new Set(its.map((i) => i.id));
+  for (const [id, e] of EMB) if (!keep.has(id)) (e.el.remove(), EMB.delete(id));
+  for (const it of its) {
+    let e = EMB.get(it.id);
+    if (!e) {
+      const el =
+        it.type === "image"
+          ? h(`<div class="emb img" data-item="${esc(it.id)}"><img alt="" draggable="false"><span class="elabel"></span></div>`)
+          : h(`<div class="emb web" data-item="${esc(it.id)}"><div class="eback"><b></b><span></span><span class="why">Showing it live here needs the site to allow embedding. Open it in a tab if it stays blank.</span></div><span class="elabel"></span></div>`);
+      noteLayer.append(el);
+      e = { el, frame: null };
+      EMB.set(it.id, e);
+      lastZ = 0;
+    }
+    const { el } = e;
+    el.style.left = it.x + "px";
+    el.style.top = it.y + "px";
+    el.style.width = it.w + "px";
+    el.style.height = it.h + "px";
+    el.querySelector(".elabel").textContent = embedLabel(it) + (it.type === "web" ? ` · ${isFigma(it.url) ? "Figma" : hostOf(it.url)}` : "");
+    if (it.type === "image") {
+      const img = el.querySelector("img");
+      const src = `/canvas-assets/${it.src}`;
+      if (img.getAttribute("src") !== src) img.src = src;
+    } else {
+      el.querySelector(".eback b").textContent = embedLabel(it);
+      el.querySelector(".eback span").textContent = it.url;
+      el.classList.toggle("figma", isFigma(it.url));
+    }
+  }
+  planLinks();
+}
+// Live links run only while they're big enough on screen to look at, and only a few at once
+function planLinks() {
+  const v = viewRect();
+  const want = [...pageItems("web")]
+    .map((it) => ({ it, r: screenRect(it) }))
+    .filter(({ r }) => r.w > 220 && r.x < v.x1 && r.y < v.y1 && r.x + r.w > v.x0 && r.y + r.h > v.y0)
+    .sort((a, b) => b.r.w * b.r.h - a.r.w * a.r.h)
+    .slice(0, MAX_LIVE_LINKS)
+    .map(({ it }) => it.id);
+  for (const [id, e] of EMB) {
+    const it = item(id);
+    if (!it || it.type !== "web") continue;
+    const on = want.includes(id);
+    if (on && !e.frame) {
+      const f = document.createElement("iframe");
+      // Guard: a linked page runs sandboxed, apart from the editor (its own origin, no top navigation)
+      f.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox");
+      f.setAttribute("referrerpolicy", "no-referrer");
+      f.setAttribute("allow", "clipboard-write; fullscreen");
+      f.loading = "lazy";
+      f.title = embedLabel(it);
+      f.src = embedUrl(it.url);
+      e.el.append(f);
+      e.frame = f;
+      e.url = it.url;
+    } else if (on && e.url !== it.url) {
+      e.frame.src = embedUrl(it.url);
+      e.url = it.url;
+    } else if (!on && e.frame) {
+      e.frame.remove();
+      e.frame = null;
+    }
+  }
+}
+// where something new goes when nobody pointed at a spot: right of everything on the page, never on top
+function freeSpot(w, h) {
+  const all = [...pageBoards(), ...pageItems("web"), ...pageItems("image"), ...pageItems("box")].map(rectOf);
+  if (!all.length) {
+    const v = viewRect();
+    const c = toWorld({ x: (v.x0 + v.x1) / 2, y: (v.y0 + v.y1) / 2 });
+    return { x: c.x - w / 2, y: c.y - h / 2 };
+  }
+  const x1 = Math.max(...all.map((r) => r.x + r.w)),
+    y0 = Math.min(...all.map((r) => r.y));
+  return { x: Math.round((x1 + 160) / SNAP) * SNAP, y: Math.round(y0 / SNAP) * SNAP };
+}
+// adds a link or a picture to this page: where it was dropped or pasted, or beside the page's content
+export async function addLink(url, name = null, at = null) {
+  const figma = isFigma(url);
+  const w = figma ? 1200 : 1280,
+    hh = 800;
+  const p = at ? { x: at.x - w / 2, y: at.y - hh / 2 } : freeSpot(w, hh);
+  const it = await createItem({ type: "web", url, name, x: Math.round(p.x), y: Math.round(p.y), w, h: hh });
+  if (it) {
+    selectItem(it.id);
+    if (!at) focusItem(it.id, { maxZ: 0.5 });
+  }
+  return it;
+}
+export async function addPicture(file, at = null) {
+  // Guard: the server checks too; this keeps a huge drop from freezing the tab first
+  if (file.size > 20 * 1024 * 1024) return toast(`${file.name} is too big`, "Pictures up to 20 MB can go on the canvas");
+  try {
+    const r = await fetch("/api/canvas/assets", { method: "POST", headers: { "x-workshop": "1", "content-type": file.type || "application/octet-stream" }, body: file });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.message || "Couldn't upload it");
+    const dims = await new Promise((res) => {
+      const im = new Image();
+      im.onload = () => res({ w: im.naturalWidth, h: im.naturalHeight });
+      im.onerror = () => res({ w: 640, h: 480 });
+      im.src = `/canvas-assets/${d.src}`;
+    });
+    // big screenshots come in at a sensible size; small pictures at their own
+    const k = Math.min(1, 1440 / dims.w);
+    const w = Math.max(16, Math.round(dims.w * k)),
+      hh = Math.max(16, Math.round(dims.h * k));
+    const p = at ? { x: at.x - w / 2, y: at.y - hh / 2 } : freeSpot(w, hh);
+    const it = await createItem({ type: "image", src: d.src, name: file.name.replace(/\.[a-z0-9]+$/i, "").slice(0, 120), x: Math.round(p.x), y: Math.round(p.y), w, h: hh });
+    if (it) {
+      selectItem(it.id);
+      if (!at) focusItem(it.id, { maxZ: 0.6 });
+    }
+    return it;
+  } catch (e) {
+    toast(`Couldn't add ${file.name}`, e.message);
+    return null;
+  }
+}
+
 // ---------- the frame tray: sizes to place a frame at, like a design tool's frame presets ----------
 const FRAME_SIZES = [
   { label: "Phone", w: 390, h: 844 },
@@ -1009,6 +1150,8 @@ export function drawHud() {
       if (item(id)?.type === "note") el.style.transform = k > 1 ? `scale(${k})` : "";
       else el.querySelector(".lb").style.transform = `translateY(-100%) scale(${clamp(12 / (14 * S.cam.z), 1, 6)})`;
     }
+    // link and picture names stay readable, like frame titles
+    for (const [, e] of EMB) e.el.querySelector(".elabel").style.transform = `translateY(-100%) scale(${1 / S.cam.z})`;
   }
   drawWires();
   drawRulers();
@@ -1062,6 +1205,9 @@ export function drawHud() {
   if (s?.kind === "board" && item(s.item)) {
     selRect = screenRect(item(s.item));
     placeBox(HUD.sel, selRect, null);
+  } else if ((s?.kind === "web" || s?.kind === "image") && item(s.item)) {
+    selRect = screenRect(item(s.item));
+    placeBox(HUD.sel, selRect, null);
   } else if (s?.kind === "ink" && item(s.item)) {
     placeBox(HUD.sel, screenRect(rectOf(item(s.item))), null);
   } else if (s?.kind === "el" && S.mode === "design") {
@@ -1070,6 +1216,7 @@ export function drawHud() {
   } else placeBox(HUD.sel, null);
   const many = s?.kind === "multi" ? selIds() : [];
   for (const [id, el] of NEL) el.classList.toggle("on", s?.item === id || many.includes(id));
+  for (const [id, x] of EMB) x.el.classList.toggle("on", s?.item === id || many.includes(id));
   for (const [id, x] of INK) x.g.classList.toggle("on", s?.item === id || many.includes(id));
   // several selected: each one outlined, and a box around them all
   const boxes = many.map((id) => item(id)).filter((it) => it && it.type !== "arrow").map((it) => screenRect(rectOf(it)));
@@ -1089,7 +1236,7 @@ export function drawHud() {
     placeBox(d, null);
   });
   drawGuides();
-  const br = s?.kind === "board" ? selRect : null;
+  const br = s?.kind === "board" || s?.kind === "web" || s?.kind === "image" ? selRect : null;
   const er = s?.kind === "el" && S.mode === "design" ? selRect : null;
   HUD.size.hidden = !(br || er);
   if (br || er) {
@@ -1402,6 +1549,7 @@ function loop() {
   if (now - planAt > 200 && S.page) {
     planAt = now;
     planLive();
+    planLinks();
     planSnapshots();
     guardKeys();
   }
@@ -1767,6 +1915,7 @@ export function copySel() {
   const ids = selIds();
   if (!ids.length) return false;
   CLIP = collect(ids);
+  copiedAt = performance.now();
   pasteN = 0;
   try {
     navigator.clipboard?.writeText(JSON.stringify({ workshop: 1, items: CLIP })).catch(() => {});
@@ -1798,6 +1947,21 @@ async function pasteList(list, { offset = 40, label = "paste" } = {}) {
   if (made.length) selectMany(made.map((m) => m.id));
 }
 const made0 = (list) => list.filter((x) => x.type !== "arrow").length;
+// ⌘V on the canvas: a picture (a screenshot, an export from Figma) becomes a picture, a web address
+// becomes a live link, and copied canvas items paste as themselves
+document.addEventListener("paste", (e) => {
+  if (!S.page || S.view !== "proto" || isTyping(document.activeElement) || $("modal").classList.contains("open") || e.target.closest?.("input,textarea,[contenteditable]")) return;
+  const dt = e.clipboardData;
+  const pic = [...(dt?.files || [])].find((f) => /^image\/(png|jpeg|webp|gif)$/.test(f.type));
+  const txt = (dt?.getData("text/plain") || "").trim();
+  e.preventDefault();
+  const at = lastWorld ? { x: lastWorld.x, y: lastWorld.y } : null;
+  if (pic) return addPicture(pic, at);
+  if (/^https?:\/\/\S+$/.test(txt) && !CLIP_FRESH()) return addLink(txt, null, at);
+  pasteClip();
+});
+let copiedAt = 0;
+const CLIP_FRESH = () => CLIP && performance.now() - copiedAt < 60_000;
 export async function pasteClip() {
   if (!CLIP) {
     try {
@@ -1944,7 +2108,7 @@ let drag = null;
 let spaceDown = false;
 
 function itemUnder(t) {
-  const n = t.closest?.(".note,.box");
+  const n = t.closest?.(".note,.box,.emb");
   if (n) return n.dataset.item;
   const g = t.closest?.("g[data-item]");
   if (g) return g.dataset.item;
@@ -1973,7 +2137,7 @@ function onDown(e) {
   if (handle && handle.dataset.el && S.sel?.kind === "el") {
     drag = startElResize(handle, p);
     if (!drag) return;
-  } else if (handle && S.sel?.kind === "board") {
+  } else if (handle && (S.sel?.kind === "board" || S.sel?.kind === "web" || S.sel?.kind === "image")) {
     const it = item(S.sel.item);
     drag = { kind: "resize", id: it.id, h: handle.dataset.h, p0: p, w0: it.w, h0: it.h };
   } else if (pan) {
@@ -2127,7 +2291,7 @@ function onMove(e) {
       if (!it) continue;
       it.x = snap.sx ? Math.round(g.x + dx / z + snap.dx) : Math.round((g.x + dx / z) / SNAP) * SNAP;
       it.y = snap.sy ? Math.round(g.y + dy / z + snap.dy) : Math.round((g.y + dy / z) / SNAP) * SNAP;
-      const el = B.get(g.id)?.el || NEL.get(g.id);
+      const el = B.get(g.id)?.el || NEL.get(g.id) || EMB.get(g.id)?.el;
       if (el) (el.style.left = it.x + "px"), (el.style.top = it.y + "px");
       INK.get(g.id)?.g.setAttribute("transform", `translate(${it.x} ${it.y})`);
     }
@@ -2149,11 +2313,13 @@ function onMove(e) {
     dirty = true;
   } else if (drag.kind === "resize") {
     const it = item(drag.id);
-    if (drag.h.includes("e")) it.w = clamp(Math.round((drag.w0 + dx / z) / SNAP) * SNAP, 240, 4096);
-    if (drag.h.includes("s")) it.h = clamp(Math.round((drag.h0 + dy / z) / SNAP) * SNAP, 240, 4096);
-    const b = B.get(drag.id);
-    b.el.style.width = it.w + "px";
-    b.el.style.height = it.h + "px";
+    const lo = it.type === "image" ? 16 : 120;
+    if (drag.h.includes("e")) it.w = clamp(Math.round((drag.w0 + dx / z) / SNAP) * SNAP, lo, it.type === "image" ? 8192 : 4096);
+    if (drag.h.includes("s")) it.h = clamp(Math.round((drag.h0 + dy / z) / SNAP) * SNAP, lo, it.type === "image" ? 8192 : 4096);
+    // a picture keeps its proportions from the corner
+    if (it.type === "image" && drag.h === "se") it.h = Math.max(lo, Math.round((it.w * drag.h0) / drag.w0));
+    const el = B.get(drag.id)?.el || EMB.get(drag.id)?.el;
+    if (el) (el.style.width = it.w + "px"), (el.style.height = it.h + "px");
     drag.moved = true;
     dirty = true;
     fire("board-size", drag.id);
@@ -2501,7 +2667,8 @@ function onKey(e) {
   }
   if (mod && (k === "c" || k === "C") && selIds().length) return e.preventDefault(), copySel();
   if (mod && (k === "x" || k === "X") && selIds().length) return e.preventDefault(), cutSel();
-  if (mod && (k === "v" || k === "V")) return e.preventDefault(), pasteClip();
+  if (mod && (k === "v" || k === "V")) return;
+  if ((k === "l" || k === "L") && !mod && !e.shiftKey) return fire("bring-in"); // the paste event below handles it, pictures and links included
   if (mod && (k === "a" || k === "A")) return e.preventDefault(), selectAll();
   if (mod && (k === "y" || k === "Y")) return e.preventDefault(), toggleOutlines();
   if (mod && (k === "]" || k === "[") && S.sel?.kind === "el") return e.preventDefault(), arrangeEl(k === "]" ? "forward" : "backward");
@@ -2583,9 +2750,10 @@ function onKeyUp(e) {
 // ---------- dropping HTML files and screens onto the canvas ----------
 function initDrop() {
   const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes("Files");
+  const hasLink = (e) => [...(e.dataTransfer?.types || [])].includes("text/uri-list");
   const hasScreen = (e) => [...(e.dataTransfer?.types || [])].includes("application/x-workshop-screen");
   cv.addEventListener("dragover", (e) => {
-    if (!hasFiles(e) && !hasScreen(e)) return;
+    if (!hasFiles(e) && !hasScreen(e) && !hasLink(e)) return;
     e.preventDefault();
     if (hasFiles(e)) cv.classList.add("dropping");
   });
@@ -2601,9 +2769,21 @@ function initDrop() {
       } catch {}
       return;
     }
+    if (!hasFiles(e) && hasLink(e) && S.page) {
+      // a link dragged from the browser's address bar or a page: Figma, a running app, any site
+      e.preventDefault();
+      const url = (e.dataTransfer.getData("text/uri-list") || "").split("\n").find((l) => /^https?:\/\//.test(l.trim()));
+      if (url) addLink(url.trim(), null, w);
+      return;
+    }
     if (!hasFiles(e)) return;
     e.preventDefault();
     cv.classList.remove("dropping");
+    const pics = [...e.dataTransfer.files].filter((f) => /^image\/(png|jpeg|webp|gif)$/.test(f.type));
+    if (pics.length && S.page) {
+      for (const [i, f] of pics.entries()) await addPicture(f, { x: w.x + i * 40, y: w.y + i * 40 });
+      return;
+    }
     const files = [...e.dataTransfer.files].filter((f) => /\.html?$/i.test(f.name) || f.type === "text/html");
     if (!files.length) return toast("Drop an HTML file", "Prototypes are .html files — a folder's index.html works too");
     let last = null;

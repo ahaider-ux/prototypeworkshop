@@ -414,3 +414,46 @@ test("frames: an empty page of the prototype at any size, carried by branches an
   // Guard: a frame's page stays an .html file inside the prototype
   for (const bad of ["../x.html", "frames/.hidden.html", "frames/x.js", "/etc/passwd"]) await assert.rejects(() => s.updateItem(f.id, { file: bad }), /frame's page/);
 });
+
+test("work from elsewhere: live links and pictures, checked", async () => {
+  const s = await Store.open(await tmp());
+  const a = await s.createEnv({ html: HTML });
+  const fig = await s.addItem({ type: "web", env: a.id, url: "https://www.figma.com/design/abc/Checkout?node-id=1-2", name: "Checkout" });
+  assert.equal(fig.url, "https://www.figma.com/design/abc/Checkout?node-id=1-2");
+  await s.addItem({ type: "web", env: a.id, url: "http://localhost:3000/" });
+  // Guard: only web pages
+  for (const bad of ["javascript:alert(1)", "file:///etc/passwd", "not a url"]) await assert.rejects(() => s.addItem({ type: "web", env: a.id, url: bad }), /web address/);
+  // pictures: real images only, never SVG, named by content
+  const png = Buffer.from("89504e470d0a1a0a0000000d4948445200000001000000010806000000", "hex");
+  const up = await s.saveAsset(png);
+  assert.match(up.src, /^assets\/[0-9a-f]{24}\.png$/);
+  assert.equal((await s.saveAsset(png)).src, up.src, "the same picture is stored once");
+  await assert.rejects(() => s.saveAsset(Buffer.from('<svg onload="alert(1)"/>')), /PNG, JPEG, WebP or GIF/);
+  const img = await s.addItem({ type: "image", env: a.id, src: up.src, w: 300, h: 200 });
+  assert.equal(img.src, up.src);
+  await assert.rejects(() => s.addItem({ type: "image", env: a.id, src: "../../secret.png" }), /uploaded/);
+  assert.throws(() => s.assetPath("../x.png"), /canvas picture/);
+});
+
+test("activity: people and agents see what each other did", async () => {
+  const s = await Store.open(await tmp());
+  const a = await s.createEnv({ html: HTML });
+  const other = await s.createEnv({ name: "Other", html: HTML });
+  const b = await s.branchEnv(a.id, { name: "Denser" });
+  const t = await s.addTask({ env: b.id, prompt: "Tighten the cards", author: "Ada" });
+  await s.updateTask(t.id, { status: "working", claimedBy: "Claude Code" });
+  await s.updateTask(t.id, { status: "done", reply: "Cards are 8px tighter" });
+  await s.log({ kind: "update", text: "Leaving the sidebar alone, Ada is on it", env: b.id, by: "Claude Code" });
+  await s.log({ kind: "update", text: "Unrelated", env: other.id, by: "Codex" });
+  const mine = await s.activity({ env: a.id });
+  const texts = mine.map((e) => e.text);
+  assert.ok(texts.some((x) => /Branched "Denser"/.test(x)));
+  assert.ok(texts.some((x) => /Asked: Tighten the cards/.test(x)));
+  assert.ok(texts.some((x) => /Finished "Tighten the cards": Cards are 8px tighter/.test(x)));
+  assert.ok(!texts.includes("Unrelated"), "another prototype's activity stays there");
+  // an agent starting on this prototype is told what happened, but not about its own request
+  const t2 = await s.addTask({ env: b.id, prompt: "Next thing" });
+  const ctx = await s.contextFor(b.id, t2);
+  assert.ok(ctx.activity.some((e) => /Ada is on it/.test(e.text)));
+  assert.ok(!ctx.activity.some((e) => e.ref === t2.id));
+});

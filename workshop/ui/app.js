@@ -2,7 +2,7 @@
 
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural, pageName, folderLabel } from "./state.js";
 import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented, skeleton, loadingToast, pendingButton } from "./lib.js";
-import { initCanvas, sync, fit, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
+import { addLink, addPicture, initCanvas, sync, fit, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
 import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff } from "./panels.js";
 import { rulesFor, loadOverrides } from "./styles.js";
 import { loadRecipes } from "./recipes.js";
@@ -55,6 +55,14 @@ async function loadComments() {
   if (S.view === "proto" && (S.leftTab === "notes" || S.leftTab === "file")) renderLeft();
 }
 let lastStatus = new Map();
+async function loadActivity() {
+  try {
+    S.activity = await api("activity?limit=300");
+  } catch {
+    return;
+  }
+  if (S.view === "proto") renderLeft();
+}
 async function loadTasks() {
   const list = await api("tasks").catch(() => S.tasks);
   for (const t of list) {
@@ -861,6 +869,53 @@ function wsMenu() {
     ...[["clear", "Clear"], ["balanced", "Balanced"], ["frosted", "Frosted"]].map(([v, l]) => ({ label: l, checked: glassPref() === v, onClick: () => setGlass(v) })),
   ], { width: 280 });
 }
+// ---------- bring in work from elsewhere: Figma files, running apps, pictures ----------
+function openBringIn() {
+  if (!S.page) return toast("Open a prototype first", "Links and pictures go on a page, next to its screens");
+  const md = modal(
+    `<div class="md-h"><div class="tt"><h2>Bring in work</h2><p>Put a Figma file, a running app (localhost, a Lovable, v0, Vercel or Bolt preview) or a picture next to your screens. Mark it up, compare, and have an agent build it here.</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div>
+    <form class="md-b" id="biF">
+      <div class="fld"><span class="lr">Link<span class="hint">Figma file, app or any web page</span></span><div class="afld-in"><input id="biUrl" type="url" spellcheck="false" placeholder="https://www.figma.com/design/… or http://localhost:3000"></div></div>
+      <div class="fld"><span class="lr">Name<span class="hint">Optional</span></span><div class="afld-in"><input id="biName" maxlength="120" placeholder="Checkout, from Figma"></div></div>
+      <div class="drop" id="biDrop" tabindex="0" role="button"><b>Or drop a picture</b><span>A screenshot, a Figma export, a moodboard (PNG, JPEG, WebP or GIF)</span><button type="button" class="dbtn" id="biPick">${IC.img}Choose a picture</button></div>
+      <span class="lineage">Tip: paste a link or a screenshot straight onto the canvas with ⌘V, or drag one in.</span>
+    </form>
+    <div class="md-f"><span class="sp"></span><button type="button" class="ghbtn" data-a="x2">Cancel</button><button type="button" class="createbtn" data-a="ok">Add link</button></div>`,
+  );
+  md.style.width = "560px";
+  const pick = (f) => f && (closeModal(), addPicture(f));
+  $("biPick").onclick = (e) => {
+    e.stopPropagation();
+    const fi = $("fileIn");
+    fi.value = "";
+    const was = fi.accept;
+    fi.accept = "image/png,image/jpeg,image/webp,image/gif";
+    fi.onchange = () => ((fi.accept = was), pick(fi.files[0]));
+    fi.click();
+  };
+  const drop = $("biDrop");
+  drop.ondragover = (e) => (e.preventDefault(), drop.classList.add("over"));
+  drop.ondragleave = () => drop.classList.remove("over");
+  drop.ondrop = (e) => {
+    e.preventDefault();
+    drop.classList.remove("over");
+    const f = [...e.dataTransfer.files].find((x) => /^image\/(png|jpeg|webp|gif)$/.test(x.type));
+    f ? pick(f) : toast("That isn't a picture", "PNG, JPEG, WebP or GIF");
+  };
+  md.querySelector('[data-a="x"]').onclick = closeModal;
+  md.querySelector('[data-a="x2"]').onclick = closeModal;
+  const ok = async () => {
+    let url = $("biUrl").value.trim();
+    if (!url) return toast("Paste a link first", "Or choose a picture");
+    if (!/^https?:\/\//i.test(url)) url = (/^(localhost|127\.|\[::1\])/.test(url) ? "http://" : "https://") + url;
+    closeModal();
+    await addLink(url, $("biName").value.trim() || null);
+  };
+  md.querySelector('[data-a="ok"]').onclick = ok;
+  $("biF").onsubmit = (e) => (e.preventDefault(), ok());
+  setTimeout(() => $("biUrl")?.focus(), 30);
+}
+
 // ---------- spaces: the folders Atelier works in ----------
 let spaceList = null;
 async function loadSpaces() {
@@ -1026,6 +1081,7 @@ async function onEvent(ev) {
   }
   if (ev.kind === "tasks") return loadTasks();
   if (ev.kind === "recipes") return loadRecipes();
+  if (ev.kind === "activity") return loadActivity();
   if (ev.kind === "comments") return loadComments();
   if (ev.kind === "versions") return S.page && loadVersions(S.page);
   if (ev.kind === "harness") {
@@ -1055,6 +1111,8 @@ async function boot() {
   $("uiToggle").onclick = toggleUi;
   $("agentBtn").onclick = openConnect;
   $("askBtn").onclick = () => fire("ask-agent", {});
+  $("bringBtn").onclick = () => fire("bring-in");
+  on("bring-in", openBringIn);
   $("shareBtn").onclick = () => openShare(S.page);
   $("presentBtn").onclick = () => present(S.sel?.kind === "board" ? S.sel.item : pageItems("board")[0]?.id);
   $("cvScreens").onclick = () => fire("left-tab", "screens");
@@ -1143,7 +1201,7 @@ async function boot() {
     $("frame").append(h(`<div class="winov open"><div class="md" style="width:480px"><div class="md-h"><div class="tt"><h2>The Workshop server isn't answering</h2><p>${esc(e.message)}. Start it with <span class="mono" style="font-size:12px;font-weight:400">npm start</span> in the workshop folder, then reload.</p></div></div></div></div>`));
     return;
   }
-  await Promise.all([loadComments(), loadTasks()]); // loading the tasks loads the recipes too
+  await Promise.all([loadComments(), loadTasks(), loadActivity()]); // loading the tasks loads the recipes too
   // a fresh visit picks up where this browser left off
   if (!location.hash || location.hash === "#") {
     const last = store.get("ws-route", "");

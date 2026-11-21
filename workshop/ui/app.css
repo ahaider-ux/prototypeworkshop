@@ -886,3 +886,30 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .cv.tool-frame{cursor:crosshair}
 .cv.tool-frame .bd .hit{pointer-events:auto!important}
 @media (max-width:1180px){.frametray .fsz{padding:0 10px;height:32px}.frametray .fsz span{display:none}}
+
+/* ---------- links and pictures brought in from elsewhere ---------- */
+.emb{position:absolute;background:var(--bg-layer);box-shadow:0 0 0 1px var(--border-subtle)}
+.emb.on{box-shadow:0 0 0 1px var(--text-accent)}
+.emb img{display:block;width:100%;height:100%;object-fit:fill;user-select:none;pointer-events:none}
+.emb iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:transparent;pointer-events:none}
+.cv.mode-prototype .emb.web iframe{pointer-events:auto}
+.emb .eback{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:24px;text-align:center;background:var(--bg-input);color:var(--text-secondary);font-size:14px}
+.emb .eback b{color:var(--text-primary);font-weight:500;font-size:16px}
+.emb .eback span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.emb .eback .why{font-size:12px;white-space:normal;max-width:360px}
+.emb .elabel{position:absolute;left:0;top:-6px;transform-origin:0 100%;transform:translateY(-100%);font-size:12px;line-height:16px;color:var(--text-secondary);white-space:nowrap;pointer-events:auto;cursor:default}
+.emb.on .elabel{color:var(--text-accent)}
+
+/* ---------- activity ---------- */
+.acts{display:flex;flex-direction:column;padding:4px 0 8px}
+.aday{position:sticky;top:0;z-index:1;padding:8px 16px 4px;font-size:12px;font-weight:500;color:var(--text-secondary);background:var(--glass-bg,var(--bg-layer))}
+.arow{display:flex;gap:8px;padding:8px 16px}
+.arow .av{width:24px;height:24px;flex-shrink:0;border-radius:99px;display:grid;place-items:center;font:600 12px/1 var(--fakt);background:var(--tag-grey);color:var(--text-primary)}
+.arow .av.agent{background:var(--bg-primary);color:var(--on-primary)}
+.arow .tx{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:12px;line-height:16px}
+.arow .tx b{font-weight:500}
+.arow .tx .tm{color:var(--text-secondary)}
+.arow .msg{color:var(--text-primary);overflow-wrap:anywhere}
+.arow .brtag{align-self:flex-start;margin-top:4px;cursor:pointer}
+.arow.failed .msg{color:var(--text-error)}
+.arow.message .msg,.arow.update .msg{padding:6px 8px;border-radius:8px;background:var(--bg-input)}

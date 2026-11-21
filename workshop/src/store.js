@@ -42,6 +42,9 @@ export const LIMITS = {
   linkBytes: 200 * 1024 * 1024,
   scanAdds: 60, // prototypes one "look for prototypes" adds at most
   snapshots: 600, // saved board pictures kept on this computer
+  activity: 1500, // activity lines kept
+  activityChars: 1200,
+  assetBytes: 20 * 1024 * 1024,
   snapshotBytes: 24 * 1024 * 1024,
 };
 
@@ -184,6 +187,17 @@ const STARTER_RECIPES = [
     ].join("\n"),
   },
 ];
+
+// Pictures uploaded to the canvas: kept in canvas/assets (committed with the workspace), named by
+// their content. Not SVG: an SVG can carry script, and these are served from the editor's origin.
+const ASSET_RE = /^assets\/[0-9a-f]{24}\.(png|jpg|webp|gif)$/;
+function imageKind(buf) {
+  if (buf.length > 8 && buf.readUInt32BE(0) === 0x89504e47) return "png";
+  if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "jpg";
+  if (buf.length > 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") return "webp";
+  if (buf.length > 6 && /^GIF8[79]a$/.test(buf.toString("ascii", 0, 6))) return "gif";
+  return null;
+}
 
 // A frame's page: an .html file inside the prototype, never outside it or in a dot folder.
 function frameFile(v) {
@@ -456,6 +470,75 @@ export class Store {
     return this.workspace();
   }
 
+  // ----- activity: what people and agents did, so everyone working here knows -----
+  // One line per event in .workshop/activity.jsonl. People see it in the Activity panel; agents
+  // read it before they start (get_activity, and the brief) and add to it (post_update), so two
+  // agents on one prototype know about each other.
+  async log({ kind, text, env = null, by = null, ref = null }) {
+    const e = { at: now(), kind: String(kind || "update").slice(0, 24), text: String(text || "").trim().slice(0, LIMITS.activityChars), env: env ? String(env).slice(0, 64) : null, by: by ? String(by).slice(0, 80) : null, ref: ref ? String(ref).slice(0, 80) : null };
+    if (!e.text) return null;
+    const file = path.join(this.metaDir, "activity.jsonl");
+    try {
+      await fsp.appendFile(file, JSON.stringify(e) + "\n");
+      // Guard: the log keeps the recent past, not everything forever
+      const st = await fsp.stat(file);
+      if (st.size > 2 * 1024 * 1024) {
+        const lines = (await fsp.readFile(file, "utf8")).trim().split("\n");
+        await writeAtomic(file, lines.slice(-LIMITS.activity).join("\n") + "\n");
+      }
+    } catch {}
+    return e;
+  }
+  // newest last; env narrows it to one prototype and its branches
+  async activity({ since = null, env = null, limit = 100 } = {}) {
+    let lines = [];
+    try {
+      lines = (await fsp.readFile(path.join(this.metaDir, "activity.jsonl"), "utf8")).trim().split("\n");
+    } catch {}
+    let out = [];
+    for (const l of lines.slice(-2000)) {
+      try {
+        const e = JSON.parse(l);
+        if (e?.at) out.push(e);
+      } catch {}
+    }
+    if (since) out = out.filter((e) => e.at > String(since));
+    if (env) {
+      const fam = await this.familyIds(env);
+      out = out.filter((e) => !e.env || fam.has(e.env));
+    }
+    return out.slice(-Math.max(1, Math.min(500, Number(limit) || 100)));
+  }
+  // a prototype and all its branches, from any one of them
+  async familyIds(env) {
+    const chain = await this.ancestors(env).catch(() => []);
+    const root = chain[chain.length - 1]?.id || env;
+    const all = await this.ids();
+    const metas = await Promise.all(all.map((id) => this.meta(id).then((m) => [id, m])));
+    const fam = new Set([root]);
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const [id, m] of metas) if (m?.parent && fam.has(m.parent) && !fam.has(id)) (fam.add(id), (grew = true));
+    }
+    return fam;
+  }
+
+  // ----- canvas assets: pictures dropped on the canvas -----
+  async saveAsset(buf) {
+    // Guard: a screenshot or export, not a video or an archive
+    if (!Buffer.isBuffer(buf) || !buf.length || buf.length > LIMITS.assetBytes) throw new StoreError("too_big", "Pictures up to 20 MB can go on the canvas");
+    const ext = imageKind(buf);
+    if (!ext) throw new StoreError("bad_image", "That isn't a PNG, JPEG, WebP or GIF picture");
+    const src = `assets/${crypto.createHash("sha1").update(buf).digest("hex").slice(0, 24)}.${ext}`;
+    const file = path.join(this.canvasDir, src);
+    if (!(await exists(file))) await writeAtomic(file, buf);
+    return { src, bytes: buf.length };
+  }
+  assetPath(src) {
+    if (!ASSET_RE.test(String(src))) throw new StoreError("bad_path", "Not a canvas picture");
+    return path.join(this.canvasDir, src);
+  }
+
   // ----- canvas items: boards, notes, boxes, arrows (one file each, so writers never collide) -----
 
   async items() {
@@ -503,6 +586,23 @@ export class Store {
       if (!["warm", "info", "plain"].includes(tone)) throw new StoreError("bad_item", "A note is warm, info or plain");
       return { ...at, env: page, w: num(p.w, 120, 800, prev.w ?? 240), text: str(p.text, LIMITS.commentChars, prev.text ?? ""), tone };
     }
+    if (type === "web") {
+      // a live link: a Figma file, a running app (localhost, a preview deploy), any web page
+      const url = p.url === undefined ? prev.url : String(p.url || "").trim().slice(0, 2000);
+      let u;
+      try {
+        u = new URL(url);
+      } catch {}
+      // Guard: only web pages; a javascript: or file: link would run or read things it shouldn't
+      if (!u || !/^https?:$/.test(u.protocol)) throw new StoreError("bad_item", "A link needs a full web address, starting with https:// or http://");
+      return { ...at, env: page, url: u.href, name: str(p.name, 120, prev.name ?? null), w: num(p.w, 160, 4096, prev.w ?? 1280), h: num(p.h, 120, 4096, prev.h ?? 800) };
+    }
+    if (type === "image") {
+      const src = p.src === undefined ? prev.src : String(p.src || "");
+      // Guard: an image is one of this canvas's own uploads, never a path elsewhere
+      if (!ASSET_RE.test(src)) throw new StoreError("bad_item", "An image is a picture uploaded to the canvas");
+      return { ...at, env: page, src, name: str(p.name, 120, prev.name ?? null), w: num(p.w, 16, 8192, prev.w ?? 640), h: num(p.h, 16, 8192, prev.h ?? 480) };
+    }
     if (type === "box") return { ...at, env: page, w: num(p.w, 8, 20000, prev.w ?? 320), h: num(p.h, 8, 20000, prev.h ?? 200), label: str(p.label, 200, prev.label ?? "") };
     if (type === "arrow") {
       const end = (e, d) => {
@@ -536,21 +636,24 @@ export class Store {
         h = Math.max(1, Math.round(Math.max(...ys) - Math.min(0, ...ys)));
       return { ...at, env: page, board, pen, color: color.toLowerCase(), size, points, w, h };
     }
-    throw new StoreError("bad_item", "Boards, notes, boxes, arrows and drawings go on the canvas");
+    throw new StoreError("bad_item", "Boards, notes, boxes, arrows, drawings, links and pictures go on the canvas");
   }
 
   async addItem(p, author = null) {
     const type = String(p?.type || "");
     if ((await this.items()).length >= 2000) throw new StoreError("too_many", "This canvas holds as much as it can");
-    const prefix = { board: "b", note: "n", box: "x", arrow: "a", ink: "k" }[type] || "i";
+    const prefix = { board: "b", note: "n", box: "x", arrow: "a", ink: "k", web: "w", image: "m" }[type] || "i";
     const it = { id: newId(prefix), type, ...(await this.cleanItem(type, p)), author, createdAt: now() };
     return this.putItem(it);
   }
 
-  async updateItem(id, patch) {
+  async updateItem(id, patch, by = null) {
     const it = await this.item(id);
     const next = { ...it, ...(await this.cleanItem(it.type, patch || {}, it)), updatedAt: now() };
-    return this.putItem(next);
+    const out = await this.putItem(next);
+    // a note's first words are worth telling everyone; later edits aren't
+    if (it.type === "note" && !String(it.text || "").trim() && String(next.text || "").trim()) await this.log({ kind: "note", text: `Noted: ${next.text.slice(0, 300)}`, env: next.env, by: by || it.author, ref: id });
+    return out;
   }
 
   async deleteItem(id) {
@@ -588,7 +691,9 @@ export class Store {
       const b = await this.boundsOf(e.id);
       if (b) at = { x: b.x1 + 120, y: b.y0 };
     }
-    return this.addItem({ type: "board", env: e.id, file, name: title, w: W, h: H, ...at }, author);
+    const it = await this.addItem({ type: "board", env: e.id, file, name: title, w: W, h: H, ...at }, author);
+    await this.log({ kind: "frame", text: `Drew the frame "${title}" (${W} × ${H})`, env: e.id, by: author, ref: it.id });
+    return it;
   }
 
   async addBoard(env, { screen = null, state = null, author = null, x, y } = {}) {
@@ -812,6 +917,7 @@ export class Store {
     Object.assign(meta, { name: title, description: "", parent: id, base: id, branch: { from: id, at: now(), snapshot: await this.snapshotOf(id) }, created: now(), author });
     await this.writeMeta(nid, meta);
     await this.copyBoards(id, nid, author);
+    await this.log({ kind: "branch", text: `Branched "${title}" from ${src.parent ? `"${src.name}"` : "main"}`, env: nid, by: author });
     return this.getEnv(nid);
   }
 
@@ -891,6 +997,7 @@ export class Store {
     Object.assign(fresh, { archived: true, mergedAt: now(), mergedInto: d.parent });
     await this.writeMeta(id, fresh);
     await this.cancelWaiting(id, "The branch was merged");
+    await this.log({ kind: "merge", text: `Merged "${env.name}": ${applied} change${applied === 1 ? "" : "s"}${note ? `. Why: ${String(note).slice(0, 300)}` : ""}`, env: d.parent, by: author, ref: id });
     return { parent: await this.getEnv(d.parent), before, after, applied };
   }
 
@@ -1183,7 +1290,9 @@ export class Store {
     const p = cleanPrompt(prompt, "Say what the agent should change");
     const sel = selection && typeof selection === "object" ? { selector: String(selection.selector || "").slice(0, LIMITS.selectorChars), label: String(selection.label || "").slice(0, 120), html: String(selection.html || "").slice(0, 4000), text: String(selection.text || "").slice(0, 600), styles: selection.styles && typeof selection.styles === "object" ? selection.styles : null } : null;
     const rec = recipe && typeof recipe === "object" && typeof recipe.id === "string" ? { id: assertRecord(recipe.id), n: Number.isInteger(recipe.n) ? recipe.n : null, name: String(recipe.name || "").slice(0, 120) } : null;
-    return this.putRecord("tasks", { id: newId("t"), env, prompt: p, selection: sel, recipe: rec, author: String(author).slice(0, 80), runner, status: "queued", log: [], reply: null, claimedBy: null, beforeVersion: null, changed: [], createdAt: now(), updatedAt: now() });
+    const t = await this.putRecord("tasks", { id: newId("t"), env, prompt: p, selection: sel, recipe: rec, author: String(author).slice(0, 80), runner, status: "queued", log: [], reply: null, claimedBy: null, beforeVersion: null, changed: [], createdAt: now(), updatedAt: now() });
+    await this.log({ kind: "request", text: rec ? `Ran the recipe "${rec.name}"` : `Asked: ${p.slice(0, 240)}`, env, by: t.author, ref: t.id });
+    return t;
   }
 
   // A branch that's merged or archived is finished: requests still waiting on it would only run an
@@ -1195,6 +1304,7 @@ export class Store {
   async updateTask(id, patch) {
     const t = await this.record("tasks", id);
     const STATUS = new Set(["queued", "working", "done", "failed", "cancelled"]);
+    const was = t.status;
     if (patch.status && STATUS.has(patch.status)) t.status = patch.status;
     if (typeof patch.reply === "string") t.reply = patch.reply.slice(0, 8000);
     if (typeof patch.claimedBy === "string") t.claimedBy = patch.claimedBy.slice(0, 80);
@@ -1206,7 +1316,13 @@ export class Store {
       while (JSON.stringify(t.log).length > LIMITS.logBytes && t.log.length > 1) t.log.shift();
     }
     t.updatedAt = now();
-    return this.putRecord("tasks", t);
+    const saved = await this.putRecord("tasks", t);
+    if (t.status !== was && (t.status === "working" || t.status === "done" || t.status === "failed")) {
+      const what = t.recipe?.name ? `the recipe "${t.recipe.name}"` : `"${t.prompt.slice(0, 120)}"`;
+      const text = t.status === "working" ? `Started on ${what}` : t.status === "done" ? `Finished ${what}${t.reply ? `: ${t.reply.slice(0, 400)}` : ""}` : `Couldn't finish ${what}${t.reply ? `: ${t.reply.slice(0, 300)}` : ""}`;
+      await this.log({ kind: t.status === "working" ? "start" : t.status, text, env: t.env, by: t.claimedBy || "Agent", ref: t.id });
+    }
+    return saved;
   }
 
   // ----- recipes: shared, versioned ways of working that agents run on a branch -----
@@ -1311,7 +1427,8 @@ export class Store {
         const v = this.recipeVersion(r, task.recipe.n);
         recipe = { name: r.name, n: v.n, prompt: v.prompt };
       }
-      return { brief, decisions, recipe, entry: this.pathFor(envId, "index.html"), overrides: path.join(this.envDir(envId), "overrides.css") };
+      const activity = (await this.activity({ env: envId, limit: 40 })).filter((e) => e.ref !== task?.id).slice(-10);
+      return { brief, decisions, recipe, activity, entry: this.pathFor(envId, "index.html"), overrides: path.join(this.envDir(envId), "overrides.css") };
     } catch {
       return { brief: "", decisions: [], recipe: null };
     }

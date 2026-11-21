@@ -12,6 +12,7 @@ export const S = {
   comments: [],
   tasks: [],
   recipes: null, // the workspace's recipes with their run stats (null until loaded)
+  activity: [], // what people and agents did, newest last
   versions: new Map(), // env id → [versions]
   diffs: new Map(), // branch id → review summary
   view: "home", // "home" | "proto"

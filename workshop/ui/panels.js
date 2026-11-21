@@ -7,7 +7,7 @@
 
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, familyOf, pageEnv, protoId, pageItems, pageOf, nearestBoard, screenName, plural, pageName, folderLabel } from "./state.js";
 import { $, h, esc, api, toast, IC, dropdown, segmented, copyText, timeAgo, clamp, skeleton } from "./lib.js";
-import { rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, setMode, docOf, winOf, flowOf, parseTranslate, exactSel, removeEl, selIds, toggleSel, alignSel, distributeSel, duplicateSel, removeItems } from "./canvas.js";
+import { isFigma, embedLabel, addFrame, rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, setMode, docOf, winOf, flowOf, parseTranslate, exactSel, removeEl, selIds, toggleSel, alignSel, distributeSel, duplicateSel, removeItems } from "./canvas.js";
 import { PENS, INKS, SIZES as INK_SIZES } from "./ink.js";
 import { record, rid } from "./history.js";
 import { renderRecipes } from "./recipes.js";
@@ -153,7 +153,7 @@ export async function loadVersions(id) {
 }
 
 // ======================= LEFT PANEL =======================
-const LEFT = { screens: "Screens", agents: "Agents", recipes: "Recipes", notes: "Notes", history: "History" };
+const LEFT = { screens: "Screens", agents: "Agents", recipes: "Recipes", notes: "Notes", history: "History", activity: "Activity" };
 export function renderLeft() {
   const head = $("lHead"),
     body = $("lBody"),
@@ -172,15 +172,70 @@ export function renderLeft() {
   if (!env) return;
   if (S.leftTab === "file") renderFile(head, body);
   else {
-    const sub = { screens: `To place on ${pageName(env)}`, agents: agentLine(), recipes: "Shared ways of working", notes: S.notesAll ? `Everywhere in ${rootOf(env.id)?.name || ""}` : `On ${pageName(env)}`, history: `Versions of ${pageName(env)}` }[S.leftTab];
+    const sub = { screens: `To place on ${pageName(env)}`, agents: agentLine(), recipes: "Shared ways of working", activity: `Everyone working on ${rootOf(env.id)?.name || "this"}`, notes: S.notesAll ? `Everywhere in ${rootOf(env.id)?.name || ""}` : `On ${pageName(env)}`, history: `Versions of ${pageName(env)}` }[S.leftTab];
     head.append(h(`<div class="ttl"><b>${LEFT[S.leftTab]}</b><span>${esc(sub)}</span></div>`));
     if (S.leftTab === "screens") renderScreens(body, foot, env);
     else if (S.leftTab === "agents") renderChat(body, foot, env);
     else if (S.leftTab === "recipes") renderRecipes(head, body, env);
+    else if (S.leftTab === "activity") renderActivity(body, foot, env);
     else if (S.leftTab === "notes") renderNotes(head, body, env);
     else renderHistory(head, body, env);
   }
   if (S.leftTab !== "agents") body.scrollTop = st;
+}
+// ----- activity: what people and agents did here, and a line to tell them all something -----
+const seenKey = () => `ws-activity-seen:${S.ws?.home || ""}`;
+function unseenActivity() {
+  if (S.leftTab === "activity") return 0;
+  let seen = "";
+  try {
+    seen = localStorage.getItem(seenKey()) || "";
+  } catch {}
+  return S.activity.filter((e) => e.at > seen && e.by !== "You").length;
+}
+const AGENTISH = (by) => by && by !== "You" && !/^recipe trigger$/i.test(by);
+function renderActivity(body, foot, env) {
+  const fam = new Set(familyOf(rootOf(env.id)?.id).map((x) => x.env.id));
+  const list = S.activity.filter((e) => !e.env || fam.has(e.env)).slice(-200).reverse();
+  try {
+    if (S.activity.length) localStorage.setItem(seenKey(), S.activity[S.activity.length - 1].at);
+  } catch {}
+  if (!list.length) body.append(h(`<div class="pempty"><b>Nothing here yet</b>Requests, branches, merges, frames, notes and agents' updates show up here, for people and agents alike. Agents read it before they start.</div>`));
+  let day = "";
+  const box = h(`<div class="acts"></div>`);
+  for (const e of list) {
+    const d = new Date(e.at).toDateString();
+    if (d !== day) {
+      day = d;
+      box.append(h(`<div class="aday">${d === new Date().toDateString() ? "Today" : esc(new Date(e.at).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }))}</div>`));
+    }
+    const page = e.env && S.envs.get(e.env);
+    const r = h(`<div class="arow ${esc(e.kind)}"><span class="av${AGENTISH(e.by) ? " agent" : ""}">${esc((e.by || "S")[0].toUpperCase())}</span><div class="tx"><div><b>${esc(e.by || "Someone")}</b> <span class="tm">${esc(timeAgo(e.at))}</span></div><div class="msg">${esc(e.text)}</div>${page ? `<span class="brtag" role="link" tabindex="0">${isBranch(page) ? IC.fork : IC.board}${esc(pageName(page))}</span>` : ""}</div></div>`);
+    const tag = r.querySelector(".brtag");
+    if (tag) tag.onclick = () => fire("go", page.id);
+    box.append(r);
+  }
+  body.append(box);
+  // tell everyone something: other people, and every agent (it's in their brief)
+  const comp = h(`<div class="acomp"><textarea rows="2" aria-label="Post an update" placeholder="Post an update for everyone here. Agents read it too."></textarea><div class="abar"><span class="sp"></span><button type="button" class="sendb" aria-label="Post" disabled>${IC.send}</button></div></div>`);
+  const ta = comp.querySelector("textarea"),
+    send = comp.querySelector(".sendb");
+  ta.oninput = () => (send.disabled = !ta.value.trim());
+  const post = async () => {
+    const text = ta.value.trim();
+    if (!text) return;
+    send.disabled = true;
+    try {
+      await api("activity", { method: "POST", body: { text, env: env.id } });
+      ta.value = "";
+    } catch (er) {
+      toast("Couldn't post that", er.message);
+      send.disabled = false;
+    }
+  };
+  send.onclick = post;
+  ta.onkeydown = (ev) => ev.key === "Enter" && !ev.shiftKey && (ev.preventDefault(), post());
+  foot.append(comp);
 }
 function railBadges() {
   const set = (t, n) => {
@@ -193,6 +248,7 @@ function railBadges() {
   };
   const fam = new Set(familyOf(protoId()).map((x) => x.env.id));
   set("agents", S.tasks.filter((t) => fam.has(t.env) && (t.status === "queued" || t.status === "working")).length);
+  set("activity", unseenActivity());
   set("notes", S.comments.filter((c) => !c.parent && !c.resolved && c.env === S.page).length);
 }
 function agentLine() {
@@ -246,7 +302,7 @@ function renderFile(head, body) {
   body.append(h(`<div class="pdiv"></div>`));
   // layers: this page's frames (open one to reach its live page) and its annotations
   const boards = pageItems("board").sort((a, b) => a.y - b.y || a.x - b.x);
-  const anns = [...pageItems("box"), ...pageItems("note"), ...pageItems("arrow"), ...pageItems("ink")];
+  const anns = [...pageItems("web"), ...pageItems("image"), ...pageItems("box"), ...pageItems("note"), ...pageItems("arrow"), ...pageItems("ink")];
   body.append(h(`<div class="shd"><span>Layers</span><span class="n">${boards.length + anns.length || ""}</span></div>`));
   const tree = h(`<div class="ltree" role="tree" aria-label="Layers"></div>`);
   const s = S.sel;
@@ -269,10 +325,10 @@ function renderFile(head, body) {
     if (open) landmarkRows(tree, b.id, d);
   }
   if (anns.length) {
-    const kind = { note: ["Note", IC.note], box: ["Highlight", IC.box], arrow: ["Arrow", IC.arrow], ink: ["Drawing", IC.draw] };
+    const kind = { note: ["Note", IC.note], box: ["Highlight", IC.box], arrow: ["Arrow", IC.arrow], ink: ["Drawing", IC.draw], web: ["Link", IC.link], image: ["Picture", IC.img || IC.board] };
     for (const a of anns) {
       const [k, ic] = kind[a.type];
-      const label = a.type === "ink" ? `${PENS[a.pen]?.label || "Drawing"}${a.board && S.items.get(a.board) ? ` on ${screenName(S.items.get(a.board))}` : ""}` : a.text || a.label || k;
+      const label = a.type === "web" || a.type === "image" ? embedLabel(a) : a.type === "ink" ? `${PENS[a.pen]?.label || "Drawing"}${a.board && S.items.get(a.board) ? ` on ${screenName(S.items.get(a.board))}` : ""}` : a.text || a.label || k;
       const r = h(`<div class="lrow${selIds().includes(a.id) ? " on" : ""}" role="treeitem" tabindex="0" style="padding-left:4px"><span class="tw none"></span>${ic}<span class="t">${esc(label)}</span>${a.type === "ink" ? `<span class="inkchip" style="--ink:${esc(a.color)}"></span>` : ""}</div>`);
       r.onclick = (e) => (e.shiftKey ? toggleSel(a.id) : (selectItem(a.id), a.type !== "arrow" && !isVisible(a.id) && focusItem(a.id, { maxZ: 0.8 })));
       r.onkeydown = (e) => e.key === "Enter" && r.click();
@@ -1333,10 +1389,39 @@ function designInk(body, it) {
   body.append(a);
 }
 
+// Work brought in from elsewhere: a Figma file, a running app, a picture. Name it, open it, and turn
+// it into a frame of this prototype with an agent.
+function designEmbed(body, it) {
+  const web = it.type === "web";
+  const fig = web && isFigma(it.url);
+  const t = h(`<div class="isec"><div class="ih"><b>${web ? (fig ? "Figma file" : "Live link") : "Picture"}</b>${web ? `<button type="button" class="ib24" aria-label="Open in a new tab" data-tip="Open in a new tab">${IC.ext}</button>` : ""}</div><div class="ititle"><div class="afld-in"><input aria-label="Name" value="${esc(it.name || "")}" placeholder="${esc(embedLabel(it))}" maxlength="120"></div>${web ? `<span class="pth"><span title="${esc(it.url)}">${esc(it.url)}</span></span>` : ""}</div></div>`);
+  t.querySelector(".ib24")?.addEventListener("click", () => window.open(it.url, "_blank", "noopener"));
+  const inp = t.querySelector("input");
+  inp.addEventListener("keydown", (e) => e.key === "Enter" && inp.blur());
+  inp.addEventListener("blur", async () => {
+    const v = inp.value.trim();
+    if (v === (it.name || "")) return;
+    const next = await api(`canvas/items/${it.id}`, { method: "PATCH", body: { name: v || null } }).catch((e) => toast("Couldn't rename it", e.message));
+    if (next) (S.items.set(it.id, next), sync(), renderLeft());
+  });
+  body.append(t);
+  const A = sec("Bring it into the prototype");
+  A.append(h(`<span class="lineage">${web ? (fig ? "An agent reads the Figma design (with Figma's MCP server, if it has one) and builds it" : "An agent studies this app and builds what you point at") : "An agent looks at this picture and builds it"} as a new frame here, in ${esc((rootOf(S.page) || pageEnv() || {}).name || "this prototype")}'s own style.${web ? " Turn on Interact (P) to click around in it." : ""}</span>`));
+  const go = h(`<button type="button" class="createbtn sm" style="align-self:flex-start">${IC.spark}Build it as a frame</button>`);
+  go.onclick = async () => {
+    const f = await addFrame({ x: it.x + it.w + 120, y: it.y, w: web ? 1440 : Math.max(120, Math.round(it.w)), h: web ? 900 : Math.max(120, Math.round(it.h)) });
+    if (!f) return;
+    const src = web ? `${fig ? "the Figma design at" : "the app at"} ${it.url}` : `the picture "${embedLabel(it)}" (open it from list_canvas, under pictures)`;
+    fire("ask-agent", { prompt: `Build ${src} as the frame "${f.name}": write its page ${f.file}. ${fig ? "Use the Figma MCP server's design context for this link if you have it. " : ""}Match what you see, but use this prototype's own design system (its CSS variables, type and components in index.html). Post an update when you're done.` });
+  };
+  A.append(go);
+  body.append(A);
+}
 function designAnnotation(body, id) {
   const it = S.items.get(id);
   if (!it) return;
   if (it.type === "ink") return designInk(body, it);
+  if (it.type === "web" || it.type === "image") return designEmbed(body, it);
   const kind = { note: "Note", box: "Highlight", arrow: "Arrow" }[it.type];
   const t = sec(kind, `<span class="tokname">${esc(it.author || "You")} · ${esc(timeAgo(it.updatedAt || it.createdAt))}</span>`);
   const save = async (patch) => {

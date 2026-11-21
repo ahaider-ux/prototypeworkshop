@@ -33,9 +33,11 @@ export const TOOLS = [
   { name: "run_recipe", description: "Runs a recipe on an environment. From a main prototype it makes a new branch first, so the result is a shadow run the designer reviews and merges. Queues a task; take_task returns its brief.", inputSchema: S({ recipe: str("Recipe id from list_recipes"), env: ENV, version: num("Version number, to test one that isn't in production yet (optional)") }, ["recipe", "env"]) },
   { name: "update_brief", description: "Replaces a prototype's brief: the context every agent reads first (what the prototype is, its design rules, what to keep). Only when the designer asks.", inputSchema: S({ env: ENV, brief: str("The whole brief") }, ["env", "brief"]) },
   { name: "fork_environment", description: "Makes an independent copy of an environment (optionally from a saved version) — no link back to merge. Prefer create_branch for trying changes.", inputSchema: S({ env: ENV, name: str("Name for the copy"), version: num("Version number to copy from (optional)") }, ["env"]) },
-  { name: "list_canvas", description: "What is on the canvas: boards (an environment at a screen and state), and the designer's annotations — notes, boxes, arrows and hand-drawn marks — on each environment's page, with the boards each one sits over. Read the annotations as feedback.", inputSchema: S({ env: str("Only boards and annotations for this environment") }) },
+  { name: "list_canvas", description: "What is on the canvas: boards (an environment at a screen and state) and frames, work brought in from elsewhere (links to Figma files and running apps, and pictures — open a picture's file to look at it), and the designer's annotations — notes, boxes, arrows and hand-drawn marks — on each environment's page, with the boards each one sits over. Read the annotations as feedback.", inputSchema: S({ env: str("Only boards and annotations for this environment") }) },
   { name: "place_screen", description: "Puts a board for one of an environment's screens on the canvas (screens are listed by get_environment under catalog).", inputSchema: S({ env: ENV, screen: str("Screen name, e.g. Chat"), state: str("Screen state, e.g. Empty (optional)") }, ["env", "screen"]) },
   { name: "add_frame", description: "Draws a new frame on the canvas: an empty page of the environment (frames/<name>.html) at the size you give, shown as its own board. Design it by writing that file. Use it to propose a new screen, or the same screen at another size.", inputSchema: S({ env: ENV, name: str("What the frame is, e.g. 'Onboarding step 2'"), width: num("Width in px, e.g. 390 for a phone"), height: num("Height in px") }, ["env", "name"]) },
+  { name: "get_activity", description: "What people and other agents have been doing in this workspace: requests, branches, merges, frames, notes, agents starting and finishing work, and messages. Read it before you start, so you don't redo or undo someone's work.", inputSchema: S({ env: str("Only this prototype and its branches"), since: str("Only events after this ISO time") }) },
+  { name: "post_update", description: "Tells the designer and any other agents working here what you're doing, what you finished, or what you need (it shows in the canvas's Activity panel and in other agents' briefs). Keep it to one or two sentences.", inputSchema: S({ text: str("The update"), env: str("The prototype or branch it's about (optional)") }, ["text"]) },
   { name: "add_note", description: "Pins a note on the canvas next to an environment's boards, e.g. to explain a change or ask a question.", inputSchema: S({ env: ENV, text: str("The note"), tone: { type: "string", enum: ["warm", "info", "plain"] } }, ["env", "text"]) },
   { name: "update_environment", description: "Changes an environment's settings: name, description, theme (light/dark/system), opening screen, screen state, board size, or variants (an object of variant label → option).", inputSchema: S({ env: ENV, name: str("New name"), description: str("New description"), theme: { type: "string", enum: ["light", "dark", "system"] }, screen: str("Screen to open on, e.g. Chat"), state: str("Screen state, e.g. Empty"), width: num("Board width in px"), height: num("Board height in px"), variants: { type: "object", additionalProperties: { type: "string" } } }, ["env"]) },
   { name: "set_style", description: "Sets CSS properties for a selector in the environment's overrides.css (rules there win over the prototype's styles). Pass null or '' to remove a property. Prefer the prototype's CSS variables, e.g. var(--text-secondary).", inputSchema: S({ env: ENV, selector: str("CSS selector, e.g. from get_selection"), props: { type: "object", description: "CSS property → value", additionalProperties: { type: ["string", "null"] } } }, ["env", "selector", "props"]) },
@@ -59,6 +61,7 @@ Each environment is a folder with index.html; you can edit those files directly 
 - Each branch is a page of its own on the canvas, laid out like its parent. list_canvas shows the designer's notes, boxes, arrows and hand-drawn marks on each page: treat them as feedback on the boards they sit over (screenshot a board to see what a mark circles or crosses out).
 - Each prototype has a brief and a decision log; take_task's brief includes both. Respect them.
 - Recipes (list_recipes, run_recipe) are the team's shared instructions for recurring work; each run happens on a branch.
+- Several people and agents can work here at once. Read get_activity before you start; post_update when you start something big, finish, or need the designer.
 - Requests typed on the canvas wait as tasks: take_task, do the work, then update_task with status done and a short reply.
 - Try changes on a branch (create_branch); the designer reviews and merges it. A branch reads its parent's files until checkout_branch copies them.
 - Visual tweaks belong in overrides.css (set_style); structure and behaviour in index.html. save_version before big edits.`;
@@ -156,6 +159,9 @@ export async function callTool(store, name, a = {}, ctx = {}) {
         boxes: items.filter((i) => i.type === "box").map((x) => ({ id: x.id, page: x.env || null, label: x.label, author: x.author, over: over(x) })),
         arrows: items.filter((i) => i.type === "arrow").map((r) => ({ id: r.id, page: r.env || null, label: r.label, from: r.from, to: r.to })),
         // hand-drawn marks: circles, underlines, crossings-out — look at the screen under them (screenshot)
+        // work brought in from elsewhere: Figma files and running apps (links), and pictures
+        links: items.filter((i) => i.type === "web" && (!a.env || i.env === a.env)).map((l) => ({ id: l.id, page: l.env || null, name: l.name, url: l.url, figma: /(^|\.)figma\.com$/.test(new URL(l.url).hostname), x: l.x, y: l.y, w: l.w, h: l.h })),
+        pictures: items.filter((i) => i.type === "image" && (!a.env || i.env === a.env)).map((m) => ({ id: m.id, page: m.env || null, name: m.name, file: path.join(store.canvasDir, m.src), x: m.x, y: m.y, w: m.w, h: m.h })),
         drawings: items.filter((i) => i.type === "ink").map((k) => ({ id: k.id, page: k.env || null, pen: k.pen, color: k.color, author: k.author, x: k.x, y: k.y, w: k.w, h: k.h, board: k.board || null, over: over(k) })),
       };
       if (a.env) {
@@ -174,6 +180,14 @@ export async function callTool(store, name, a = {}, ctx = {}) {
     case "add_frame": {
       const f = await store.addFrame(a.env, { name: a.name, w: a.width || 1440, h: a.height || 900, author: who });
       return text({ board: f.id, file: f.file, path: path.join(store.filesDir(a.env), f.file), width: f.w, height: f.h, next: "Write the design into that file. The board updates as you save." });
+    }
+    case "get_activity": {
+      const list = await store.activity({ env: a.env || null, since: a.since || null, limit: 60 });
+      return text(list.length ? list.map((e) => ({ at: e.at, by: e.by, kind: e.kind, env: e.env, text: e.text })) : "Nothing has happened here yet.");
+    }
+    case "post_update": {
+      const e = await store.log({ kind: "update", text: a.text, env: a.env || null, by: who });
+      return text(e ? "Posted. People see it in the Activity panel; other agents read it in their brief." : "Write something to post.");
     }
     case "add_note": {
       const bounds = await store.boundsOf(a.env);

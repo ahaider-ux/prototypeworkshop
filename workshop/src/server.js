@@ -204,14 +204,17 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
       }
       if (m === "PATCH") return json(res, 200, await store.updateWorkspace(await body(req)));
     }
+    if (a === "canvas" && b === "assets" && !c && m === "POST") return json(res, 201, await store.saveAsset(await raw(req, 20 * 1024 * 1024)));
     if (a === "canvas" && b === "items") {
       if (!c && m === "GET") return json(res, 200, await store.items());
       if (!c && m === "POST") {
         const item = await store.addItem(await body(req), me);
+        if (item.type === "web") await store.log({ kind: "link", text: `Added a link: ${item.name || item.url}`, env: item.env, by: me, ref: item.id });
+        if (item.type === "image") await store.log({ kind: "image", text: `Added a picture${item.name ? `: ${item.name}` : ""}`, env: item.env, by: me, ref: item.id });
         if (item.env && ["note", "box", "arrow", "ink"].includes(item.type)) noteAdded(item.env);
         return json(res, 201, item);
       }
-      if (c && m === "PATCH") return json(res, 200, await store.updateItem(c, await body(req)));
+      if (c && m === "PATCH") return json(res, 200, await store.updateItem(c, await body(req), me));
       if (c && m === "DELETE") return json(res, 200, await store.deleteItem(c));
     }
     if (a === "envs") {
@@ -435,6 +438,17 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
         return send(res, 200, zlib.gunzipSync(gz), { "content-type": "image/svg+xml", "cache-control": "private, max-age=31536000, immutable" });
       }
     }
+    if (a === "activity") {
+      if (!b && m === "GET") return json(res, 200, await store.activity({ since: url.searchParams.get("since"), env: url.searchParams.get("env"), limit: url.searchParams.get("limit") || 200 }));
+      if (!b && m === "POST") {
+        // a person's message to everyone working here: other people, and agents (they read this)
+        const p = await body(req);
+        const e = await store.log({ kind: "message", text: p.text, env: p.env || null, by: me });
+        if (!e) throw new StoreError("empty", "Write something to post");
+        emit({ kind: "activity" });
+        return json(res, 201, e);
+      }
+    }
     if (a === "selection") {
       if (m === "GET") return json(res, 200, await store.selection());
       if (m === "PUT") return json(res, 200, await store.setSelection((await body(req)).selection ?? null));
@@ -477,6 +491,13 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
         return await api(req, res, p.slice(5).split("/").filter(Boolean), url);
       }
       if (p === "/_workshop/runtime.js") return serveFile(res, RUNTIME);
+      const assetm = /^\/canvas-assets\/(assets\/[0-9a-f]{24}\.(?:png|jpg|webp|gif))$/.exec(p);
+      if (assetm) {
+        // named by its content, so the browser may keep it; nosniff keeps it a picture
+        const buf = await fsp.readFile(store.assetPath(assetm[1])).catch(() => null);
+        const type = { png: "image/png", jpg: "image/jpeg", webp: "image/webp", gif: "image/gif" }[assetm[1].split(".").pop()];
+        return buf ? send(res, 200, buf, { "content-type": type, "cache-control": "private, max-age=31536000, immutable" }) : send(res, 404, "Not found", { "content-type": "text/plain" });
+      }
 
       const envm = /^\/env\/([a-z0-9][a-z0-9-]{0,63})(?:\/(.*))?$/.exec(p);
       if (envm) {
@@ -593,6 +614,7 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
         if (!name || String(name).endsWith(".tmp")) return;
         const top = String(name).split("/")[0];
         if (["tasks", "comments", "harness", "versions"].includes(top)) queue(top, { kind: top });
+        if (top === "activity.jsonl") queue("activity", { kind: "activity" });
         if (top === "tasks" && runner) runner.kick();
       }, { maxDepth: 2, skip: (n) => n === "trash" || n === "files" }),
     );

@@ -137,6 +137,33 @@ hidden parts of the page are left out and the wait ends as soon as the page has 
 screen. What's saved is the drawing (an SVG of the page, gzipped), because browsers don't let a
 page read back the pixels of such a drawing.
 
+## Bring in work from anywhere
+
+Put the rest of your work next to your screens: a **Figma file**, a **running app** (a localhost
+dev server, a Lovable, v0, Vercel or Bolt preview), any web page, or a **picture** (a screenshot,
+an export, a moodboard). Press **L** (the link button in the toolbar), paste a link or screenshot
+onto the canvas with **⌘V**, or drag one in.
+
+- A link runs live on the canvas, like a board. Figma links show through Figma's own embed
+  (you're asked to sign in to Figma if the file needs it), and a site that refuses to be embedded
+  shows its address with a way to open it. Turn on Interact (**P**) to click around in a link.
+- Pictures are stored with the canvas (`workspace/canvas/assets/`, PNG, JPEG, WebP or GIF up to
+  20 MB) and keep their proportions when you resize them from the corner.
+- Select one and choose **Build it as a frame**. Atelier draws a frame beside it and asks an
+  agent to build it in the prototype's own design system. For a Figma link, the agent is told to
+  use Figma's MCP server when it has one.
+- Agents see links and pictures in `list_canvas` (a picture comes with its file, so an agent can
+  look at it).
+
+## Activity: everyone keeps each other informed
+
+The **Activity** tab shows what people and agents did on a prototype and its branches: requests,
+recipes, agents starting and finishing work (with their replies), branches, merges (with the
+reason), frames, notes, links and pictures. Post a message there for everyone, for example
+"Agents: leave the sidebar alone today". Agents read the recent activity before they start (it's
+in their brief and in `get_activity`) and post their own updates with `post_update`, so several
+Claude sessions on one prototype know what the others are doing.
+
 ## Frames
 
 Press **F** (or the frame button in the toolbar) and drag on the canvas to draw a frame, or pick
@@ -227,7 +254,8 @@ notes, highlights and arrows), `place_screen`, `add_note`, `create_branch`, `rev
 `merge_branch`, `checkout_branch`, `read_file`, `write_file`, `create_environment`,
 `fork_environment`, `update_environment`, `set_style`, `set_text`, `save_version`, `list_versions`,
 `restore_version`, `screenshot`, `list_tasks`, `take_task`, `update_task`, `list_comments`,
-`reply_comment`, `resolve_comment`, `list_recipes`, `run_recipe`, `update_brief`, `add_frame`.
+`reply_comment`, `resolve_comment`, `list_recipes`, `run_recipe`, `update_brief`, `add_frame`,
+`get_activity`, `post_update`.
 
 ### Run requests automatically
 
