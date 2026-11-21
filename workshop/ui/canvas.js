@@ -114,8 +114,10 @@ function elAt(id, p) {
 }
 
 // ---------- camera ----------
+let camMovedAt = 0;
 function applyCam() {
   gfxDirty = true;
+  camMovedAt = performance.now();
   world.style.transform = `translate(${S.cam.x}px, ${S.cam.y}px) scale(${S.cam.z})`;
   $("zPct").textContent = Math.round(S.cam.z * 100) + "%";
   dirty = true;
@@ -376,7 +378,9 @@ function unmount(id, now = false) {
     fr.remove();
     gfxDirty = true;
   };
-  if (!now && it && b.ready && (b.touched || !G.hasFresh(it))) {
+  // a board put away hands back a picture only if there's no up-to-date one (clicking around in it
+  // doesn't count: the saved picture shows the screen as it is meant to look)
+  if (!now && it && b.ready && !G.hasFresh(it)) {
     b.leaving = true;
     G.captureLive(it, fr.contentDocument).finally(() => ((b.leaving = false), done()));
   } else done();
@@ -390,9 +394,12 @@ function planLive() {
   if (S.sel?.item && item(S.sel.item)?.type === "board") add(S.sel.item);
   add(pop?.board);
   add(pendingPick?.id);
-  add(hoverBoard);
+  if (S.mode === "prototype") add(hoverBoard); // in Interact, the board you're about to click is ready
+  // A live board is a whole prototype running on the editor's thread, so passing the pointer over
+  // one doesn't start it (a click that arrives first is kept: pendingPick). Zoomed in close, the
+  // boards in view go live once the view has stopped moving.
   const dpr = window.devicePixelRatio || 1;
-  if (S.cam.z * dpr >= 0.55) {
+  if (S.cam.z * dpr >= 0.55 && performance.now() - camMovedAt > 450) {
     const v = viewRect();
     const seen = pageItems("board")
       .map((it) => {
@@ -405,7 +412,7 @@ function planLive() {
       .sort((a, b) => b.area - a.area);
     for (const x of seen) if (wantLive.length < MAX_LIVE) add(x.id);
   }
-  const keep = new Set(wantLive.slice(0, Math.max(MAX_LIVE, wantLive.indexOf(hoverBoard) + 1)));
+  const keep = new Set(wantLive.slice(0, MAX_LIVE));
   for (const id of keep) mount(id);
   const now = performance.now();
   for (const [id, b] of B) {
@@ -452,11 +459,13 @@ function drawGfx() {
   ) > 0;
 }
 // the live page and its bitmap must agree: once the page has settled, it renders itself
+// Only when the board has no up-to-date picture: capturing copies the whole page (~0.4 s on a big
+// prototype, on the editor's thread), and the background pool already draws and saves new looks.
 function captureSoon(b) {
   clearTimeout(b.capT);
   b.capT = setTimeout(() => {
     const it = item(b.id);
-    if (b.ready && it) G.captureLive(it, b.frame?.contentDocument);
+    if (b.ready && it && !G.hasFresh(it)) G.captureLive(it, b.frame?.contentDocument);
   }, 1600);
 }
 // While designing, the keyboard belongs to the canvas: prototypes often focus a field of their own
@@ -1547,7 +1556,8 @@ function loop() {
   if (tracking()) drawHud();
   // which pages are live and which bitmaps to render next: a few times a second, idle or not
   const now = performance.now();
-  if (now - planAt > 200 && S.page) {
+  // nothing new starts while something is being dragged: the drag gets the frames
+  if (now - planAt > 200 && S.page && !drag) {
     planAt = now;
     planLive();
     planLinks();
