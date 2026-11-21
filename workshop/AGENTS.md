@@ -42,7 +42,9 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   hover scaling, and reduced motion keeps colour and opacity only. Chrome is glass after iOS 27
   (`--glass-*` tokens: floating panels, capsule toolbar and banner, glass menus and dialogs); the
   inspector's controls follow DialKit (number bars with the label and value inside, `numField` in
-  `ui/panels.js`). Both are design references only: no code or assets are copied from either.
+  `ui/panels.js`). Motion timing follows transitions.dev's tokens (250ms smooth-out
+  `cubic-bezier(.22,1,.36,1)` for tabs and slides, 150ms for appear, 2px blur on content swaps).
+  All three are design references only: no code or assets are copied from any of them.
   Anything still loading shows it: words that say so ("Loading…", "Running…", "Connecting…") get
   `.shimmer`, content on its way gets `skeleton()` rows or cards, a button that started something
   slow gets `pendingButton()`, and a progress toast is `loadingToast()` (all in `ui/lib.js`).

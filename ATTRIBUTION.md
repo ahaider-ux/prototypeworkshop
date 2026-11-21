@@ -51,3 +51,4 @@ egui's default fonts (compiled into the `egui`/`epaint` crates) keep their own l
 ## Libra Workshop / Atelier — design references
 
 - `workshop/ui/ink.js` follows the pen parameters and stroke approach of Drawesome by Benji Taylor (MIT, © 2026 Benji Taylor, https://github.com/benjitaylor/drawesome). The code is Atelier's own implementation; no Drawesome source or assets are included.
+- The left panel tabs, Play control and content slides in `workshop/ui/` take their motion pattern and timing (sliding pill, 250 ms smooth-out, blurred cross-fades) from transitions.dev by Jakub Antalik (https://transitions.dev) as a design reference. The code is Atelier's own; no transitions.dev snippets are included.

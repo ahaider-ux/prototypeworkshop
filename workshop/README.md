@@ -123,11 +123,12 @@ them all):
 ### How it stays fast
 
 The canvas draws boards as pictures on a graphics layer, so a page of dozens of screens pans and
-zooms smoothly. The real pages run in the background: a few hidden frames load each board, let
-the prototype settle on its screen, and turn it into a picture. Only the boards you're working in
-are live — the one you selected, the one under the pointer, and the few in view once you zoom in
-close — so they're ready to click into, edit or use, and a live board hands back a fresh picture
-when you leave it. Any change to a prototype's files or settings redraws its pictures.
+zooms smoothly. Frames stay pictures until you **play** one: hover a frame and press **Play** (or
+select it and press **P**) and its prototype runs on the canvas, starting on that frame's screen;
+**Stop** (or **P** again, or Esc) puts it back. The only other time a page runs is while you edit
+one of its elements: clicking into a frame starts it. The real pages behind the pictures load in
+the background, a few at a time. Any change to a prototype's files or settings redraws its
+pictures.
 
 Pictures are saved on this computer (`.workshop/snapshots`, the newest 600) and named by what the
 board shows: a hash of the prototype's files, overrides and look settings, plus the screen, state

@@ -802,7 +802,7 @@ function openShortcuts() {
   const mac = navigator.platform?.startsWith("Mac");
   const K = (k) => (mac ? k : k.replace(/⌘/g, "Ctrl+").replace(/⌥/g, "Alt+").replace(/⇧/g, "Shift+"));
   const groups = [
-    ["Tools", [["Select", "V"], ["Hand", "H · Space"], ["Frame", "F"], ["Note", "N"], ["Highlight", "B"], ["Arrow", "A"], ["Comment", "C"], ["Draw", "D"], ["Interact with the prototype", "P"], ["Ask an agent", "Toolbar"]]],
+    ["Tools", [["Select", "V"], ["Hand", "H · Space"], ["Frame", "F"], ["Note", "N"], ["Highlight", "B"], ["Arrow", "A"], ["Comment", "C"], ["Draw", "D"], ["Play the selected frame · stop", "P"], ["Ask an agent", "Toolbar"]]],
     ["Draw", [["Marker · pen · pencil · highlighter", "1 · 2 · 3 · 4"], ["Eraser", "E"], ["Finer · bolder", "[ · ]"], ["Straight line", "hold ⇧"], ["Stop drawing", "Esc · V"]]],
     ["Edit", [["Undo", K("⌘Z")], ["Redo", K("⌘⇧Z")], ["Copy · cut · paste", K("⌘C · ⌘X · ⌘V")], ["Duplicate", K("⌘D")], ["Delete", "Delete"], ["Select all", K("⌘A")], ["Add to the selection", "⇧ click"], ["Select by dragging", "Drag on empty canvas"]]],
     ["Elements", [["Parent · first child", "Esc · Enter"], ["Next · previous", "Tab · ⇧Tab"], ["Move or reorder", "Drag · arrows (⇧ 8 px)"], ["Bring forward · send backward", K("⌘] · ⌘[")], ["Bring to front · send to back", "] · ["], ["Edit text", "Double-click"]]],
@@ -860,6 +860,7 @@ function wsMenu() {
     { label: "Connect an agent", icon: IC.agent, onClick: openConnect },
     { label: "Copy folder path", icon: IC.copy, onClick: () => copyText(S.ws.home || S.ws.root) },
     { label: "Rename space", icon: IC.board, onClick: renameWorkspace },
+    { label: "Hide panels", kbd: "⌘\\", onClick: toggleUi },
     { label: "Keyboard shortcuts", kbd: "?", onClick: openShortcuts },
     "-",
     { head: "Appearance" },
@@ -1108,7 +1109,7 @@ async function boot() {
   S.tabs = store.get("ws-tabs", []);
   if (!Array.isArray(S.tabs)) S.tabs = [];
   $("wsBtn").onclick = async () => (spaceList || (await loadSpaces()), wsMenu());
-  $("uiToggle").onclick = toggleUi;
+  $("uiShow").onclick = toggleUi;
   $("agentBtn").onclick = openConnect;
   $("askBtn").onclick = () => fire("ask-agent", {});
   $("bringBtn").onclick = () => fire("bring-in");

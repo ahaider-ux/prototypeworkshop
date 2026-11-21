@@ -971,3 +971,48 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .rail>button[data-t]{position:relative}
 .rail>button[data-t] .tct{position:absolute;top:0;right:4px;min-width:16px;height:16px;padding:0 4px;font-size:12px;line-height:16px;border-radius:99px;box-shadow:0 0 0 2px var(--glass-bg,var(--bg-layer))}
 .ccomp textarea:focus,.ccomp textarea:focus-visible{outline:none;box-shadow:none}
+
+/* ---------- play a frame ---------- */
+/* motion: appear like a tooltip (fade + slight scale, 150ms out-ease), leave faster; after transitions.dev's tokens */
+.bplay{position:absolute;z-index:6;display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 18px 0 6px;border-radius:99px;transform:translate(-50%,-50%) scale(.96);opacity:0;pointer-events:none;background:var(--glass-bg,var(--bg-layer));-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass,var(--sh-md));font:500 14px/1 var(--fakt);color:var(--text-primary);transition:opacity 100ms ease-out,transform 100ms ease-out}
+.bplay.on{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1);transition:opacity 150ms cubic-bezier(.22,1,.36,1),transform 250ms cubic-bezier(.22,1,.36,1)}
+.bplay .pic{width:32px;height:32px;border-radius:99px;display:grid;place-items:center;background:var(--bg-primary);color:var(--on-primary)}
+.bplay .pic .ic{width:14px;height:14px;margin-left:2px}
+.bplay:hover .pic{background:var(--text-accent);color:var(--on-accent)}
+.bplay:active{transform:translate(-50%,-50%) scale(.97)}
+.bplay.small{padding:0 6px;height:40px}
+.bplay.small .plb{display:none}
+.bstop{position:absolute;z-index:6;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px 0 8px;border-radius:99px;transform:translate(-100%,calc(-100% - 8px));opacity:0;pointer-events:none;background:var(--text-accent);color:var(--on-accent);font:500 12px/1 var(--fakt);box-shadow:var(--sh-md);transition:opacity 100ms ease-out}
+.bstop.on{opacity:1;pointer-events:auto;transition:opacity 150ms cubic-bezier(.22,1,.36,1)}
+.bstop .ic{width:12px;height:12px}
+.bstop:active{transform:translate(-100%,calc(-100% - 8px)) scale(.97)}
+@media (prefers-reduced-motion:reduce){.bplay,.bplay.on{transition:opacity 100ms linear;transform:translate(-50%,-50%)}}
+
+/* ---------- left panel tabs: one row of icons; the active one opens out to show its name ---------- */
+/* motion after transitions.dev's sliding tabs and page slide (250ms, smooth-out, 2px blur); own code */
+.rail{display:none}
+.app.ui-off .rail{display:flex;width:48px;height:48px;bottom:auto;padding:0;align-items:center;justify-content:center;border-radius:var(--r-panel)}
+.lp{left:var(--gutter);width:312px;border-radius:var(--r-panel);clip-path:none}
+@media(max-width:1180px){.lp{width:296px}}
+.ltabs{position:relative;flex-shrink:0;display:flex;align-items:center;gap:2px;height:48px;padding:0 8px;border-bottom:.5px solid color-mix(in srgb,var(--border-subtle) 70%,transparent)}
+.ltabs .sp{flex:1}
+.ltabs [data-t]{position:relative;z-index:1;height:32px;min-width:32px;display:inline-flex;align-items:center;justify-content:center;padding:0 8px;border-radius:99px;color:var(--text-secondary);font:500 12px/1 var(--fakt);white-space:nowrap;transition:color 250ms cubic-bezier(.22,1,.36,1),background-color 120ms ease}
+.ltabs [data-t] i{width:16px;height:16px;display:grid;place-items:center;flex-shrink:0}
+.ltabs [data-t] .lb{max-width:0;opacity:0;overflow:hidden;margin-left:0;transition:max-width 250ms cubic-bezier(.22,1,.36,1),margin-left 250ms cubic-bezier(.22,1,.36,1),opacity 150ms ease-in-out}
+.ltabs [data-t][aria-selected="true"]{color:var(--text-primary)}
+.ltabs [data-t][aria-selected="true"] i .ic{color:var(--text-accent)}
+.ltabs [data-t][aria-selected="true"] .lb{max-width:96px;opacity:1;margin-left:6px}
+.ltabs [data-t]:not([aria-selected="true"]):hover{color:var(--text-primary);background:color-mix(in srgb,var(--bg-hover) 60%,transparent)}
+.ltabs [data-t]:active{transform:scale(.97)}
+.ltabs [data-t]:focus-visible{outline:2px solid var(--ring-default);outline-offset:1px}
+.ltabs [data-t] .tct{position:absolute;top:0;right:0;min-width:14px;height:14px;padding:0 3px;font-size:10px;line-height:14px;border-radius:99px;background:var(--text-accent);color:var(--on-accent);box-shadow:0 0 0 2px var(--glass-bg,var(--bg-layer))}
+.ltpill{position:absolute;z-index:0;top:8px;left:0;height:32px;width:0;border-radius:99px;background:var(--bg-hover);box-shadow:inset 0 0 0 .5px var(--border-subtle);pointer-events:none;transition:transform 250ms cubic-bezier(.22,1,.36,1),width 250ms cubic-bezier(.22,1,.36,1);will-change:transform,width}
+/* the content under a tab slides in from the side you moved towards, through a light blur */
+@keyframes ltab-in{from{opacity:0;transform:translateX(var(--ltab-dx,8px));filter:blur(2px)}to{opacity:1;transform:none;filter:none}}
+.pbody.ltab-in,.lhd.ltab-in{animation:ltab-in 250ms cubic-bezier(.22,1,.36,1)}
+@media (prefers-reduced-motion:reduce){
+  .ltpill,.ltabs [data-t],.ltabs [data-t] .lb{transition:none!important}
+  @keyframes ltab-in{from{opacity:0}to{opacity:1}}
+}
+.ltabs [data-t]{flex-shrink:0}
+@media(max-width:1180px){.ltabs{padding:0 6px;gap:1px}.ltabs [data-t]{min-width:30px;padding:0 7px}.ltpill{top:8px}}

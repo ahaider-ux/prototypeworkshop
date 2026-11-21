@@ -158,11 +158,15 @@ export function renderLeft() {
   const head = $("lHead"),
     body = $("lBody"),
     foot = $("lFoot");
-  for (const b of document.querySelectorAll("#rail [data-t]")) {
+  const was = document.querySelector("#ltabs [data-t][aria-selected='true']")?.dataset.t;
+  for (const b of document.querySelectorAll("#ltabs [data-t]")) {
     const on = b.dataset.t === S.leftTab;
     b.classList.toggle("on", on);
     b.setAttribute("aria-selected", String(on));
+    b.tabIndex = on ? 0 : -1;
   }
+  movePill(!!was && was !== S.leftTab);
+  if (was && was !== S.leftTab) slideIn(was, S.leftTab);
   railBadges();
   const env = pageEnv();
   const st = body.scrollTop;
@@ -237,9 +241,53 @@ function renderActivity(body, foot, env) {
   ta.onkeydown = (ev) => ev.key === "Enter" && !ev.shiftKey && (ev.preventDefault(), post());
   foot.append(comp);
 }
+// The pill under the active tab. The active tab's label is still opening when this runs, so its
+// final size is worked out (every other tab is a 32px icon) rather than measured mid-animation.
+function movePill(animate) {
+  const bar = $("ltabs");
+  const pill = bar?.querySelector(".ltpill");
+  if (!pill || !bar.offsetParent) return;
+  const tabs = [...bar.querySelectorAll("[data-t]")];
+  const small = innerWidth <= 1180;
+  const GAP = small ? 1 : 2,
+    ICON = small ? 30 : 32;
+  let x = small ? 6 : 8,
+    w = ICON;
+  for (const t of tabs) {
+    const on = t.getAttribute("aria-selected") === "true";
+    const tw = on ? ICON + 6 + (t.querySelector(".lb")?.scrollWidth || 0) : ICON;
+    if (on) {
+      w = tw;
+      break;
+    }
+    x += tw + GAP;
+  }
+  if (!animate) {
+    const prev = pill.style.transition;
+    pill.style.transition = "none";
+    pill.style.transform = `translateX(${x}px)`;
+    pill.style.width = `${w}px`;
+    void pill.offsetWidth;
+    pill.style.transition = prev;
+  } else {
+    pill.style.transform = `translateX(${x}px)`;
+    pill.style.width = `${w}px`;
+  }
+}
+// the new tab's content comes in from the side you moved towards
+function slideIn(from, to) {
+  const order = [...document.querySelectorAll("#ltabs [data-t]")].map((t) => t.dataset.t);
+  const dx = order.indexOf(to) > order.indexOf(from) ? "8px" : "-8px";
+  for (const el of [$("lBody"), $("lHead")]) {
+    el.style.setProperty("--ltab-dx", dx);
+    el.classList.remove("ltab-in");
+    void el.offsetWidth;
+    el.classList.add("ltab-in");
+  }
+}
 function railBadges() {
   const set = (t, n) => {
-    const b = document.querySelector(`#rail [data-t="${t}"]`);
+    const b = document.querySelector(`#ltabs [data-t="${t}"]`);
     if (!b) return;
     let c = b.querySelector(".tct");
     if (!n) return c?.remove();
@@ -853,7 +901,7 @@ function designBoard(body, bid) {
   } })));
   L.append(h(`<div class="xyrow"><span class="xy"><i>X</i>${b.x}</span><span class="xy"><i>Y</i>${b.y}</span><span class="xy"><i>W</i>${b.w}</span><span class="xy"><i>H</i>${b.h}</span></div>`));
   body.append(L);
-  if (ad?.screen) body.append(h(`<div class="isec"><span class="lineage">Showing ${esc(ad.screen)} now. Turn on Interact (P) to click through it.</span></div>`));
+  if (ad?.screen) body.append(h(`<div class="isec"><span class="lineage">Showing ${esc(ad.screen)} now. Press Play (P) to click through it.</span></div>`));
   const acts = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="pr">${IC.play}Present</button><button type="button" class="dbtn sm" data-a="dup">${IC.copy}Duplicate</button><button type="button" class="dbtn sm" data-a="agent">${IC.spark}Ask</button></div></div>`);
   acts.querySelector('[data-a="dup"]').onclick = () => placeScreen(b.env, b.screen, b.state).then((it) => it && selectBoard(it.id));
   acts.querySelector('[data-a="pr"]').onclick = () => fire("present", bid);
@@ -878,10 +926,11 @@ function renderProto(body) {
     }
     body.append(F);
   }
-  const I = sec("Interact");
-  const sw = h(`<div class="setrow"><div class="tx"><span style="font-size:12px;line-height:1.5">Use the prototype on the canvas: clicks and typing go to the page. <b style="font-weight:500">P</b> switches.</span></div><button type="button" class="sw" role="switch" aria-checked="${S.mode === "prototype"}" aria-label="Interact"><i></i></button></div>`);
-  sw.querySelector(".sw").onclick = () => setMode(S.mode === "design" ? "prototype" : "design");
-  I.append(sw);
+  const I = sec("Play");
+  I.append(h(`<span class="lineage">Frames are pictures until you play one. Hover a frame and press Play, or select one and press P: its prototype runs on the canvas, starting on that screen.</span>`));
+  const pl = h(`<button type="button" class="${S.playing ? "dbtn" : "createbtn"} sm" style="align-self:flex-start">${S.playing ? `${IC.stop}Stop` : `${IC.play}Play the selected frame`}</button>`);
+  pl.onclick = () => ($("interactBtn").click(), renderRight());
+  I.append(pl);
   body.append(I);
   const P = sec("Present and share");
   const acts = h(`<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="pr">${IC.play}Present</button><button type="button" class="dbtn sm" data-a="sh">${IC.share}Share</button><button type="button" class="dbtn sm" data-a="tab">${IC.ext}New tab</button></div>`);
@@ -1406,7 +1455,7 @@ function designEmbed(body, it) {
   });
   body.append(t);
   const A = sec("Bring it into the prototype");
-  A.append(h(`<span class="lineage">${web ? (fig ? "An agent reads the Figma design (with Figma's MCP server, if it has one) and builds it" : "An agent studies this app and builds what you point at") : "An agent looks at this picture and builds it"} as a new frame here, in ${esc((rootOf(S.page) || pageEnv() || {}).name || "this prototype")}'s own style.${web ? " Turn on Interact (P) to click around in it." : ""}</span>`));
+  A.append(h(`<span class="lineage">${web ? (fig ? "An agent reads the Figma design (with Figma's MCP server, if it has one) and builds it" : "An agent studies this app and builds what you point at") : "An agent looks at this picture and builds it"} as a new frame here, in ${esc((rootOf(S.page) || pageEnv() || {}).name || "this prototype")}'s own style.${web ? " Press Play (P) to click around in it." : ""}</span>`));
   const go = h(`<button type="button" class="createbtn sm" style="align-self:flex-start">${IC.spark}Build it as a frame</button>`);
   go.onclick = async () => {
     const f = await addFrame({ x: it.x + it.w + 120, y: it.y, w: web ? 1440 : Math.max(120, Math.round(it.w)), h: web ? 900 : Math.max(120, Math.round(it.h)) });
@@ -1596,7 +1645,19 @@ function turnView(t, agentName) {
 
 // ---------- wiring ----------
 export function initPanels() {
-  for (const b of document.querySelectorAll("#rail [data-t]")) b.addEventListener("click", () => ((S.leftTab = b.dataset.t), $("frame").classList.remove("ui-off"), renderLeft()));
+  for (const b of document.querySelectorAll("#ltabs [data-t]")) b.addEventListener("click", () => ((S.leftTab = b.dataset.t), $("frame").classList.remove("ui-off"), renderLeft()));
+  // ← → move between the tabs, as in any tab list
+  $("ltabs").addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    const tabs = [...document.querySelectorAll("#ltabs [data-t]")];
+    const i = tabs.findIndex((t) => t.dataset.t === S.leftTab);
+    const next = tabs[(i + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length];
+    e.preventDefault();
+    next.click();
+    next.focus();
+  });
+  addEventListener("resize", () => movePill(false));
+  requestAnimationFrame(() => movePill(false));
   for (const b of document.querySelectorAll("#rTabs button")) b.addEventListener("click", () => ((S.rightTab = b.dataset.t), renderRight()));
   on("left-tab", (t) => ((S.leftTab = t), renderLeft()));
   on("sel", () => {

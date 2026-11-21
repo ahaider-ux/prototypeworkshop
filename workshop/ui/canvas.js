@@ -14,7 +14,7 @@ import { PENS, INKS, SIZES, outline, touches } from "./ink.js";
 const B = new Map(); // board item id → {id, el, hit, frame, live, ready} — frame only while mounted live
 const NEL = new Map(); // note/box item id → element
 const GH = new Map(); // compare boards: main's screens above a branch's, not saved anywhere
-const HUD = { labels: new Map(), alabels: new Map(), pins: new Map(), sel: null, hover: null, size: null, handles: [], ehandles: [], ins: null, draft: null, multi: [], guides: [] };
+const HUD = { play: null, stop: null, labels: new Map(), alabels: new Map(), pins: new Map(), sel: null, hover: null, size: null, handles: [], ehandles: [], ins: null, draft: null, multi: [], guides: [] };
 let cv, world, hud, wires, boardLayer, noteLayer, inkLayer, inkRoot, wiresRoot, rulerH, rulerV;
 const INK = new Map(); // ink item id → {g, path, key}
 const RULER = 20;
@@ -114,10 +114,8 @@ function elAt(id, p) {
 }
 
 // ---------- camera ----------
-let camMovedAt = 0;
 function applyCam() {
   gfxDirty = true;
-  camMovedAt = performance.now();
   world.style.transform = `translate(${S.cam.x}px, ${S.cam.y}px) scale(${S.cam.z})`;
   $("zPct").textContent = Math.round(S.cam.z * 100) + "%";
   dirty = true;
@@ -390,28 +388,13 @@ function unmount(id, now = false) {
 function planLive() {
   const wantLive = [];
   const add = (id) => id && B.has(id) && !isGhost(id) && !wantLive.includes(id) && wantLive.push(id);
+  // Frames are pictures until someone presses Play on one (or presents it). Editing an element is
+  // the one other time a page runs: clicking into a frame starts it (pendingPick) and it keeps
+  // running while one of its elements is selected.
   add(S.presenting);
-  if (S.sel?.item && item(S.sel.item)?.type === "board") add(S.sel.item);
-  add(pop?.board);
+  add(S.playing);
   add(pendingPick?.id);
-  if (S.mode === "prototype") add(hoverBoard); // in Interact, the board you're about to click is ready
-  // A live board is a whole prototype running on the editor's thread, so passing the pointer over
-  // one doesn't start it (a click that arrives first is kept: pendingPick). Zoomed in close, the
-  // boards in view go live once the view has stopped moving.
-  const dpr = window.devicePixelRatio || 1;
-  if (S.cam.z * dpr >= 0.55 && performance.now() - camMovedAt > 450) {
-    const v = viewRect();
-    const seen = pageItems("board")
-      .map((it) => {
-        const a = toScreen(it);
-        const w = Math.max(0, Math.min(a.x + it.w * S.cam.z, v.x1) - Math.max(a.x, v.x0)),
-          hh = Math.max(0, Math.min(a.y + it.h * S.cam.z, v.y1) - Math.max(a.y, v.y0));
-        return { id: it.id, area: w * hh };
-      })
-      .filter((x) => x.area > 0)
-      .sort((a, b) => b.area - a.area);
-    for (const x of seen) if (wantLive.length < MAX_LIVE) add(x.id);
-  }
+  if (S.sel?.kind === "el") add(S.sel.item);
   const keep = new Set(wantLive.slice(0, MAX_LIVE));
   for (const id of keep) mount(id);
   const now = performance.now();
@@ -967,9 +950,12 @@ function renderTray() {
 const inkSize = () => (PENS[S.ink.pen]?.size || 6) * S.ink.k;
 export function setMode(m) {
   S.mode = m;
+  if (m === "design") S.playing = null; // back to designing: the frame that was playing stops
   cv.classList.toggle("mode-design", m === "design");
   cv.classList.toggle("mode-prototype", m === "prototype");
   $("interactBtn").setAttribute("aria-pressed", String(m === "prototype"));
+  const lb = $("interactBtn").querySelector(".lb");
+  if (lb) lb.textContent = m === "prototype" ? "Stop" : "Play";
   if (m === "prototype") {
     setHover(null, null);
     if (S.sel?.kind === "el") selectBoard(S.sel.item, { quiet: true });
@@ -977,6 +963,57 @@ export function setMode(m) {
   }
   dirty = true;
   fire("mode");
+}
+
+// ---------- play: run a frame's prototype, starting on its screen ----------
+export function playBoard(id) {
+  const it = item(id);
+  if (!it) return;
+  closePop();
+  S.playing = id;
+  setMode("prototype");
+  S.playing = id; // setMode clears it only when going back to design
+  selectBoard(id, { quiet: true });
+  planLive();
+  dirty = true;
+  fire("playing", id);
+}
+export function stopPlaying() {
+  const id = S.playing;
+  S.playing = null;
+  setMode("design");
+  if (id && item(id)) selectBoard(id, { quiet: true });
+  planLive();
+  dirty = true;
+  fire("playing", null);
+}
+// a Play button over the frame under the pointer, and Stop on the one that's playing
+function drawPlay() {
+  if (!HUD.play) {
+    HUD.play = h(`<button type="button" class="bplay" aria-label="Play this frame"><span class="pic">${IC.play}</span><span class="plb">Play</span></button>`);
+    HUD.stop = h(`<button type="button" class="bstop" aria-label="Stop playing">${IC.stop}<span>Stop</span></button>`);
+    for (const el of [HUD.play, HUD.stop]) el.addEventListener("pointerdown", (e) => e.stopPropagation());
+    HUD.play.onclick = (e) => (e.stopPropagation(), HUD.play.dataset.item && playBoard(HUD.play.dataset.item));
+    HUD.stop.onclick = (e) => (e.stopPropagation(), stopPlaying());
+    hud.append(HUD.play, HUD.stop);
+  }
+  const hb = hoverBoard && hoverBoard !== S.playing && item(hoverBoard) && !isGhost(hoverBoard) && !drag && (S.tool === "move" || S.tool === "hand") ? item(hoverBoard) : null;
+  const r = hb && screenRect(hb);
+  const show = !!r && r.w > 120 && r.h > 80;
+  HUD.play.classList.toggle("on", show);
+  if (show) {
+    HUD.play.dataset.item = hb.id;
+    HUD.play.style.left = r.x + r.w / 2 + "px";
+    HUD.play.style.top = r.y + r.h / 2 + "px";
+    HUD.play.classList.toggle("small", r.w < 260);
+  }
+  const pb = S.playing && item(S.playing);
+  const pr = pb && screenRect(pb);
+  HUD.stop.classList.toggle("on", !!pr);
+  if (pr) {
+    HUD.stop.style.left = pr.x + pr.w + "px";
+    HUD.stop.style.top = pr.y + "px";
+  }
 }
 
 // ---------- HUD ----------
@@ -1279,6 +1316,7 @@ export function drawHud() {
   const hv = S.hover;
   const hr = hv && S.mode === "design" && S.tool === "move" && !(s?.kind === "el" && s.el === hv.el) ? elScreenRect(hv.item, hv.el) : null;
   placeBox(HUD.hover, hr, null);
+  drawPlay();
   // comment pins sit on their board: who started the thread, how many replies, and a dot when
   // there's something you haven't read
   const pins = new Set();
@@ -2412,7 +2450,7 @@ function onMove(e) {
   const p = local(e);
   lastWorld = toWorld(p);
   if (!drag) {
-    const over = e.target.closest?.(".bd:not(.ghost)")?.dataset.item || null;
+    const over = e.target.closest?.(".bd:not(.ghost)")?.dataset.item || e.target.closest?.(".bplay")?.dataset.item || null;
     // the board under the pointer goes live after a moment, so it's ready to pick from or use
     if (over !== hoverBoard) {
       clearTimeout(hoverT);
@@ -2875,6 +2913,7 @@ function onKey(e) {
   if (mod) return;
   if (k === "Escape") {
     if (pop) return closePop();
+    if (S.playing) return stopPlaying();
     if (S.tool !== "move") return setTool("move");
     if (S.sel?.kind === "el") {
       const parent = S.sel.el.parentElement;
@@ -2896,7 +2935,7 @@ function onKey(e) {
   }
   const tools = { v: "move", h: "hand", f: "frame", n: "note", b: "box", a: "arrow", c: "comment", d: "draw" };
   if (tools[k.toLowerCase()] && !e.shiftKey) return setTool(S.tool === tools[k.toLowerCase()] && k.toLowerCase() !== "v" ? "move" : tools[k.toLowerCase()]);
-  if (k === "p" || k === "P") return setMode(S.mode === "design" ? "prototype" : "design");
+  if (k === "p" || k === "P") return $("interactBtn").click();
   if (k === "!" || (e.shiftKey && k === "1")) return fit();
   if (k === "@" || (e.shiftKey && k === "2")) return S.sel && focusItem(S.sel.item);
   if (k === "=" || k === "+") return zoomBy(1.25);
@@ -3061,7 +3100,15 @@ export function initCanvas() {
     }, 0),
   );
   for (const b of document.querySelectorAll("#tb [data-tool]")) b.addEventListener("click", () => setTool(b.dataset.tool));
-  $("interactBtn").onclick = () => setMode(S.mode === "design" ? "prototype" : "design");
+  // Interact plays the selected frame (or the one in the middle of the view), or stops
+  $("interactBtn").onclick = () => {
+    if (S.playing || S.mode === "prototype") return stopPlaying();
+    const sel = S.sel?.kind === "board" || S.sel?.kind === "el" ? S.sel.item : null;
+    const v = viewRect();
+    const mid = toWorld({ x: (v.x0 + v.x1) / 2, y: (v.y0 + v.y1) / 2 });
+    const near = pageBoards().sort((a, b) => Math.hypot(a.x + a.w / 2 - mid.x, a.y + a.h / 2 - mid.y) - Math.hypot(b.x + b.w / 2 - mid.x, b.y + b.h / 2 - mid.y))[0];
+    if (sel || near) playBoard(sel || near.id);
+  };
   $("zPct").onclick = () =>
     menu($("zPct"), [
       { label: "Zoom in", kbd: "+", onClick: () => zoomBy(1.25) },

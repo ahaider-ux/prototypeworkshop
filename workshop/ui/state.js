@@ -35,6 +35,7 @@ export const S = {
   chatOnBranch: true,
   draftSel: true,
   presenting: null,
+  playing: null, // the frame whose prototype is running on the canvas (Play)
   outlines: false,
   rulers: false, // off for now: ⇧R or the view menu shows them
 };
