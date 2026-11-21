@@ -1267,15 +1267,28 @@ export class Store {
       fy = Number(y);
     if (!parent && !(Number.isFinite(fx) && Number.isFinite(fy))) throw new StoreError("bad_position", "A comment needs a spot on the board");
     const id = newId("c");
+    await this.log({ kind: "comment", text: `${parent ? "Replied" : "Commented"}: ${t.slice(0, 240)}`, env, by: String(author).slice(0, 80), ref: parent || id });
     return this.putRecord("comments", { id, env, board: board ? assertRecord(String(board)) : null, x: parent ? null : Math.round(fx), y: parent ? null : Math.round(fy), selector: selector ? checkSelector(selector) : null, text: t, author: String(author).slice(0, 80), parent, resolved: false, createdAt: now() });
   }
 
-  async updateComment(id, patch) {
+  async updateComment(id, patch, by = null) {
     const c = await this.record("comments", id);
+    const wasResolved = !!c.resolved;
     if ("resolved" in patch) c.resolved = !!patch.resolved;
     if (typeof patch.text === "string" && patch.text.trim()) c.text = patch.text.trim().slice(0, LIMITS.commentChars);
+    // a pin dragged to another spot on its board
+    if (!c.parent && patch.x !== undefined && patch.y !== undefined) {
+      const fx = Number(patch.x),
+        fy = Number(patch.y);
+      if (!Number.isFinite(fx) || !Number.isFinite(fy) || Math.abs(fx) > 20000 || Math.abs(fy) > 20000) throw new StoreError("bad_position", "That spot is off the board");
+      c.x = Math.round(fx);
+      c.y = Math.round(fy);
+      if ("selector" in patch) c.selector = patch.selector ? checkSelector(patch.selector) : null;
+    }
     c.updatedAt = now();
-    return this.putRecord("comments", c);
+    const out = await this.putRecord("comments", c);
+    if (!c.parent && c.resolved !== wasResolved) await this.log({ kind: "comment", text: `${c.resolved ? "Resolved" : "Reopened"} a comment: ${c.text.slice(0, 160)}`, env: c.env, by: by || "You", ref: c.id });
+    return out;
   }
 
   async deleteComment(id) {

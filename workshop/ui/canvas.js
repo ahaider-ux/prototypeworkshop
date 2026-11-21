@@ -1279,26 +1279,35 @@ export function drawHud() {
   const hv = S.hover;
   const hr = hv && S.mode === "design" && S.tool === "move" && !(s?.kind === "el" && s.el === hv.el) ? elScreenRect(hv.item, hv.el) : null;
   placeBox(HUD.hover, hr, null);
-  // comment pins sit on their board
+  // comment pins sit on their board: who started the thread, how many replies, and a dot when
+  // there's something you haven't read
   const pins = new Set();
   const top = S.comments.filter((c) => !c.parent && c.env === S.page);
-  top.forEach((c, i) => {
+  top.forEach((c) => {
     const b = (c.board && S.items.get(c.board)) || pageItems("board")[0];
     if (!b || !B.has(b.id)) return;
     pins.add(c.id);
     let p = HUD.pins.get(c.id);
     if (!p) {
-      p = h(`<button type="button" class="pin" data-c="${esc(c.id)}" aria-label="Comment"></button>`);
+      p = h(`<button type="button" class="pin" data-c="${esc(c.id)}" aria-label="Comment"><span class="pi"></span><i class="pn"></i></button>`);
+      wirePin(p, c.id);
       hud.append(p);
       HUD.pins.set(c.id, p);
     }
-    const a = toScreen({ x: b.x + c.x, y: b.y + c.y });
+    const at = pinDrag?.id === c.id ? pinDrag.at : { x: c.x, y: c.y };
+    const a = toScreen({ x: b.x + at.x, y: b.y + at.y });
     p.style.left = a.x + "px";
     p.style.top = a.y + "px";
-    p.textContent = String(i + 1);
+    const n = S.comments.filter((r) => r.parent === c.id).length;
+    p.querySelector(".pi").textContent = (c.author || "?")[0].toUpperCase();
+    p.querySelector(".pn").textContent = n ? String(n + 1) : "";
+    p.setAttribute("aria-label", `Comment by ${c.author || "someone"}${n ? `, ${n + 1} messages` : ""}${c.resolved ? ", resolved" : ""}`);
+    p.classList.toggle("agent", !!c.author && c.author !== "You");
+    p.classList.toggle("unread", isUnread(c));
     p.classList.toggle("done", !!c.resolved);
     p.classList.toggle("on", pop?.kind === "thread" && pop.id === c.id);
-    p.hidden = !!c.resolved && !S.showResolved;
+    p.classList.toggle("moving", pinDrag?.id === c.id);
+    p.hidden = !!c.resolved && !S.showResolved && !(pop?.kind === "thread" && pop.id === c.id);
   });
   for (const [id, p] of HUD.pins) if (!pins.has(id)) (p.remove(), HUD.pins.delete(id));
   placePop();
@@ -1571,6 +1580,7 @@ function loop() {
 
 // ---------- canvas popovers: comment composer and thread ----------
 function closePop() {
+  hidePeek();
   if (!pop) return;
   pop.el.remove();
   pop = null;
@@ -1586,36 +1596,166 @@ function placePop() {
   pop.el.style.left = clamp(a.x + 16, 8, cv.clientWidth - w - 8) + "px";
   pop.el.style.top = clamp(a.y - 28, 8, cv.clientHeight - hh - 8) + "px";
 }
-function composeComment(boardId, bx, by, selector) {
-  closePop();
-  const b = item(boardId);
-  const el = h(`<div class="pop" role="dialog" aria-label="New comment"><textarea class="afld-ta" placeholder="Add a comment" aria-label="Comment"></textarea><div class="acts"><button type="button" class="ghbtn sm" data-a="cancel">Cancel</button><button type="button" class="createbtn sm" data-a="post">Comment</button></div></div>`);
-  cv.append(el);
-  pop = { el, board: boardId, x: bx, y: by, kind: "new" };
-  placePop();
-  const ta = el.querySelector("textarea");
-  ta.focus();
+// ----- comments, after the design tools designers use most: a pin you can drag, a peek on hover,
+// one composer for new comments and replies, and a thread you can step through -----
+const SEEN_KEY = "ws-comments-seen";
+const seenMap = () => {
+  try {
+    return JSON.parse(localStorage.getItem(SEEN_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+};
+const threadOf = (id) => [S.comments.find((x) => x.id === id), ...S.comments.filter((r) => r.parent === id)].filter(Boolean);
+export function isUnread(c) {
+  const last = threadOf(c.id).filter((m) => m.author && m.author !== "You").map((m) => m.createdAt).sort().pop();
+  return !!last && last > (seenMap()[c.id] || "");
+}
+function markSeen(id) {
+  const m = seenMap();
+  m[id] = threadOf(id).map((x) => x.createdAt).sort().pop() || new Date().toISOString();
+  try {
+    localStorage.setItem(SEEN_KEY, JSON.stringify(m));
+  } catch {}
+}
+const avatar = (who) => `<span class="cav${who && who !== "You" ? " agent" : ""}">${esc((who || "?")[0].toUpperCase())}</span>`;
+let pinDrag = null;
+let peekEl = null;
+function hidePeek() {
+  peekEl?.remove();
+  peekEl = null;
+}
+function wirePin(p, id) {
+  // hover: a peek at the thread, without opening it
+  p.addEventListener("pointerenter", () => {
+    if (pinDrag || (pop?.kind === "thread" && pop.id === id)) return;
+    const c = S.comments.find((x) => x.id === id);
+    if (!c) return;
+    hidePeek();
+    const n = S.comments.filter((r) => r.parent === id).length;
+    peekEl = h(`<div class="pinpeek" role="tooltip"><div class="ph">${avatar(c.author)}<b>${esc(c.author || "Someone")}</b><span>${esc(timeAgo(c.createdAt))}</span></div><p>${esc(c.text)}</p>${n ? `<span class="pr">${plural(n, "reply", "replies")}</span>` : ""}</div>`);
+    cv.append(peekEl);
+    const r = p.getBoundingClientRect(),
+      cr = cv.getBoundingClientRect(),
+      fr = frScale();
+    peekEl.style.left = clamp((r.right - cr.left) / fr + 8, 8, cv.clientWidth - peekEl.offsetWidth - 8) + "px";
+    peekEl.style.top = clamp((r.top - cr.top) / fr - 4, 8, cv.clientHeight - peekEl.offsetHeight - 8) + "px";
+  });
+  p.addEventListener("pointerleave", hidePeek);
+  // drag to move it; a click opens the thread
+  p.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    hidePeek();
+    const c = S.comments.find((x) => x.id === id);
+    if (!c) return;
+    const start = { x: e.clientX, y: e.clientY };
+    let moved = false;
+    p.setPointerCapture?.(e.pointerId);
+    const mv = (ev) => {
+      const fr = frScale();
+      const dx = (ev.clientX - start.x) / fr / S.cam.z,
+        dy = (ev.clientY - start.y) / fr / S.cam.z;
+      if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 4) return;
+      moved = true;
+      pinDrag = { id, at: { x: Math.round(c.x + dx), y: Math.round(c.y + dy) } };
+      dirty = true;
+    };
+    const up = async () => {
+      p.removeEventListener("pointermove", mv);
+      p.removeEventListener("pointerup", up);
+      p.removeEventListener("pointercancel", up);
+      if (!moved) return openThread(id);
+      const to = pinDrag.at;
+      const from = { x: c.x, y: c.y };
+      Object.assign(c, to);
+      pinDrag = null;
+      dirty = true;
+      try {
+        await api(`comments/${id}`, { method: "PATCH", body: to });
+        record({ label: "comment move", undo: () => api(`comments/${id}`, { method: "PATCH", body: from }).then(() => fire("comments-changed")), redo: () => api(`comments/${id}`, { method: "PATCH", body: to }).then(() => fire("comments-changed")) });
+      } catch (er) {
+        Object.assign(c, from);
+        toast("Couldn't move the comment", er.message);
+      }
+      fire("comments-changed");
+    };
+    p.addEventListener("pointermove", mv);
+    p.addEventListener("pointerup", up);
+    p.addEventListener("pointercancel", up);
+  });
+}
+// one composer for a new comment and for replies: grows as you type, Enter posts, Shift+Enter
+// starts a new line, Esc cancels; "Agent fixes this" also sends it to an agent as a request
+function composer({ placeholder, agentToggle = false, onPost }) {
+  const el = h(`<div class="ccomp">${avatar("You")}<div class="cbox"><textarea rows="1" aria-label="${esc(placeholder)}" placeholder="${esc(placeholder)}"></textarea><div class="cbar">${agentToggle ? `<button type="button" class="cagent" aria-pressed="false" data-tip="Also send it to an agent, pinned to this spot">${IC.spark}Agent fixes this</button>` : ""}<span class="sp"></span><button type="button" class="csend" aria-label="Post" disabled>${IC.send}</button></div></div></div>`);
+  const ta = el.querySelector("textarea"),
+    send = el.querySelector(".csend"),
+    ag = el.querySelector(".cagent");
+  const grow = () => ((ta.style.height = "auto"), (ta.style.height = Math.min(160, ta.scrollHeight) + "px"), (send.disabled = !ta.value.trim()));
+  ta.addEventListener("input", grow);
+  // the toggle hands the keyboard straight back, so Enter still posts
+  if (ag) ag.onclick = () => (ag.setAttribute("aria-pressed", String(ag.getAttribute("aria-pressed") !== "true")), ta.focus());
   let busy = false;
   const post = async () => {
     const text = ta.value.trim();
     if (!text || busy) return;
     busy = true;
-    try {
-      await api("comments", { method: "POST", body: { env: b.env, board: boardId, x: bx, y: by, selector, text } });
-      closePop();
-      setTool("move");
-      fire("comments-changed");
-    } catch (e) {
-      toast("Couldn't add the comment", e.message);
-      busy = false;
-    }
+    send.disabled = true;
+    const ok = await onPost(text, ag?.getAttribute("aria-pressed") === "true" || /(^|\s)@agent\b/i.test(text));
+    busy = false;
+    if (ok !== false) (ta.value = ""), grow();
+    else send.disabled = false;
   };
-  el.querySelector('[data-a="post"]').onclick = post;
-  el.querySelector('[data-a="cancel"]').onclick = closePop;
+  send.onclick = post;
   ta.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) (e.preventDefault(), post());
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) (e.preventDefault(), post());
     else if (e.key === "Escape") (e.stopPropagation(), closePop());
   });
+  return { el, ta };
+}
+// the request an agent gets from a comment: its words, pinned to the element under it
+async function sendToAgent(c, text, b) {
+  try {
+    const env = S.envs.get(b.env);
+    const onMain = env && !isBranch(env);
+    const sel = c.selector ? { selector: c.selector, label: c.selector.split(" ").pop() } : null;
+    const t = await api("tasks", { method: "POST", body: { env: b.env, prompt: text.replace(/(^|\s)@agent\b/gi, " ").trim(), selection: sel, branch: onMain } });
+    toast("Sent to an agent", onMain ? "It works on a new branch; main stays as it is" : "Its changes show up on this branch", { label: "Show", fn: () => fire("ask-agent", {}) });
+    return t;
+  } catch (e) {
+    toast("Couldn't send it to an agent", e.message);
+    return null;
+  }
+}
+function composeComment(boardId, bx, by, selector) {
+  closePop();
+  const b = item(boardId);
+  const el = h(`<div class="pop cpop new" role="dialog" aria-label="New comment"></div>`);
+  const { el: comp, ta } = composer({
+    placeholder: "Add a comment",
+    agentToggle: true,
+    onPost: async (text, agent) => {
+      try {
+        const c = await api("comments", { method: "POST", body: { env: b.env, board: boardId, x: bx, y: by, selector, text } });
+        if (agent) await sendToAgent(c, text, b);
+        closePop();
+        setTool("move");
+        markSeen(c.id);
+        fire("comments-changed");
+      } catch (e) {
+        toast("Couldn't add the comment", e.message);
+        return false;
+      }
+    },
+  });
+  el.append(comp, h(`<div class="chint">Enter to post · Shift+Enter for a new line · type @agent to hand it to an agent</div>`));
+  cv.append(el);
+  pop = { el, board: boardId, x: bx, y: by, kind: "new" };
+  placePop();
+  dirty = true;
+  ta.focus();
 }
 export function openThread(id) {
   const c = S.comments.find((x) => x.id === id);
@@ -1623,43 +1763,83 @@ export function openThread(id) {
   const b = (c.board && S.items.get(c.board)) || itemsOf("board").find((x) => x.env === c.env);
   if (!b) return;
   closePop();
+  hidePeek();
+  if (c.env !== S.page) fire("go", c.env);
+  const all = S.comments.filter((x) => !x.parent && x.env === c.env && (S.showResolved || !x.resolved || x.id === id));
+  const at = all.findIndex((x) => x.id === id);
   const replies = S.comments.filter((r) => r.parent === id);
-  const row = (x) => `<div class="cm"><span class="av">${esc((x.author || "?")[0].toUpperCase())}</span><div class="tx"><b>${esc(x.author)}</b><i>${esc(timeAgo(x.createdAt))}</i><p>${esc(x.text)}</p></div></div>`;
-  const el = h(`<div class="pop" role="dialog" aria-label="Comment thread">${row(c)}${replies.map(row).join("")}<textarea class="afld-ta" placeholder="Reply" aria-label="Reply" style="min-height:40px"></textarea><div class="acts"><button type="button" class="ghbtn sm" data-a="del" style="margin-right:auto;color:var(--text-error)">Delete</button><button type="button" class="dbtn sm" data-a="agent">Ask agent</button><button type="button" class="dbtn sm" data-a="res">${c.resolved ? "Reopen" : "Resolve"}</button><button type="button" class="createbtn sm" data-a="reply">Reply</button></div></div>`);
+  const msg = (x, first) => `<div class="cm" data-id="${esc(x.id)}">${avatar(x.author)}<div class="tx"><div class="mh"><b>${esc(x.author || "Someone")}</b><i>${esc(timeAgo(x.createdAt))}</i>${!first ? `<button type="button" class="ib24 mdel" aria-label="Delete this reply" data-tip="Delete reply">${IC.trash}</button>` : ""}</div><p>${esc(x.text)}</p></div></div>`;
+  const el = h(`<div class="pop cpop" role="dialog" aria-label="Comment thread">
+    <div class="phd"><span class="pt">${c.resolved ? `<span class="tagro ok">Resolved</span>` : "Comment"}${all.length > 1 ? `<span class="pc">${at + 1} of ${all.length}</span>` : ""}</span>
+      <button type="button" class="ib24" data-a="prev" aria-label="Previous comment" data-tip="Previous · ←" ${all.length < 2 ? "disabled" : ""}>${IC.chev.replace("<svg", '<svg style="transform:rotate(90deg)"')}</button>
+      <button type="button" class="ib24" data-a="next" aria-label="Next comment" data-tip="Next · →" ${all.length < 2 ? "disabled" : ""}>${IC.chevr}</button>
+      <button type="button" class="ib24${c.resolved ? " on" : ""}" data-a="res" aria-pressed="${!!c.resolved}" aria-label="${c.resolved ? "Reopen" : "Resolve"}" data-tip="${c.resolved ? "Reopen" : "Resolve"}">${IC.check}</button>
+      <button type="button" class="ib24" data-a="more" aria-label="More" aria-haspopup="menu">${IC.more}</button>
+      <button type="button" class="ib24" data-a="x" aria-label="Close" data-tip="Close · Esc">${IC.x}</button></div>
+    <div class="cms">${msg(c, true)}${replies.map((r) => msg(r, false)).join("")}</div></div>`);
+  const { el: comp, ta } = composer({
+    placeholder: "Reply",
+    onPost: async (text, agent) => {
+      try {
+        await api("comments", { method: "POST", body: { env: c.env, parent: c.id, text } });
+        if (agent) await sendToAgent(c, `${c.text}\n\n${text}`, b);
+        markSeen(id);
+        fire("comments-changed", { reopen: id });
+      } catch (e) {
+        toast("Couldn't reply", e.message);
+        return false;
+      }
+    },
+  });
+  el.append(comp);
   cv.append(el);
   pop = { el, board: b.id, x: c.x, y: c.y, kind: "thread", id };
   placePop();
+  markSeen(id);
   dirty = true;
-  const ta = el.querySelector("textarea");
-  el.querySelector('[data-a="reply"]').onclick = async () => {
-    const text = ta.value.trim();
-    if (!text) return ta.focus();
-    try {
-      await api("comments", { method: "POST", body: { env: c.env, parent: c.id, text } });
-      fire("comments-changed", { reopen: id });
-    } catch (e) {
-      toast("Couldn't reply", e.message);
-    }
-  };
+  const list = el.querySelector(".cms");
+  list.scrollTop = list.scrollHeight;
+  const step = (d) => all.length > 1 && openThread(all[(at + d + all.length) % all.length].id);
+  el.querySelector('[data-a="prev"]').onclick = () => step(-1);
+  el.querySelector('[data-a="next"]').onclick = () => step(1);
+  el.querySelector('[data-a="x"]').onclick = closePop;
   el.querySelector('[data-a="res"]').onclick = async () => {
     await api(`comments/${id}`, { method: "PATCH", body: { resolved: !c.resolved } }).catch((e) => toast("Couldn't update the comment", e.message));
-    closePop();
+    if (!c.resolved && all.length > 1) step(1);
+    else closePop();
     fire("comments-changed");
+    toast(c.resolved ? "Reopened" : "Resolved", "", c.resolved ? null : { label: "Undo", fn: () => api(`comments/${id}`, { method: "PATCH", body: { resolved: false } }).then(() => fire("comments-changed")) });
   };
-  el.querySelector('[data-a="del"]').onclick = async () => {
-    await api(`comments/${id}`, { method: "DELETE" }).catch((e) => toast("Couldn't delete the comment", e.message));
-    closePop();
-    fire("comments-changed");
-    toast("Comment deleted");
-  };
-  el.querySelector('[data-a="agent"]').onclick = () => {
-    closePop();
-    const target = c.selector ? safeQuery(docOf(b.id), c.selector) : null;
-    if (target) selectEl(b.id, target);
-    else selectBoard(b.id);
-    fire("ask-agent", { prompt: c.text });
-  };
-  ta.addEventListener("keydown", (e) => e.key === "Escape" && (e.stopPropagation(), closePop()));
+  el.querySelector('[data-a="more"]').onclick = (e) =>
+    menu(e.currentTarget, [
+      { label: "Send to an agent", icon: IC.spark, onClick: () => sendToAgent(c, [c.text, ...replies.map((r) => r.text)].join("\n\n"), b) },
+      { label: "Copy text", icon: IC.copy, onClick: () => navigator.clipboard?.writeText([c, ...replies].map((m) => `${m.author}: ${m.text}`).join("\n")).then(() => toast("Copied the thread")) },
+      { label: "Show the element", icon: IC.sel, onClick: () => {
+        const target = c.selector ? safeQuery(docOf(b.id), c.selector) : null;
+        target ? selectEl(b.id, target) : selectBoard(b.id);
+      } },
+      "-",
+      { label: "Delete thread", icon: IC.trash, danger: true, onClick: async () => {
+        await api(`comments/${id}`, { method: "DELETE" }).catch((er) => toast("Couldn't delete the comment", er.message));
+        closePop();
+        fire("comments-changed");
+        toast("Comment deleted");
+      } },
+    ], { align: "right", width: 220 });
+  for (const d of el.querySelectorAll(".mdel"))
+    d.onclick = async () => {
+      const rid0 = d.closest(".cm").dataset.id;
+      await api(`comments/${rid0}`, { method: "DELETE" }).catch((er) => toast("Couldn't delete the reply", er.message));
+      fire("comments-changed", { reopen: id });
+    };
+  // ← and → step through the comments on this page while the thread has the keyboard
+  el.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "TEXTAREA" && e.target.value) return;
+    if (e.key === "ArrowLeft") (e.preventDefault(), step(-1));
+    else if (e.key === "ArrowRight") (e.preventDefault(), step(1));
+    else if (e.key === "Escape") (e.stopPropagation(), closePop());
+  });
+  setTimeout(() => ta.focus({ preventScroll: true }), 30);
 }
 
 // ---------- inline editing ----------
@@ -2866,10 +3046,7 @@ export function initCanvas() {
   cv.addEventListener("contextmenu", onContext);
   cv.addEventListener("dblclick", onDbl);
   cv.addEventListener("wheel", onWheel, { passive: false });
-  hud.addEventListener("click", (e) => {
-    const pin = e.target.closest(".pin");
-    if (pin) openThread(pin.dataset.c);
-  });
+  // pins open on release, not on click: a drag that ends on the pin moves it instead (wirePin)
   document.addEventListener("keydown", (e) => !isTyping(e.target) && onKey(e));
   document.addEventListener("keyup", onKeyUp);
   window.addEventListener("blur", () => ((spaceDown = false), cv.classList.remove("panning")));

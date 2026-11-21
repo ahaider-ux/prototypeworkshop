@@ -327,7 +327,7 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
         return json(res, 201, r);
       }
       if (b && m === "PATCH") {
-        const r = await store.updateComment(b, await body(req));
+        const r = await store.updateComment(b, await body(req), me);
         emit({ kind: "comments" });
         return json(res, 200, r);
       }

@@ -7,7 +7,7 @@
 
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, familyOf, pageEnv, protoId, pageItems, pageOf, nearestBoard, screenName, plural, pageName, folderLabel } from "./state.js";
 import { $, h, esc, api, toast, IC, dropdown, segmented, copyText, timeAgo, clamp, skeleton } from "./lib.js";
-import { isFigma, embedLabel, addFrame, rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, setMode, docOf, winOf, flowOf, parseTranslate, exactSel, removeEl, selIds, toggleSel, alignSel, distributeSel, duplicateSel, removeItems } from "./canvas.js";
+import { isUnread, isFigma, embedLabel, addFrame, rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, setMode, docOf, winOf, flowOf, parseTranslate, exactSel, removeEl, selIds, toggleSel, alignSel, distributeSel, duplicateSel, removeItems } from "./canvas.js";
 import { PENS, INKS, SIZES as INK_SIZES } from "./ink.js";
 import { record, rid } from "./history.js";
 import { renderRecipes } from "./recipes.js";
@@ -464,7 +464,7 @@ function renderNotes(head, body, env) {
   const fam = new Set(familyOf(rootOf(env.id)?.id).map((x) => x.env.id));
   const where = (pg) => (S.notesAll ? fam.has(pg) : pg === env.id);
   const list = [];
-  for (const c of S.comments.filter((c) => !c.parent && (S.showResolved || !c.resolved) && where(c.env))) list.push({ kind: "cmt", at: c.createdAt, page: c.env, text: c.text, who: c.author, done: c.resolved, go: () => fire("open-thread", c.id), n: S.comments.filter((r) => r.parent === c.id).length });
+  for (const c of S.comments.filter((c) => !c.parent && (S.showResolved || !c.resolved) && where(c.env))) list.push({ kind: "cmt", at: c.createdAt, page: c.env, text: c.text, who: c.author, done: c.resolved, unread: isUnread(c), go: () => fire("open-thread", c.id), n: S.comments.filter((r) => r.parent === c.id).length });
   for (const n of itemsOf("note").filter((n) => where(pageOf(n)))) list.push({ kind: "note", at: n.createdAt, page: pageOf(n), text: n.text || "Empty note", who: n.author, go: () => fire("go-item", n.id) });
   for (const x of itemsOf("box").filter((x) => where(pageOf(x)))) list.push({ kind: "box", at: x.createdAt, page: pageOf(x), text: x.label || "Highlight", who: x.author, go: () => fire("go-item", x.id) });
   list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
@@ -473,7 +473,7 @@ function renderNotes(head, body, env) {
     const feed = h(`<div class="feed"></div>`);
     for (const x of list) {
       const icon = x.kind === "cmt" ? IC.cmt : x.kind === "box" ? IC.box : IC.note;
-      const f = h(`<div class="fi${x.done ? " done" : ""}" role="button" tabindex="0"><span class="k ${x.kind}">${icon}</span><span class="tx"><p>${esc(x.text)}</p><span>${esc(x.who || "You")} · ${esc(timeAgo(x.at))}${S.notesAll && x.page ? ` · ${esc(pageName(S.envs.get(x.page)))}` : ""}${x.n ? ` · ${plural(x.n, "reply", "replies")}` : ""}${x.done ? " · resolved" : ""}</span></span></div>`);
+      const f = h(`<div class="fi${x.done ? " done" : ""}${x.unread ? " unread" : ""}" role="button" tabindex="0" ${x.unread ? 'aria-label="Unread comment"' : ""}><span class="k ${x.kind}">${icon}</span><span class="tx"><p>${esc(x.text)}</p><span>${esc(x.who || "You")} · ${esc(timeAgo(x.at))}${S.notesAll && x.page ? ` · ${esc(pageName(S.envs.get(x.page)))}` : ""}${x.n ? ` · ${plural(x.n, "reply", "replies")}` : ""}${x.done ? " · resolved" : ""}</span></span></div>`);
       f.onclick = x.go;
       f.onkeydown = (e) => e.key === "Enter" && x.go();
       feed.append(f);

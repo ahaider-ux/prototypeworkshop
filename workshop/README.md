@@ -137,6 +137,20 @@ hidden parts of the page are left out and the wait ends as soon as the page has 
 screen. What's saved is the drawing (an SVG of the page, gzipped), because browsers don't let a
 page read back the pixels of such a drawing.
 
+## Comments
+
+Press **C** and click a screen to comment on that spot; the comment remembers the element under
+it. The composer grows as you type: **Enter** posts, **Shift+Enter** starts a new line, **Esc**
+cancels. Turn on **Agent fixes this** (or type `@agent`) to also send the comment to an agent as a
+request, pinned to that element (from Main it works on a new branch).
+
+- Pins show who started the thread, how many messages it has, and a blue dot when there's a reply
+  you haven't read. Hover a pin for a peek; drag it to move it.
+- A thread shows "2 of 7": step through the page's comments with the arrows (or ← →), resolve with
+  the tick (the next comment opens), and use … to send the thread to an agent, copy it, show the
+  element or delete it. Replies can be deleted one by one.
+- Unread threads are marked in the Notes tab, and comments, replies and resolves show in Activity.
+
 ## Bring in work from anywhere
 
 Put the rest of your work next to your screens: a **Figma file**, a **running app** (a localhost

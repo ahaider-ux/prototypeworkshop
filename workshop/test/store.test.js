@@ -457,3 +457,18 @@ test("activity: people and agents see what each other did", async () => {
   assert.ok(ctx.activity.some((e) => /Ada is on it/.test(e.text)));
   assert.ok(!ctx.activity.some((e) => e.ref === t2.id));
 });
+
+test("comments: a pin moves on its board, and comments and resolves reach the activity log", async () => {
+  const s = await Store.open(await tmp());
+  const a = await s.createEnv({ html: HTML });
+  const c = await s.addComment({ env: a.id, x: 10, y: 20, text: "Too tight" });
+  await s.addComment({ env: a.id, parent: c.id, text: "Agreed", author: "Claude Code" });
+  const moved = await s.updateComment(c.id, { x: 120, y: 80 });
+  assert.deepEqual([moved.x, moved.y], [120, 80]);
+  await assert.rejects(() => s.updateComment(c.id, { x: "nope", y: 1 }), /off the board/);
+  await s.updateComment(c.id, { resolved: true });
+  const texts = (await s.activity({ env: a.id })).map((e) => e.text);
+  assert.ok(texts.includes("Commented: Too tight"));
+  assert.ok(texts.includes("Replied: Agreed"));
+  assert.ok(texts.some((t) => /^Resolved a comment: Too tight/.test(t)));
+});
