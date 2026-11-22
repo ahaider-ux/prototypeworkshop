@@ -44,13 +44,14 @@ are OFL-1.1. Font files don't live in this repository: Atelier serves them from 
 the same fonts if they're installed on the computer, and otherwise system fonts, so nothing is
 required to run it.
 
-The first time a browser opens Atelier, a six-second intro plays, made only of Atelier's own
-pieces: tool icons cut through one tile, then the studio fills the screen (frames, a sticky note,
-comments, branches, a recipe running, Review and merge, cursors for you and Claude). Interface
-moves smooth; hand-drawn ink moves like stop-motion, eight frames a second, drawn on and then
-gently "boiling". Everything cuts away, the tile flashes through the app's colours, the name types
-on, the mark (a comment pin with an eye) drops onto the "i" with a squash, a hand underlines it,
-and the lockup flies into the header logo as the app appears. Flat colour, no gradients. Click or
+The first time a browser opens Atelier, a six-second intro plays. It is abstract, not a tour of
+the screens: one tile cuts through flat shapes, then paper sheets and blocks of colour land loosely
+around it and snap into an arranged page, with a gap left for the tile, and a hand-drawn ring marks
+one piece. Shapes move smooth; hand-drawn ink moves like stop-motion, eight frames a second, drawn
+on and then gently "boiling". Everything cuts away, the tile flashes through the palette, the name
+types on, the mark (a comment pin with an eye) drops onto the "i" with a squash, a hand underlines
+it, and the word flies into the header with the pin riding its "i", which then hops to its place
+beside the name. Flat colour, no gradients. Click or
 press Esc to go straight in; replay it from the Atelier menu (**Play the intro**) or by opening
 `/?intro`. With reduced motion, only the final lockup shows.
 

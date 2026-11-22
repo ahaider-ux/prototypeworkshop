@@ -151,3 +151,11 @@ test("ui: the intro lands letter for letter on the header logo", () => {
   assert.match(read("app.css"), /\.ilock\.flying\{letter-spacing:-\.01em\}/);
   assert.match(read("app.css"), /\.tlogo b\.wm\{[^}]*letter-spacing:-\.01em/, "the header's spacing it must match");
 });
+
+// The intro is abstract: the owner found the literal app parts (toolbars, panels, toasts, cursors,
+// tool icons) generic. It must not copy the page's interface or use the app's icons.
+test("ui: the intro is abstract, not a collage of app screens", () => {
+  const js = read("intro.js").replace(/^\s*\/\/.*$/gm, ""); // code only, not the comments that explain the rule
+  assert.ok(!/copyOf|cloneNode|IC\./.test(js), "no copies of the interface and no app icons");
+  for (const literal of ["toast", "createbtn", "pinpeek", "cursor", "ltabs", "Review and merge"]) assert.ok(!js.includes(literal), `intro still shows "${literal}"`);
+});

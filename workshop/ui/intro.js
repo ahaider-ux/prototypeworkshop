@@ -1,23 +1,23 @@
-// The first-run intro: six seconds that show what Atelier is, made of Atelier itself.
+// The first-run intro: six seconds that say what Atelier is without showing its screens.
 //
-// Creative direction: a fancy name, a playful studio. Everything on screen is the app's own
-// interface — the real toolbar and tabs (copied from the page underneath), frames with their
-// selection, comment pins, notes, ink, the Play pill, branches, a recipe running, a merge — on flat
-// paper, no gradients. The brand is the comment pin with an eye: a little critic that peeks at
-// your work, and in the end drops onto the "i" of the name.
+// Creative direction: abstract, not literal. No toolbars, panels, cursors or captions: flat paper
+// sheets and blocks of colour land loosely on the page, then snap into an arranged composition, and
+// a hand-drawn ring marks one piece, which is the whole job (rough ideas, arranged, critiqued) in
+// one gesture. Flat paper, no gradients, the palette and nothing else. The brand is the comment pin
+// with an eye: a little critic that peeks at your work, and in the end drops onto the "i" of the name.
 //
-// Beats (after the reference cut the owner chose):
-//   0.25–1.3 s one crop-marked tile cutting through the app's tools
-//   1.3–1.75 s the studio pops in around it, with a little overshoot
-//   1.75–2.75 s a held moment with a story: an agent runs a recipe, you merge, a toast confirms
+// Beats:
+//   0.15–1.3 s one crop-marked tile cutting through flat shapes in the palette
+//   1.3–1.75 s sheets and blocks land around it, loose and a little askew
+//   1.9–2.5 s  they snap into place, an arranged page; 2.3 s a hand-drawn ring marks one
 //   2.75–3.25 s everything cuts away, outside in
 //   3.25–3.6 s the tile flashes through the palette down to the pin
 //   3.6–4.9 s  the pin alone (it blinks), hops up while "atelıer" types, then drops onto the i
-//   → hold (one more blink), and the scene lifts away to the app
+//   → hold (one more blink), and the word flies into the header, the pin riding its i
 // Skips on a click or Esc. Shown once per browser; replay from the Atelier menu or /?intro.
 // Reduced motion: the final lockup only.
 
-import { h, IC, holdPages, releasePages } from "./lib.js";
+import { h, holdPages, releasePages } from "./lib.js";
 import { outline } from "./ink.js";
 
 const KEY = "atelier-intro-v2";
@@ -32,51 +32,41 @@ const circlePts = (cx, cy, rx, ry, turns = 1.12) => Array.from({ length: 60 }, (
   const a = -2.2 + (i / 59) * Math.PI * 2 * turns;
   return [cx + Math.cos(a) * rx * (1 + i / 400), cy + Math.sin(a) * ry * (1 - i / 500)];
 });
-// a little product page inside a frame: flat boxes, the way a wireframe reads at a glance
-const PAGE = (kind) =>
-  kind === "phone"
-    ? `<div class="ipg phone"><i class="hd"></i><i class="hero"></i><i class="row"></i><i class="row"></i><i class="row short"></i><i class="cta"></i></div>`
-    : `<div class="ipg desk"><i class="sb"></i><i class="hd"></i><i class="c1"></i><i class="c2"></i><i class="c3"></i><i class="c4"></i><i class="c5"></i><i class="c6"></i></div>`;
-
-// [class, x, y, w, h, in ms, out ms, html] — x/y: top-left in the collage, from its centre. The
-// collage is shown at 1.5–1.56×, so everything stays inside ±490 × ±300 (the safe area: nothing is
-// cropped by the screen edge) and clear of the centre tile (±64).
-const PIECES = () => [
-  ["frame", -490, -276, 300, 196, 1380, 3200, `<span class="flbl">Start screen</span>${PAGE("desk")}`],
-  ["box hl", -475, -231, 150, 84, 1560, 2980, `<div class="box" style="width:150px;height:84px"><span class="lb"><i>1</i><span>Tighten the cards</span></span></div>`],
-  ["play", -262, -122, 0, 0, 1640, 2900, `<button type="button" class="bplay on" tabindex="-1"><span class="pic">${IC.play}</span><span class="plb">Play</span></button>`],
-  ["frame sel", 350, -276, 140, 290, 1420, 3150, `<span class="flbl on">Checkout</span>${PAGE("phone")}<span class="isel">${CORNERS}</span><span class="sizetag">390 × 844</span>`],
-  ["ink", 340, -54, 160, 70, 1600, 2880, "INK:circle"],
-  ["note", -176, -286, 164, 0, 1520, 2840, `<div class="note warm" style="width:164px;position:relative"><div class="tx">Tighten the cards, they feel cramped</div><div class="by">You · now</div></div>`],
-  ["ink arrow", -344, -262, 166, 48, 1760, 2800, "INK:arrow"],
-  ["pin", 12, -262, 0, 0, 1460, 3260, `<span class="pin agent" style="position:relative;margin:0"><span class="pi">C</span><i class="pn">3</i></span>`],
-  ["peek", 74, -296, 0, 0, 1700, 2760, `<div class="pinpeek" style="position:relative"><div class="ph"><span class="cav agent">C</span><b>Claude</b><span>just now</span></div><p>On it: 8px more between the cards, on a branch.</p><span class="pr">2 replies</span></div>`],
-  ["panel tabs", -490, -52, 0, 0, 1440, 3300, "TABS"],
-  ["panel branches", -490, 2, 250, 0, 1480, 3100, `<div class="shd"><span>Branches</span><span class="n">3</span></div><div class="pgs"><div class="pg on">${IC.board}<span class="t">Main</span></div><div class="pg">${IC.fork}<span class="t">Denser sidebar</span><span class="m ch cnt" data-to="3">2</span></div><div class="pg">${IC.fork}<span class="t">Roomier cards</span><span class="m ch">1</span></div></div>`],
-  ["panel act", -490, 160, 250, 0, 1620, 2820, `<div class="arow"><span class="av agent">C</span><div class="tx"><div><b>Claude</b> <span class="tm">now</span></div><div class="msg">Finished "Polish pass": cards are 8px tighter</div></div></div>`],
-  ["panel recipe", 250, 54, 240, 0, 1500, 2960, `<div class="isec rcard"><div class="ih"><b>Polish pass</b><span class="tagro info">Auto</span><span class="tagro">v2</span></div><div class="rcs"><div class="rcbar" aria-hidden="true"><i class="m" style="flex:4"></i><i class="o" style="flex:1"></i></div><span class="rcst">5 runs · 4 merged · 80% kept</span></div><div class="rca"><button type="button" class="createbtn sm" tabindex="-1"><span class="shimmer">Running…</span></button></div></div>`],
-  ["merge", 70, 108, 0, 0, 1560, 3040, `<button type="button" class="createbtn" tabindex="-1">${IC.check}Review and merge</button>`],
-  ["toast", 150, 208, 0, 0, 2440, 3000, `<div class="toast is-open" style="position:relative"><div class="tcol"><span class="tt2">Merged Denser sidebar into Main</span></div></div>`],
-  ["tray", -214, 196, 0, 0, 1580, 2920, `<div class="inktray" style="position:relative;left:auto;bottom:auto;transform:none">${["#111111", "#e03131", "#f76707", "#ffd43b", "#2f9e44", "#1c7ed6"].map((c, i) => `<span class="inkdot${i === 1 ? " on" : ""}" style="--ink:${c}"></span>`).join("")}</div>`],
-  ["panel comp", -220, 78, 256, 0, 1680, 2860, `<div class="ccomp"><span class="cav">Y</span><div class="cbox"><span class="ctx">Make the button bolder</span><div class="cbar"><span class="cagent" aria-pressed="true">${IC.spark}Agent fixes this</span><span class="sp"></span><span class="csend">${IC.send}</span></div></div></div>`],
-  ["toolbar", -267, 262, 0, 0, 1400, 3330, "TOOLBAR"],
-  ["cursor you", -176, 0, 0, 0, 1600, 2900, `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5 13 8l-4.3 1.2L7 13.5Z"/></svg><b>You</b>`],
-  ["cursor agent", 228, -72, 0, 0, 1650, 2880, `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5 13 8l-4.3 1.2L7 13.5Z"/></svg><b>Claude</b>`],
+// The composition, arranged: [look, x, y, w, h, scatter dx, dy, turn°]. x/y are the top-left in the
+// collage, from its centre, shown at 1:1 (a slow push to 1.04×): a page with paper all round it,
+// inside ±490 × ±292, with a gap left in the middle (±104 × ±108) that the brand tile fits into. Looks: a paper
+// sheet, a sheet with crop marks, and flat colour (blue, yellow, red, black), squared, round or a pill.
+const BLOCKS = [
+  ["sheet", -480, -292, 296, 184, -60, -40, -6],
+  ["blue", -168, -292, 128, 84, 40, -70, 8],
+  ["yellow round", -146, -192, 84, 84, -30, 50, 0],
+  ["sheet marked", -24, -292, 160, 184, 20, -90, 5],
+  ["black pill", 152, -292, 176, 44, 90, -30, -4],
+  ["red", 152, -232, 176, 124, 60, 40, 6],
+  ["sheet", 344, -292, 146, 184, 70, -50, -7],
+  ["yellow", -480, -84, 148, 168, -80, 10, 5],
+  ["sheet", -316, -84, 212, 168, -40, 60, -5],
+  ["blue round", 104, -56, 112, 112, 50, 20, 0],
+  ["sheet", 232, -84, 258, 168, 80, 30, 4],
+  ["sheet", -480, 108, 360, 184, -70, 70, -4],
+  ["red pill", -104, 108, 176, 44, -20, 90, 6],
+  ["black", -104, 168, 176, 124, 30, 80, -6],
+  ["sheet", 88, 108, 232, 184, 40, 90, 5],
+  ["yellow", 336, 108, 154, 184, 90, 60, -5],
 ];
+const RING = { x: 80, y: -80, w: 160, h: 160 }; // the hand-drawn mark, round the blue disc
+const LAND = 1380, // the first block lands; the rest follow from the middle out
+  ARRANGE = 1900, // they snap into place
+  MARK = 2300, // the ring is drawn
+  CUT0 = 2760, // the outermost block cuts away first …
+  CUT1 = 3240; // … the innermost last
 
 // Hand-drawn marks move like hand-drawn marks: on eights (125 ms a frame), drawn on in four frames
 // and then "boiling" — redrawn a hair differently each frame, the way an animator's line lives on
 // paper. The interface around them moves smooth. Machines glide, hands flicker.
 const FRAME_MS = 125;
 const INKS = {
-  circle: { w: 160, h: 70, color: "red", strokes: [circlePts(80, 35, 70, 26)], pen: "marker", size: 6 },
-  arrow: {
-    w: 166, h: 48, color: "green", pen: "marker", size: 5,
-    strokes: [
-      Array.from({ length: 24 }, (_, i) => { const t = i / 23; return [158 - 146 * t, 10 + 26 * t * t - 10 * Math.sin(Math.PI * t)]; }),
-      [[27, 22], [12, 36], [31, 43]],
-    ],
-  },
+  ring: { w: 160, h: 160, color: "red", strokes: [circlePts(80, 80, 70, 66, 1.08)], pen: "marker", size: 6 },
   under: {
     w: 400, h: 36, color: "blue", pen: "marker", size: 9,
     strokes: [Array.from({ length: 30 }, (_, i) => { const t = i / 29; return [12 + 374 * t, 24 - 3 * Math.sin(Math.PI * t) - 10 * t * t]; })],
@@ -105,14 +95,14 @@ function inkFrames(spec) {
 }
 const inkSvg = (name) => `<svg viewBox="0 0 ${INKS[name].w} ${INKS[name].h}" aria-hidden="true"><path class="ik ${INKS[name].color}" data-ink="${name}" d=""/></svg>`;
 
-// what the opening tile cuts through: the app's own tools
+// what the opening tile cuts through: flat shapes in the palette (a cut every 200 ms)
 const OPENERS = [
-  `<span class="ot blue">${IC.frame}</span>`,
-  `<span class="ot yellow"><b>Y</b></span>`,
-  `<span class="ot red">${IC.draw}</span>`,
-  `<span class="ot ink">${IC.spark}</span>`,
-  `<span class="ot white">${IC.cmt}</span>`,
-  `<span class="ot blue">${IC.play}</span>`,
+  `<span class="ot blue"><i class="s-dot"></i></span>`,
+  `<span class="ot yellow"><i class="s-half"></i></span>`,
+  `<span class="ot red"><i class="s-bar"></i></span>`,
+  `<span class="ot ink"><i class="s-ring"></i></span>`,
+  `<span class="ot white"><i class="s-sq"></i></span>`,
+  `<span class="ot blue"><i class="s-tri"></i></span>`,
 ];
 const OPEN_AT = [160, 360, 560, 760, 960, 1160];
 const FLASHES = [
@@ -131,16 +121,6 @@ export const introSeen = () => {
     return true; // no storage (a private window, a preview): never hold the app back with it
   }
 };
-
-// a real piece of the page underneath, without its ids
-function copyOf(id) {
-  const src = document.getElementById(id);
-  if (!src) return "";
-  const c = src.cloneNode(true);
-  for (const el of [c, ...c.querySelectorAll("[id]")]) el.removeAttribute("id");
-  for (const el of c.querySelectorAll("[data-tip]")) el.removeAttribute("data-tip");
-  return c;
-}
 
 // the app is uncovered: the home canvas brings its pictures in now, once the logo has settled
 const landed = () => dispatchEvent(new Event("atelier:landed"));
@@ -164,14 +144,12 @@ export function playIntro({ force = false } = {}) {
   addEventListener("resize", fit);
   const timers = [];
   const at = (ms, fn) => timers.push(setTimeout(fn, ms));
-  let done,
-    tick = null;
+  let done;
   const finished = new Promise((r) => (done = r));
   const end = (land = false) => {
     if (!running) return;
     running = null;
     timers.forEach(clearTimeout);
-    clearInterval(tick);
     clearInterval(inkTick);
     removeEventListener("resize", fit);
     removeEventListener("keydown", onKey, true);
@@ -252,44 +230,29 @@ export function playIntro({ force = false } = {}) {
     return finished;
   }
 
-  // the studio: the app's own pieces, popping in and cutting out on their beats
+  // the composition: blocks land loose and askew, then snap into place; a ring marks one; then they
+  // cut away from the outside in
   const col = root.querySelector(".icol");
-  for (const [cls, x, y, w, hh, tin, tout, html] of PIECES()) {
-    // piece classes get a p- prefix: bare names (toast, note, pin…) would pick up the app's own rules
-    const el = h(`<div class="ip ${cls.split(" ").map((c) => "p-" + c).join(" ")}" style="left:${W / 2 + x}px;top:${H / 2 + y}px;${w ? `width:${w}px;` : ""}${hh ? `height:${hh}px;` : ""}--in:${tin}ms"></div>`);
-    if (html === "TOOLBAR" || html === "TABS") {
-      const c = copyOf(html === "TOOLBAR" ? "tb" : "ltabs");
-      if (!c) continue;
-      if (html === "TABS") {
-        // the Agents tab, opened out, as in the app
-        for (const b of c.querySelectorAll("[data-t]")) b.setAttribute("aria-selected", String(b.dataset.t === "agents"));
-        const pill = c.querySelector(".ltpill");
-        if (pill) (pill.style.transform = "translateX(76px)"), (pill.style.width = "80px"), (pill.style.transition = "none");
-      }
-      el.append(c);
-    } else if (html.startsWith("INK:")) {
-      el.innerHTML = inkSvg(html.slice(4));
-      addInk(el.querySelector(".ik"), tin + 60);
-    } else el.innerHTML = html;
+  const far = Math.max(...BLOCKS.map(([, x, y, w, hh]) => Math.hypot(x + w / 2, y + hh / 2)));
+  BLOCKS.forEach(([look, x, y, w, hh, dx, dy, turn]) => {
+    const d = Math.hypot(x + w / 2, y + hh / 2) / far; // 0 in the middle, 1 at the edge
+    // piece classes get a p- prefix: bare names would pick up the app's own rules
+    const el = h(`<div class="ip p-block ${look.split(" ").map((c) => "p-" + c).join(" ")}" style="left:${W / 2 + x}px;top:${H / 2 + y}px;width:${w}px;height:${hh}px;--in:${Math.round(LAND + d * 220)}ms;--set:${Math.round(d * 120)}ms;--dx:${dx}px;--dy:${dy}px;--r:${turn}deg">${look.includes("marked") ? CORNERS : ""}</div>`);
     col.append(el);
-    at(tout, () => el.classList.add("cut")); // a cut, never a fade
-  }
+    at(Math.round(CUT1 - d * (CUT1 - CUT0)), () => el.classList.add("cut")); // a cut, never a fade
+  });
+  at(ARRANGE, () => col.classList.add("set"));
+  const ring = h(`<div class="ip p-ink" style="left:${W / 2 + RING.x}px;top:${H / 2 + RING.y}px;width:${RING.w}px;height:${RING.h}px;--in:${MARK}ms">${inkSvg("ring")}</div>`);
+  col.append(ring);
+  addInk(ring.querySelector(".ik"), MARK + 40);
+  at(CUT0 + 120, () => ring.classList.add("cut"));
   // the opening tile
   const tile = root.querySelector(".itile");
   const open = root.querySelector(".iopen");
   OPEN_AT.forEach((ms, i) => at(ms, () => ((open.innerHTML = OPENERS[i]), tile.classList.add("on"))));
   at(1300, () => tile.classList.add("grow"));
   at(1420, () => ((open.innerHTML = ""), tile.classList.add("brand")));
-  // the held moment: Claude works, you go to Review and merge, the toast confirms
-  at(1760, () => {
-    const cnts = [...col.querySelectorAll(".cnt")];
-    tick = setInterval(() => {
-      for (const c of cnts) if (+c.textContent < +c.dataset.to) c.textContent = String(+c.textContent + 1);
-    }, 420);
-  });
-  at(1900, () => col.querySelector(".p-cursor.p-you")?.classList.add("go"));
-  at(2380, () => col.querySelector(".p-merge .createbtn")?.classList.add("press"));
-  at(2500, () => blinkTile());
+  at(2560, () => blinkTile()); // the pin looks the arrangement over
   const blinkTile = () => (tile.classList.remove("blink"), void tile.offsetWidth, tile.classList.add("blink"));
   // the collapse: palette flashes down to the pin
   FLASHES.forEach(([cls, ms]) => at(ms, () => (tile.classList.remove("f1", "f2", "f3", "f4"), tile.classList.add(cls))));
