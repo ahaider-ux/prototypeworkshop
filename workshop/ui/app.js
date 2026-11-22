@@ -294,7 +294,7 @@ function renderHome() {
     inner.append(
       h(`<div class="hempty"><b>No prototypes in this space yet</b><span>Add a folder with an index.html (or any .html page) to ${esc(S.ws.home || "this folder")} and look again, connect another project folder, or import an HTML file.</span></div>`),
     );
-  const nw = h(`<div class="card new" role="button" tabindex="0">${IC.plus}<b>Import a prototype</b><span style="font-size:12px">An HTML file or a whole document you paste</span></div>`);
+  const nw = h(`<div class="card new" role="button" tabindex="0">${IC.plus}<b>Import a prototype</b><span class="hand">an HTML file, or a whole document you paste</span></div>`);
   nw.onclick = openImport;
   nw.onkeydown = (ev) => ev.key === "Enter" && openImport();
   cards.append(nw);

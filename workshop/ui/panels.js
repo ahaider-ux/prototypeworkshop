@@ -521,7 +521,7 @@ function renderNotes(head, body, env) {
     const feed = h(`<div class="feed"></div>`);
     for (const x of list) {
       const icon = x.kind === "cmt" ? IC.cmt : x.kind === "box" ? IC.box : IC.note;
-      const f = h(`<div class="fi${x.done ? " done" : ""}${x.unread ? " unread" : ""}" role="button" tabindex="0" ${x.unread ? 'aria-label="Unread comment"' : ""}><span class="k ${x.kind}">${icon}</span><span class="tx"><p>${esc(x.text)}</p><span>${esc(x.who || "You")} · ${esc(timeAgo(x.at))}${S.notesAll && x.page ? ` · ${esc(pageName(S.envs.get(x.page)))}` : ""}${x.n ? ` · ${plural(x.n, "reply", "replies")}` : ""}${x.done ? " · resolved" : ""}</span></span></div>`);
+      const f = h(`<div class="fi${x.done ? " done" : ""}${x.unread ? " unread" : ""}" role="button" tabindex="0" ${x.unread ? 'aria-label="Unread comment"' : ""}><span class="k k-${x.kind}">${icon}</span><span class="tx"><p>${esc(x.text)}</p><span>${esc(x.who || "You")} · ${esc(timeAgo(x.at))}${S.notesAll && x.page ? ` · ${esc(pageName(S.envs.get(x.page)))}` : ""}${x.n ? ` · ${plural(x.n, "reply", "replies")}` : ""}${x.done ? " · resolved" : ""}</span></span></div>`);
       f.onclick = x.go;
       f.onkeydown = (e) => e.key === "Enter" && x.go();
       feed.append(f);
@@ -574,7 +574,7 @@ function renderHistory(head, body, env) {
   if (!vs) loadVersions(env.id);
   const v = h(`<div class="isec" style="border-bottom:0"></div>`);
   if (!vs) v.append(skeleton("Loading versions", 3));
-  if (vs && !vs.length) v.append(h(`<span class="lineage">No versions yet. Merges and agents save one before they change anything.</span>`));
+  if (vs && !vs.length) v.append(h(`<div class="pempty" style="padding:0"><b>No versions yet</b>Merges and agents save one before they change anything, and you can save one any time.</div>`));
   for (const x of vs || []) {
     const vr = h(`<div class="vrow"><span class="n">V${x.n}</span><span class="tx"><b title="${esc(x.label)}">${esc(x.label)}</b><span>${esc(x.author || "You")} · ${esc(timeAgo(x.at))}</span></span><span class="va"><button type="button" class="ib24" aria-label="Restore version ${x.n}" data-tip="Restore">${IC.restore}</button><button type="button" class="ib24" aria-label="Copy version ${x.n}" data-tip="Copy as a new prototype">${IC.copy}</button></span></div>`);
     const [rb, fb] = vr.querySelectorAll(".ib24");
