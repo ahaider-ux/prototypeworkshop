@@ -25,7 +25,25 @@
   root.classList.add("ws-env");
   var embedded = false;
   try { embedded = window.parent !== window && !!window.parent.__workshopCanvas; } catch (e) { embedded = false; }
+  /* a preview loaded from the other loopback name can't see the editor, so it says so in its URL */
+  try { if (!embedded && new URLSearchParams(location.search).get("ws-embed") === "1") embedded = true; } catch (e) {}
   if (embedded) root.classList.add("ws-embed");
+
+  /* ---- a picture for the canvas: the editor (on the other loopback name, same port) asks a background
+     page to draw itself, so the page can run in its own browser process (ui/snap.js) ---- */
+  window.addEventListener("message", function (e) {
+    var d = e.data;
+    if (!d || d.ws !== "snap" || e.source !== window.parent) return;
+    /* Guard: only the editor on this computer gets a drawing of the page (a loopback name, this port) */
+    try {
+      var o = new URL(e.origin);
+      if (o.port !== location.port || !/^(127\.0\.0\.1|localhost|\[::1\])$/.test(o.hostname)) return;
+    } catch (x) { return; }
+    import("/ui/snap.js").then(function (m) { return m.snapHere(window, d); }).then(
+      function (r) { e.source.postMessage({ ws: "snapped", id: d.id, svg: r.svg, catalog: r.catalog }, e.origin); },
+      function (err) { e.source.postMessage({ ws: "snapped", id: d.id, error: String(err && err.message || err) }, e.origin); }
+    );
+  });
 
   /* ---- storage: one namespace per environment ---- */
   function shim(real, prefix) {

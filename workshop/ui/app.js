@@ -1,7 +1,7 @@
 // Atelier — boot, Home and tabs, pages, live updates, branches, review and merge, dialogs.
 
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural, pageName, folderLabel } from "./state.js";
-import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented, skeleton, loadingToast, pendingButton, loadPage } from "./lib.js";
+import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented, skeleton, loadingToast, pendingButton, loadPage, apartUrl } from "./lib.js";
 import { addLink, addPicture, initCanvas, sync, fit, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
 import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff } from "./panels.js";
 import { rulesFor, loadOverrides } from "./styles.js";
@@ -277,9 +277,9 @@ function renderHome() {
     fr.loading = "lazy";
     fr.tabIndex = -1;
     fr.setAttribute("aria-hidden", "true");
-    const q = new URLSearchParams({ "ws-board": `thumb-${e.id}` });
+    const q = new URLSearchParams({ "ws-board": `thumb-${e.id}`, "ws-embed": "1" });
     if (first?.screen) q.set("ws-screen", first.screen);
-    loadPage(fr, `/env/${encodeURIComponent(e.id)}/?${q}`);
+    loadPage(fr, apartUrl(`/env/${encodeURIComponent(e.id)}/?${q}`));
     const w = e.device?.w || 1440,
       ht = e.device?.h || 900;
     fr.style.width = w + "px";

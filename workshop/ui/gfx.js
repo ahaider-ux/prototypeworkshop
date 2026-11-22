@@ -8,15 +8,12 @@
 // board shows: its prototype's look (a hash of its files, overrides and settings, from the server),
 // screen, state and size. Opening a page again, or a branch nobody has changed, draws at once.
 
-import { pagesFree } from "./lib.js";
+import { pagesFree, apartUrl } from "./lib.js";
+import { drawingOf, settle, sleep } from "./snap.js";
 
 const LEVEL = 0.5; // bitmaps are kept at half size: sharp up to 50% zoom on a 1× screen
 const POOL = 3; // background pages loading at once
 const MAX_BITMAPS = 160; // Guard: bitmaps are ~2 MB each at half size; past this the oldest go
-const SETTLE = 2200; // ms after load, at most, for the prototype to go to its screen, state and variants
-const SETTLE_MIN = 450; // ...and at least: its own start-up scripts run first
-const QUIET = 300; // ms without changes to the page before it counts as settled
-const SETTLE_TEXT = 2700; // text edits are re-applied up to ~2.5 s after load
 const LOAD_TIMEOUT = 25000;
 
 const CACHE = new Map(); // content key → {bmp, w, h, used}
@@ -45,7 +42,8 @@ export function invalidate(env) {
   REV.set(env, rev(env) + 1);
 }
 // what a board shows; without a look from the server yet, only this session can match it
-export const keyOf = (it) => `${lookOf(it.env) || `${it.env}@${rev(it.env)}`}|${it.file || ""}|${it.screen || ""}|${it.state || ""}|${it.w}x${it.h}|${LEVEL}`;
+const DRAWING = 7; // the snapshot format: bump it when what goes into a drawing changes, so old ones aren't reused
+export const keyOf = (it) => `${lookOf(it.env) || `${it.env}@${rev(it.env)}`}|${it.file || ""}|${it.screen || ""}|${it.state || ""}|${it.w}x${it.h}|${LEVEL}|d${DRAWING}`;
 
 // ---------- saved pictures ----------
 const HASHES = new Map();
@@ -64,17 +62,21 @@ async function loadSaved(k, w, h) {
     if (r.status !== 200) return null;
     const blob = await r.blob();
     // The pictures inside a saved drawing finish decoding a moment after the drawing itself, and a
-    // bitmap made too early can come out empty: draw it again once they're in, and swap it in.
+    // bitmap made too early can come out empty: draw it again once they're in, and swap it in. The
+    // redraw reuses the decoded drawing; decoding it again would cost as much as the first time.
+    const keep = {};
+    const bmp = await svgToBitmap(URL.createObjectURL(blob), w, h, LEVEL, keep);
     setTimeout(async () => {
-      if (!CACHE.has(k)) return;
-      const again = await svgToBitmap(URL.createObjectURL(blob), w, h).catch(() => null);
+      if (!CACHE.has(k) || !keep.img) return;
+      const again = await bitmapOf(keep.img, w, h, LEVEL).catch(() => null);
+      keep.img = null;
       if (again && CACHE.has(k)) {
         CACHE.get(k).bmp.close?.();
         CACHE.set(k, { ...CACHE.get(k), bmp: again });
         onReady(k);
       }
     }, 900);
-    return await svgToBitmap(URL.createObjectURL(blob), w, h);
+    return bmp;
   } catch {
     return null;
   }
@@ -87,29 +89,39 @@ function save(k, svg) {
     .then((hx) => fetch(`/api/snapshots/${hx}`, { method: "PUT", headers: { "x-workshop": "1", "content-type": "image/svg+xml" }, body: svg }))
     .catch(() => {});
 }
-// an SVG (by blob URL, revoked here) → a bitmap at the kept size
-async function svgToBitmap(url, w, h, scale = LEVEL) {
+// Decoding a drawing lays out a whole page on the main thread (100–300 ms): one at a time, and only
+// when the browser is idle, so scrolling, typing and the panels never wait behind several at once.
+let decoding = Promise.resolve();
+const idle = () => new Promise((r) => (window.requestIdleCallback ? requestIdleCallback(() => r(), { timeout: 600 }) : setTimeout(r, 16)));
+// (src is set inside the turn: an SVG image starts parsing, the costly part, as soon as it has one)
+function decodeInTurn(img, url) {
+  const turn = decoding.then(idle).then(() => ((img.src = url), img.decode()));
+  decoding = turn.catch(() => {});
+  return turn;
+}
+// an SVG (by blob URL, revoked here) → a bitmap at the kept size; keep.img holds the decoded drawing
+async function svgToBitmap(url, w, h, scale = LEVEL, keep = null) {
   try {
     const img = new Image();
-    img.src = url;
-    await img.decode();
+    await decodeInTurn(img, url);
     // let the browser paint the drawing (its fonts and inner pictures) before taking the bitmap
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const W = Math.max(1, Math.round(w * scale)),
-      H = Math.max(1, Math.round(h * scale));
-    try {
-      return await createImageBitmap(img, { resizeWidth: W, resizeHeight: H, resizeQuality: "high" });
-    } catch {
-      // some browsers won't make a bitmap from an SVG image: draw it to a canvas instead
-      const c = document.createElement("canvas");
-      c.width = W;
-      c.height = H;
-      c.getContext("2d").drawImage(img, 0, 0, W, H);
-      return c;
-    }
+    if (keep) keep.img = img;
+    return await bitmapOf(img, w, h, scale);
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+// The drawing is vector: painting it straight onto a canvas at the kept size is several times quicker
+// than createImageBitmap, which paints it at full size and then scales the pixels down.
+async function bitmapOf(img, w, h, scale) {
+  const W = Math.max(1, Math.round(w * scale)),
+    H = Math.max(1, Math.round(h * scale));
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  c.getContext("2d").drawImage(img, 0, 0, W, H);
+  return c;
 }
 export function bitmapFor(it) {
   const k = keyOf(it);
@@ -125,115 +137,8 @@ export function bitmapFor(it) {
 export const hasFresh = (it) => CACHE.has(keyOf(it));
 
 // ---------- DOM → bitmap ----------
-const IMG_CACHE = new Map(); // url → data: url
-async function inlineImage(url) {
-  if (IMG_CACHE.has(url)) return IMG_CACHE.get(url);
-  const p = (async () => {
-    try {
-      const r = await fetch(url);
-      const b = await r.blob();
-      // Guard: an SVG snapshot carries its images inline; skip anything huge rather than stall.
-      if (!r.ok || b.size > 4 * 1024 * 1024) return null;
-      return await new Promise((res) => {
-        const fr = new FileReader();
-        fr.onload = () => res(String(fr.result));
-        fr.onerror = () => res(null);
-        fr.readAsDataURL(b);
-      });
-    } catch {
-      return null;
-    }
-  })();
-  IMG_CACHE.set(url, p);
-  return p;
-}
-// An SVG image can't fetch anything, so the clone carries its styles, images and form state inline.
-// out: when given, out.svg receives the drawing, so it can be saved
 export async function rasterize(doc, w, h, scale = LEVEL, out = null) {
-  if (!doc?.documentElement) throw new Error("no page");
-  const clone = doc.documentElement.cloneNode(true);
-  // scrolled boxes show the part you scrolled to (matched before anything is taken out of the clone)
-  const all = [...doc.querySelectorAll("*")];
-  const call = [...clone.querySelectorAll("*")];
-  // Hidden parts of the page (other screens of a one-page app, closed menus, dialogs) can be most of
-  // it: they're left out of the picture, which makes it several times quicker to draw. Never style
-  // or SVG parts (icons point at hidden <symbol>s), and never display:contents boxes.
-  const prune = [];
-  if (all.length === call.length && typeof Element.prototype.checkVisibility === "function") {
-    const body = doc.body;
-    const SVGE = doc.defaultView?.SVGElement;
-    for (let i = 0; i < all.length; i++) {
-      const e = all[i];
-      if (e === body || !body?.contains(e) || (SVGE && e instanceof SVGE) || /^(STYLE|LINK|META|SCRIPT|TEMPLATE|SLOT|BR|WBR|SOURCE|TRACK)$/.test(e.tagName)) continue;
-      if (e.checkVisibility() || doc.defaultView.getComputedStyle(e).display === "contents") continue;
-      prune.push(call[i]);
-    }
-  }
-  if (all.length === call.length) {
-    let n = 0;
-    for (let i = 0; i < all.length && n < 40; i++) {
-      const e = all[i];
-      if (!e.scrollTop && !e.scrollLeft) continue;
-      n++;
-      for (const k of call[i].children) k.setAttribute("style", `${k.getAttribute("style") || ""};translate:${-e.scrollLeft}px ${-e.scrollTop}px`);
-    }
-  }
-  for (const n of clone.querySelectorAll("script,noscript,iframe,object,embed,video,audio,.ws-ghost")) n.remove();
-  const live = [...doc.querySelectorAll('link[rel~="stylesheet"]')];
-  const dead = [...clone.querySelectorAll('link[rel~="stylesheet"]')];
-  live.forEach((l, i) => {
-    let css = "";
-    try {
-      if (!l.disabled && l.sheet) css = [...l.sheet.cssRules].map((r) => r.cssText).join("\n");
-    } catch {}
-    const st = doc.createElement("style");
-    st.textContent = css;
-    dead[i]?.replaceWith(st);
-  });
-  for (const l of clone.querySelectorAll("link")) l.remove();
-  // An SVG image is painted once, at the first frame of every animation: a fade-in would be caught
-  // invisible. Show everything as it rests instead.
-  const still = doc.createElement("style");
-  still.textContent = "*,*::before,*::after{animation:none!important;transition:none!important}";
-  (clone.querySelector("head") || clone).append(still);
-  // what's typed in fields and which boxes are ticked
-  const lf = [...doc.querySelectorAll("input,textarea,select")],
-    cf = [...clone.querySelectorAll("input,textarea,select")];
-  lf.forEach((f, i) => {
-    const c = cf[i];
-    if (!c) return;
-    if (f.localName === "textarea") c.textContent = f.value;
-    else if (f.localName === "select") [...c.options].forEach((o, j) => (o.selected = j === f.selectedIndex) && o.setAttribute("selected", ""));
-    else if (/checkbox|radio/.test(f.type)) f.checked ? c.setAttribute("checked", "") : c.removeAttribute("checked");
-    else c.setAttribute("value", f.value);
-  });
-  // canvases inside the page keep their current picture
-  const lc = [...doc.querySelectorAll("canvas")],
-    cc = [...clone.querySelectorAll("canvas")];
-  lc.forEach((c, i) => {
-    try {
-      const img = doc.createElement("img");
-      img.src = c.toDataURL();
-      img.setAttribute("style", c.getAttribute("style") || "");
-      img.className = c.className;
-      img.width = c.width;
-      img.height = c.height;
-      cc[i]?.replaceWith(img);
-    } catch {}
-  });
-  const imgs = [...clone.querySelectorAll("img[src]")].filter((i) => !prune.some((p) => p.contains(i))).filter((i) => !/^data:/.test(i.getAttribute("src"))).slice(0, 60);
-  await Promise.all(
-    imgs.map(async (i) => {
-      const abs = new URL(i.getAttribute("src"), doc.baseURI).href;
-      const d = await inlineImage(abs);
-      if (d) i.setAttribute("src", d);
-      else i.removeAttribute("src");
-    }),
-  );
-  for (const i of clone.querySelectorAll("img[srcset]")) i.removeAttribute("srcset");
-  for (const n of prune) n.remove();
-  const xml = new XMLSerializer().serializeToString(clone);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><foreignObject x="0" y="0" width="${w}" height="${h}">${xml}</foreignObject></svg>`;
+  const svg = await drawingOf(doc, w, h);
   if (out) out.svg = svg;
   return svgToBitmap(URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" })), w, h, scale);
 }
@@ -283,46 +188,12 @@ function pump() {
     RUNNING.set(j.key, p);
   }
 }
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const frames = (win) => new Promise((r) => win.requestAnimationFrame(() => win.requestAnimationFrame(r)));
-// Wait until the page has started up, reached its screen and loaded its fonts, instead of always
-// waiting the longest it might need. Text edits are re-applied on a timer, so they still wait.
-async function settle(win, it, textEdits) {
-  if (textEdits) return sleep(SETTLE_TEXT);
-  const t0 = performance.now();
-  await sleep(SETTLE_MIN);
-  try {
-    await Promise.race([win.document.fonts?.ready, sleep(SETTLE - SETTLE_MIN)]);
-  } catch {}
-  // ...and until the page stops changing (an intro overlay going away, a list filling in)
-  let changed = performance.now();
-  let mo = null;
-  try {
-    mo = new win.MutationObserver(() => (changed = performance.now()));
-    mo.observe(win.document, { subtree: true, childList: true, attributes: true, characterData: true });
-  } catch {}
-  while (performance.now() - t0 < SETTLE) {
-    try {
-      const rt = win.__workshop;
-      const ad = rt?.adapter();
-      const there = !it.screen || !ad?.screens?.length || ad.screen === it.screen || !ad.screens.some((x) => x.name === it.screen);
-      if (rt && there && performance.now() - changed > QUIET) break;
-    } catch {
-      break;
-    }
-    await sleep(80);
-  }
-  mo?.disconnect();
-  try {
-    await frames(win);
-  } catch {}
-  await sleep(120);
-}
 async function render({ key, it, src, textEdits }) {
+  await pagesFree(); // nothing heavy while the intro plays (lib.js)
   // saved from an earlier visit (or by a branch that looks the same): no page to load at all
   const kept = await loadSaved(key, it.w, it.h);
   if (kept) return store(key, kept, it.w, it.h);
-  await pagesFree(); // not while the intro plays (lib.js)
+  const apart = apartUrl(src);
   const fr = document.createElement("iframe");
   fr.setAttribute("aria-hidden", "true");
   fr.tabIndex = -1;
@@ -334,22 +205,53 @@ async function render({ key, it, src, textEdits }) {
     await new Promise((res, rej) => {
       const t = setTimeout(() => rej(new Error("timeout")), LOAD_TIMEOUT);
       fr.addEventListener("load", () => (clearTimeout(t), res()), { once: true });
-      fr.src = src;
+      // From the other loopback name the page is another site: the browser runs it in its own process,
+      // so its start-up and layout never block the editor. It draws itself and sends the drawing back.
+      fr.src = apart === src ? src : `${apart}${apart.includes("?") ? "&" : "?"}ws-embed=1`;
     });
     if (document.activeElement === fr) fr.blur();
-    await settle(fr.contentWindow, it, textEdits);
-    if (keyOf(it) !== key) return; // it changed while loading; the next pass asks again
-    try {
-      await onFrame(fr.contentWindow, it);
-    } catch {}
-    const out = {};
-    const bmp = await rasterize(fr.contentDocument, it.w, it.h, LEVEL, out);
+    let svg;
+    if (apart === src) {
+      await settle(fr.contentWindow, it, textEdits);
+      if (keyOf(it) !== key) return; // it changed while loading; the next pass asks again
+      try {
+        await onFrame(fr.contentWindow, it);
+      } catch {}
+      svg = await drawingOf(fr.contentDocument, it.w, it.h);
+    } else {
+      const r = await askForDrawing(fr, it, textEdits);
+      if (keyOf(it) !== key) return;
+      // what the page can show (its screens and states), as the canvas reads it from a page
+      try {
+        if (r.catalog) await onFrame({ __workshop: { adapter: () => r.catalog, go() {}, setState() {} } }, it);
+      } catch {}
+      svg = r.svg;
+    }
+    if (!svg) throw new Error("no drawing");
+    const bmp = await svgToBitmap(URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" })), it.w, it.h, LEVEL);
     store(key, bmp, it.w, it.h);
-    save(key, out.svg);
+    save(key, svg);
   } finally {
     fr.src = "about:blank";
     fr.remove();
   }
+}
+let asks = 0;
+function askForDrawing(fr, it, textEdits) {
+  const id = ++asks;
+  const origin = new URL(fr.src).origin;
+  return new Promise((res, rej) => {
+    const t = setTimeout(() => (removeEventListener("message", on), rej(new Error("timeout"))), LOAD_TIMEOUT);
+    // Guard: only the page we asked, from where we loaded it, answers this request
+    const on = (e) => {
+      if (e.source !== fr.contentWindow || e.origin !== origin || e.data?.ws !== "snapped" || e.data.id !== id) return;
+      clearTimeout(t);
+      removeEventListener("message", on);
+      e.data.error ? rej(new Error(e.data.error)) : res(e.data);
+    };
+    addEventListener("message", on);
+    fr.contentWindow.postMessage({ ws: "snap", id, w: it.w, h: it.h, screen: it.screen || null, state: it.state || null, textEdits: !!textEdits }, origin);
+  });
 }
 
 // ---------- drawing ----------

@@ -336,6 +336,14 @@ export function releasePages() {
   held = null;
   q.forEach((fn, i) => setTimeout(fn, i * 40));
 }
+// A preview that is only looked at (a home thumbnail) loads from the other loopback name
+// (127.0.0.1 ↔ localhost). That's another site to the browser, so it runs the prototype in its own
+// process, and the prototype starting up never blocks the editor. The server accepts both names.
+export function apartUrl(path) {
+  const h = location.hostname;
+  const other = h === "127.0.0.1" ? "localhost" : h === "localhost" ? "127.0.0.1" : null;
+  return other ? `${location.protocol}//${other}:${location.port}${path}` : path;
+}
 // resolves when pages may load
 export const pagesFree = () => (held ? new Promise((r) => held.push(r)) : Promise.resolve());
 // point a frame at a page, now or once the intro is over (only if nothing asked for another page since)

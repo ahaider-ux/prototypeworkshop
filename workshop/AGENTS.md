@@ -55,6 +55,15 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   Anything still loading shows it: words that say so ("Loading…", "Running…", "Connecting…") get
   `.shimmer`, content on its way gets `skeleton()` rows or cards, a button that started something
   slow gets `pendingButton()`, and a progress toast is `loadingToast()` (all in `ui/lib.js`).
+- **Loading stays smooth.** Prototype pages never load on the editor's main thread when they don't
+  have to: home thumbnails and the background pages that draw boards load from the other loopback
+  name (`apartUrl` in `ui/lib.js`: 127.0.0.1 ↔ localhost), so Chrome runs them in their own process,
+  and a background page draws itself (`ui/snap.js`, imported by the runtime on the editor's request)
+  and sends back only the drawing. Only live boards (Play, element editing) load on the editor's own
+  site. Every frame loads through `loadPage`/`pagesFree`, which hold while the intro plays. Saved
+  drawings carry only what's shown: hidden parts emptied, CSS trimmed to what matches, each picture
+  once. They decode one at a time when idle. Bump `DRAWING` in `ui/gfx.js` when what goes into a
+  drawing changes. `ui/snap.js` takes no imports: it runs inside any prototype.
 - **The canvas shell scales below 1180px** (`fitShell`). Anything measured with
   `getBoundingClientRect` and written into a style inside `#frame` is divided by `frScale()`
   (`inFrame()` in `ui/lib.js` does it for menus).

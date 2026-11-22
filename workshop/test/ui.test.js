@@ -24,11 +24,41 @@ test("ui: list and intro pieces never reuse the canvas's own class names as modi
 test("ui: prototype pages load through the intro's gate", () => {
   for (const f of ["app.js", "canvas.js", "gfx.js"]) {
     const src = read(f);
-    const direct = [...src.matchAll(/\b(?:fr|f|frame|b\.frame|e\.frame)\.src\s*=\s*([^;\n]+)/g)].map((m) => m[1].trim()).filter((v) => v !== '"about:blank"' && v !== "src");
+    const direct = [...src.matchAll(/\b(?:fr|f|frame|b\.frame|e\.frame)\.src\s*=\s*([^;\n]+)/g)].map((m) => m[1].trim()).filter((v) => v !== '"about:blank"' && v !== "src" && !v.startsWith("apart === src")); // the pool sets its own frame after pagesFree()
     assert.deepEqual(direct, [], `${f} sets a frame's src without loadPage: ${direct.join(", ")}`);
   }
   assert.match(read("gfx.js"), /await pagesFree\(\)/, "the background pool waits for the intro");
   const intro = read("intro.js");
   assert.match(intro, /holdPages\(\)/);
   assert.equal((intro.match(/releasePages\(\)/g) || []).length, 2, "both endings (landing and skip) release the pages");
+});
+
+// Saved drawings: the CSS kept is what matches the picture, tested with states taken off. Taking
+// them off must never change what a selector means (".a > .b" once became ".a >* .b" and dropped
+// rules the page needed).
+test("snap: selectors lose their states, never their meaning", async () => {
+  const { bareSelector } = await import("../ui/snap.js");
+  const cases = {
+    ".a > .b": ".a > .b",
+    ".a + .b ~ .c": ".a + .b ~ .c",
+    "a:hover": "a",
+    ".x::before": ".x",
+    ".nav li:hover > a": ".nav li > a",
+    ".a:hover::after": ".a",
+    "[x]:focus-visible": "[x]",
+    ":hover": "*",
+    ".a > :focus-visible": ".a > *",
+    ":root .t": "html .t",
+    ".l:nth-child(2n):hover": ".l:nth-child(2n)",
+  };
+  for (const [sel, want] of Object.entries(cases)) assert.equal(bareSelector(sel), want, sel);
+});
+
+// Hidden parts of a page are left out of its drawing, matched element for element between the page
+// and its copy. The page's list must be its root's descendants like the copy's: document-wide it
+// includes <html> itself, the two never line up and nothing was ever left out.
+test("snap: the page and its copy are matched from the same root", () => {
+  const src = read("snap.js");
+  assert.match(src, /const all = \[\.\.\.doc\.documentElement\.querySelectorAll\("\*"\)\]/);
+  assert.doesNotMatch(src, /const all = \[\.\.\.doc\.querySelectorAll\("\*"\)\]/);
 });
