@@ -37,7 +37,7 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   hand-drawn mark; shapes: what you press is a pill and icon buttons are circles, list rows are
   rounded 8, fields 10, sheets 16 and panels 20; padding follows the control scale at the end
   of `ui/app.css` (32-tall pills 14 a side, 28-tall 12, 24-tall 8, a leading icon takes 2 off the left); type in
-  three tokens: `--display` Zilla Slab for big moments only, `--fakt` Schibsted Grotesk for the
+  three tokens: `--display` Zilla Slab for the wordmark only (header logo and intro lockup; never titles or other app text), `--fakt` Schibsted Grotesk for the
   interface, `--hand` Shantell Sans for notes and handwritten marks, never on buttons; mono only for
   code). Font files are never committed here: `src/fonts.js` serves them from a craft-fonts
   checkout, and every token falls back to system fonts. Libra's tokens belong to the prototypes: they appear only inside boards

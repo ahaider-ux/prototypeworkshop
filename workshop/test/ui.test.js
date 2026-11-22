@@ -121,3 +121,11 @@ test("ui: the home bar fits a phone, and coming back shows it again", () => {
   assert.ok(mount.indexOf('host.classList.remove("hleaving")') < mount.indexOf("host.append(root)"), "mount clears the leaving state first");
   assert.match(home.slice(home.indexOf("destroy()")), /host\.classList\.remove\("hleaving"\)/);
 });
+
+// The slab is the logo's typeface. Titles, the home bar and empty states once used it too, which
+// made the app read heavy; the app's own type is the interface sans, and only the wordmark is slab.
+test("ui: the logo font is for the wordmark only", () => {
+  const uses = read("app.css").split("\n").filter((l) => l.includes("var(--display)")).map((l) => l.slice(0, l.indexOf("{")));
+  assert.deepEqual(uses.sort(), [".ilock", ".tlogo b.wm"]);
+  for (const f of ["app.js", "panels.js", "canvas.js", "home.js", "lib.js"]) assert.ok(!read(f).includes("--display"), `${f} sets the logo font`);
+});

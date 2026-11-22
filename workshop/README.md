@@ -36,8 +36,8 @@ still there in the middle. On a touch screen the names sit under the pictures in
 top shows the space, the most recent prototypes (click one to glide to it) and a switch to a plain
 list. Thumbnails are pictures, not live pages, so it stays smooth however many there are.
 
-**Type.** Atelier sets big moments (the wordmark, page titles, the intro) in Zilla Slab, the
-interface in Schibsted Grotesk, and sticky notes in Shantell Sans, a marker handwriting. All three
+**Type.** Atelier sets only its wordmark (the logo and the intro) in Zilla Slab; everything in the
+app, titles included, is Schibsted Grotesk, and sticky notes in Shantell Sans, a marker handwriting. All three
 are OFL-1.1. Font files don't live in this repository: Atelier serves them from a
 [craft-fonts](https://github.com/storytold/craft-fonts) checkout, found at `CRAFT_FONTS_DIR` or in
 `craft-fonts` next to this repository (the faces are in its Latin catalog). Without one it uses
