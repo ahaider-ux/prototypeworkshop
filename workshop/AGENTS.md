@@ -31,8 +31,11 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
 - **No runtime dependencies.** Node 20+ built-ins only, ES modules, no build step. Playwright is
   optional and only used for screenshots when it is already installed.
 - **Atelier has its own look, not Libra's.** The editor's colours, shadows, type and motion come
-  from the Atelier tokens at the top of `ui/app.css` (neutral greys, a tool-blue accent, the system UI
-  face; mono only for code). Libra's tokens belong to the prototypes: they appear only inside boards
+  from the Atelier tokens at the top of `ui/app.css` (neutral greys, a tool-blue accent; type in
+  three tokens: `--display` Zilla Slab for big moments only, `--fakt` Schibsted Grotesk for the
+  interface, `--hand` Shantell Sans for notes and handwritten marks, never on buttons; mono only for
+  code). Font files are never committed here: `src/fonts.js` serves them from a craft-fonts
+  checkout, and every token falls back to system fonts. Libra's tokens belong to the prototypes: they appear only inside boards
   and in the inspector's swatches. Compose new surfaces from the existing classes (`.dbtn`,
   `.createbtn`, `.ghbtn`, `.segds`, `.cnmenu`, `.ddtrig`, `.afld-in`, `.tagro`, `.tct`, `.md`,
   `.toast`, `.isec`/`.irow`). No new hex values outside the token block, spacing 2/4/6/8/12/16/24/32,

@@ -26,6 +26,14 @@ npm start
 
 Open http://127.0.0.1:4600. The server only listens on this computer.
 
+**Type.** Atelier sets big moments (the wordmark, page titles, the intro) in Zilla Slab, the
+interface in Schibsted Grotesk, and sticky notes in Shantell Sans, a marker handwriting. All three
+are OFL-1.1. Font files don't live in this repository: Atelier serves them from a
+[craft-fonts](https://github.com/storytold/craft-fonts) checkout, found at `CRAFT_FONTS_DIR` or in
+`craft-fonts` next to this repository (the faces are in its Latin catalog). Without one it uses
+the same fonts if they're installed on the computer, and otherwise system fonts, so nothing is
+required to run it.
+
 The first time a browser opens Atelier, a six-second intro plays, made only of Atelier's own
 pieces: tool icons cut through one tile, then the studio fills the screen (frames, a sticky note,
 comments, branches, a recipe running, Review and merge, cursors for you and Claude). Interface

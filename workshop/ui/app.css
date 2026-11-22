@@ -4,6 +4,15 @@
    lives in the prototype and in the inspector's swatches, never in the editor's chrome.
    Spacing 2/4/6/8/12/16/24/32 · radii 4/6/8/12/16/99 · 28 and 32 px controls. */
 
+/* Type: a slab for big moments (Zilla Slab), a grotesque for the interface (Schibsted Grotesk) and
+   a hand for notes (Shantell Sans), all OFL-1.1. The files come from a craft-fonts checkout through
+   /fonts/ (src/fonts.js) or from fonts installed on the computer; without either, each falls back
+   to the system faces in its token below. */
+@font-face{font-family:"Atelier Display";font-weight:600;font-display:swap;src:local("Zilla Slab SemiBold"),local("ZillaSlab-SemiBold"),url(/fonts/zilla-slab-semibold.ttf) format("truetype")}
+@font-face{font-family:"Atelier Display";font-weight:700;font-display:swap;src:local("Zilla Slab Bold"),local("ZillaSlab-Bold"),url(/fonts/zilla-slab-bold.ttf) format("truetype")}
+@font-face{font-family:"Atelier Sans";font-weight:100 900;font-display:swap;src:local("Schibsted Grotesk"),url(/fonts/schibsted-grotesk.ttf) format("truetype")}
+@font-face{font-family:"Atelier Hand";font-weight:300 800;font-display:swap;src:local("Shantell Sans"),url(/fonts/shantell-sans.ttf) format("truetype")}
+
 /* ═══ Tokens ═══ */
 :root{
   color-scheme:light;
@@ -21,7 +30,8 @@
   --sh-sm:0 1px 2px rgba(24,24,27,.06);--sh-md:0 6px 20px rgba(24,24,27,.10),0 0 0 .5px rgba(24,24,27,.06);--sh-field:0 0 0 1px rgba(24,24,27,.06);
   --sh-btn:0 0 0 1px rgba(24,24,27,.06),0 1px 2px rgba(24,24,27,.05);
   --sh-chat:0 6px 20px rgba(24,24,27,.10),0 0 0 1px rgba(24,24,27,.07);--sh-modal:0 16px 40px rgba(24,24,27,.16),0 0 0 .5px rgba(24,24,27,.08);
-  --fakt:'Inter',ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;--ivar:var(--fakt);
+  --display:'Atelier Display','Zilla Slab',Rockwell,'Roboto Slab',Georgia,serif;--hand:'Atelier Hand','Shantell Sans','Comic Neue','Segoe Print','Bradley Hand',cursive;
+  --fakt:'Atelier Sans','Inter',ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;--ivar:var(--fakt);
   --mono:ui-monospace,'SF Mono','JetBrains Mono',Menlo,Consolas,monospace;
   --ease-out:cubic-bezier(0.23,1,0.32,1);--ease-smooth:cubic-bezier(0.22,1,0.36,1);--ease-io:cubic-bezier(0.77,0,0.175,1);
   --ease-quick:cubic-bezier(0.25,0.46,0.45,0.94);
@@ -484,7 +494,7 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .note{position:absolute;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--note-bg);box-shadow:var(--sh-md),0 0 0 .5px var(--note-edge);transform-origin:0 0;cursor:default}
 .note.info{background:var(--accent-subtle);box-shadow:var(--sh-md),0 0 0 .5px var(--tag-info-bg)}
 .note.plain{background:var(--bg-layer)}
-.note .tx{font-size:16px;line-height:1.45;white-space:pre-wrap;word-break:break-word;outline:none;min-height:22px}
+.note .tx{font-family:var(--hand);font-size:16px;line-height:1.45;white-space:pre-wrap;word-break:break-word;outline:none;min-height:22px}
 .note .tx[contenteditable]{user-select:text;-webkit-user-select:text;cursor:text}
 .note .tx:empty::before{content:"Write a note";color:var(--text-placeholder)}
 .note .by{font:500 12px/1 var(--fakt);color:var(--text-secondary)}
@@ -573,7 +583,7 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .home .in{max-width:1120px;margin:0 auto;padding:40px 32px 64px;display:flex;flex-direction:column;gap:32px}
 .home .hh{display:flex;align-items:flex-end;gap:16px}
 .home .hh .tt{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
-.home h1{font:600 24px/1.2 var(--fakt)}
+.home h1{font:600 32px/1.1 var(--display);letter-spacing:-.01em}
 .home .hh p{font-size:14px;color:var(--text-secondary);line-height:1.5;max-width:640px}
 .hsec{display:flex;flex-direction:column;gap:12px}
 .hsec>.shd{padding:0;height:24px;font-size:14px}
@@ -1124,7 +1134,7 @@ html[data-intro] .app{visibility:hidden}
 .intro.lock .imk{display:block}
 .imk.hop{transform:translateY(-118px) scale(.7)}
 .intro.typing .imk>i,.intro.dotted .imk>i{display:none}
-.ilock{position:absolute;left:50%;top:50%;transform:translate(-50%,-38%);display:none;align-items:baseline;font:800 128px/1 var(--fakt);letter-spacing:-.05em;color:var(--i-ink)}
+.ilock{position:absolute;left:50%;top:50%;transform:translate(-50%,-38%);display:none;align-items:baseline;font:700 136px/1 var(--display);letter-spacing:-.02em;color:var(--i-ink)}
 .intro.lock .ilock{display:flex}
 .ilock .lt{opacity:0;transform:translateY(10px)}
 .ilock .lt.on{opacity:1;transform:none;transition:transform 260ms cubic-bezier(.34,1.56,.64,1)}
@@ -1140,5 +1150,5 @@ html[data-intro] .app{visibility:hidden}
 .intro.still .imk>i{display:none}
 /* the header lockup: the pin, and the name in lowercase, heavy and tight */
 .tlogo .amark.pinmark{width:20px;height:20px}
-.tlogo b.wm{font-size:16px;font-weight:800;letter-spacing:-.04em}
+.tlogo b.wm{font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:-.01em}
 .tlogo:hover .pinmark .eye{animation:i-blink 180ms ease-in-out}

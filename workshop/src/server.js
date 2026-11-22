@@ -9,6 +9,7 @@ import path from "node:path";
 import os from "node:os";
 import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
+import { defaultFontsDir, fontFile } from "./fonts.js";
 import { Store, StoreError, assertId } from "./store.js";
 import { AgentRunner } from "./agent.js";
 import { screenshot, screenshotAvailable } from "./screenshot.js";
@@ -46,7 +47,7 @@ function lanAddress() {
 }
 
 // spaces: the file listing this computer's spaces (null keeps the server on one workspace, as in tests)
-export async function startServer({ workspace, port = 4600, host = "127.0.0.1", quiet = false, agent = true, spaces = null } = {}) {
+export async function startServer({ workspace, port = 4600, host = "127.0.0.1", quiet = false, agent = true, spaces = null, fontsDir = defaultFontsDir() } = {}) {
   let store = await Store.open(workspace);
   const clients = new Set();
   // Recipes that run when notes are added: only on a branch page (main never changes on its own),
@@ -171,6 +172,16 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
       return send(res, 200, injectHtml(html, inject.env, inject.settings), { "content-type": ct });
     }
     res.writeHead(200, { "content-type": ct, "content-length": st.size, "cache-control": "no-store", "x-content-type-options": "nosniff" });
+    fs.createReadStream(file).pipe(res);
+  }
+
+  // Atelier's typefaces, from a craft-fonts checkout when there is one (src/fonts.js); a 404
+  // otherwise, and the CSS falls back to installed and system fonts
+  async function serveFont(res, name) {
+    const file = await fontFile(fontsDir, name);
+    if (!file) return send(res, 404, "Not found", { "content-type": "text/plain; charset=utf-8" });
+    const st = await fsp.stat(file);
+    res.writeHead(200, { "content-type": "font/ttf", "content-length": st.size, "cache-control": "max-age=86400", "x-content-type-options": "nosniff" });
     fs.createReadStream(file).pipe(res);
   }
 
@@ -507,6 +518,8 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
       if (p === "/" || /^\/(home|canvas|tasks)(\/.*)?$/.test(p)) return serveFile(res, path.join(UI_DIR, "index.html"));
       if (/^\/present\/[a-z0-9-]+\/?$/.test(p)) return serveFile(res, path.join(UI_DIR, "present.html"));
       if (p.startsWith("/ui/")) return serveFile(res, store.safeJoin(UI_DIR, p.slice(4)));
+      const fontm = /^\/fonts\/([a-z0-9-]{1,40})\.ttf$/.exec(p);
+      if (fontm) return serveFont(res, fontm[1]);
       return send(res, 404, "Not found", { "content-type": "text/plain; charset=utf-8" });
     } catch (e) {
       return fail(res, e);

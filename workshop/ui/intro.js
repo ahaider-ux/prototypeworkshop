@@ -295,9 +295,10 @@ export function playIntro({ force = false } = {}) {
     const s = stage.getBoundingClientRect();
     const kk = k();
     const em = i.height / kk; // the line is 1em tall
-    const size = em * 0.4;
-    const cx = (i.left - s.left) / kk + i.width / kk / 2 + size * 0.06;
-    const cy = (i.top - s.top) / kk + em * 0.24 - size * 0.42;
+    // tuned to the slab's ı: the pin sits just above the stem, a little to the left of centre
+    const size = em * 0.34;
+    const cx = (i.left - s.left) / kk + i.width / kk / 2 - em * 0.02;
+    const cy = (i.top - s.top) / kk + em * 0.327 - size * 0.42;
     const target = `translate(${cx - W / 2}px, ${cy - H / 2}px) scale(${size / 72})`;
     mk.classList.remove("hop");
     if (now) return void (mk.style.transform = target);
