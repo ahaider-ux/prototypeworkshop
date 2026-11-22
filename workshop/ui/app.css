@@ -1160,3 +1160,32 @@ html[data-intro] .app{visibility:hidden}
 .tlogo .amark.pinmark{width:20px;height:20px}
 .tlogo b.wm{font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:-.01em}
 .tlogo:hover .pinmark .eye{animation:i-blink 180ms ease-in-out}
+
+/* ═══ Control scale — the last word on padding, so every control in every panel matches ═══
+   Pills: 32 tall → 14 each side; 28 tall → 12; 24 tall (text links, tags with words) → 8.
+   A leading icon takes 2 off the left so the icon, not its box, sits on the padding line.
+   Segments sit 2 inside their track. List rows are 8-round with 8 in front. Fields are 10-round. */
+.dbtn,.createbtn,.ghbtn{padding:0 14px;gap:6px}
+.dbtn .ic{margin-left:0}
+.dbtn.sm,.createbtn.sm,.ghbtn.sm{padding:0 12px}
+:is(.rp,.banner) :is(.dbtn,.createbtn,.ghbtn).sm{padding:0 14px}
+:is(.dbtn,.createbtn,.ghbtn):has(> .ic:first-child){padding-left:12px}
+:is(.dbtn,.createbtn,.ghbtn).sm:has(> .ic:first-child){padding-left:10px}
+:is(.rp,.banner) :is(.dbtn,.createbtn,.ghbtn).sm:has(> .ic:first-child){padding-left:12px}
+.ahar button,.sgh button{height:24px;padding:0 8px;border-radius:99px}
+.segds{padding:2px}
+.segds button{padding:0 12px;border-radius:99px}
+:is(.lp,.rp) .segds button{padding:0 10px;border-radius:99px}
+.ttabs button{padding:0 10px}
+.tab .ib24{border-radius:99px}
+.tlogo{border-radius:99px;padding:0 10px 0 8px}
+.agst{border-radius:99px;padding:0 10px}
+.zm{padding:0 10px}
+.cnmenu button{border-radius:8px;padding:0 8px}
+.srow{border-radius:8px}
+.rp .ddtrig,.nfdd{border-radius:10px}
+.rp .ddtrig{padding:0 8px 0 12px}
+
+.ddtrig{padding:0 10px 0 14px}
+.lp .ddtrig{padding:0 8px 0 12px}
+.brtag{border-radius:99px;padding:0 10px 0 8px}
