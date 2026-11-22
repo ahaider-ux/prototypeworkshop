@@ -1,7 +1,7 @@
 // Atelier — boot, Home and tabs, pages, live updates, branches, review and merge, dialogs.
 
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural, pageName, folderLabel } from "./state.js";
-import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented, skeleton, loadingToast, pendingButton, loadPage, apartUrl } from "./lib.js";
+import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented, skeleton, loadingToast, pendingButton, loadPage, apartUrl, initTips } from "./lib.js";
 import { addLink, addPicture, initCanvas, sync, fit, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
 import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff } from "./panels.js";
 import { rulesFor, loadOverrides } from "./styles.js";
@@ -1198,6 +1198,7 @@ async function boot() {
     }
     loadTasks();
   });
+  initTips();
   // the first time this browser opens Atelier (or with ?intro): the intro plays while the workspace loads
   playIntro({ force: new URLSearchParams(location.search).has("intro") });
   try {

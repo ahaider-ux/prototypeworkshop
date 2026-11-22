@@ -62,3 +62,25 @@ test("snap: the page and its copy are matched from the same root", () => {
   assert.match(src, /const all = \[\.\.\.doc\.documentElement\.querySelectorAll\("\*"\)\]/);
   assert.doesNotMatch(src, /const all = \[\.\.\.doc\.querySelectorAll\("\*"\)\]/);
 });
+
+// A tooltip drawn as ::after inside its button is still laid out when invisible: it made the panels
+// scroll sideways (and so shift when something in them took focus) and was clipped at panel edges.
+// Tooltips are one floating element (initTips in lib.js).
+test("ui: tooltips float outside the panels", () => {
+  const css = read("app.css");
+  assert.doesNotMatch(css, /\[data-tip\][^{]*::after/, "no tooltip drawn inside its control");
+  assert.match(read("lib.js"), /export function initTips\(\)/);
+  assert.match(read("app.js"), /initTips\(\)/);
+});
+
+// The active tab's label opened by animating max-width to 96px: the real label is narrower, so it
+// raced open and sat still before snapping shut, while the pill moved on its own path. Labels open
+// to their measured width and the pill is placed from the tabs' real geometry.
+test("ui: the tab row moves on one path", () => {
+  const css = read("app.css");
+  assert.match(css, /\.ltabs \[data-t\]\[aria-selected="true"\] \.lb\{width:var\(--lbw/);
+  assert.doesNotMatch(css, /\.ltabs \[data-t\]\[aria-selected="true"\] \.lb\{max-width/);
+  const panels = read("panels.js");
+  assert.doesNotMatch(panels, /ICON = small \? 30 : 32/, "the pill is placed from computed geometry, not constants");
+  assert.match(panels, /if \(at === pillAt\) return/, "a re-render never snaps the pill");
+});

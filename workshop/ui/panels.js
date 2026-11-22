@@ -155,9 +155,11 @@ export async function loadVersions(id) {
 // ======================= LEFT PANEL =======================
 const LEFT = { screens: "Screens", agents: "Agents", recipes: "Recipes", notes: "Notes", history: "History", activity: "Activity" };
 export function renderLeft() {
-  const head = $("lHead"),
-    body = $("lBody"),
-    foot = $("lFoot");
+  selectTab();
+  renderLeftBody();
+}
+// the tab row: which tab is on, the pill, the badges
+function selectTab() {
   const was = document.querySelector("#ltabs [data-t][aria-selected='true']")?.dataset.t;
   for (const b of document.querySelectorAll("#ltabs [data-t]")) {
     const on = b.dataset.t === S.leftTab;
@@ -166,8 +168,15 @@ export function renderLeft() {
     b.tabIndex = on ? 0 : -1;
   }
   movePill(!!was && was !== S.leftTab);
-  if (was && was !== S.leftTab) slideIn(was, S.leftTab);
   railBadges();
+}
+let bodyTab = null; // the tab the panel body was last built for
+function renderLeftBody() {
+  const head = $("lHead"),
+    body = $("lBody"),
+    foot = $("lFoot");
+  if (bodyTab && bodyTab !== S.leftTab) slideIn(bodyTab, S.leftTab); // the new content slides in with itself, not the old
+  bodyTab = S.leftTab;
   const env = pageEnv();
   const st = body.scrollTop;
   foot.replaceChildren();
@@ -241,38 +250,43 @@ function renderActivity(body, foot, env) {
   ta.onkeydown = (ev) => ev.key === "Enter" && !ev.shiftKey && (ev.preventDefault(), post());
   foot.append(comp);
 }
-// The pill under the active tab. The active tab's label is still opening when this runs, so its
-// final size is worked out (every other tab is a 32px icon) rather than measured mid-animation.
+// The pill under the active tab, and each label's width. Every tab's final geometry is worked out from
+// its real computed padding and the label's measured width (the labels are still animating when this
+// runs), so the pill and the tabs travel the same path, at the same speed, and end exactly together.
+// The pill is only moved when where it should be changes: a panel re-render never snaps it.
+let pillAt = "";
+function measureLabels() {
+  for (const t of document.querySelectorAll("#ltabs [data-t]")) {
+    const lb = t.querySelector(".lb");
+    if (lb) t.style.setProperty("--lbw", `${Math.ceil(lb.scrollWidth)}px`);
+  }
+}
 function movePill(animate) {
   const bar = $("ltabs");
   const pill = bar?.querySelector(".ltpill");
   if (!pill || !bar.offsetParent) return;
-  const tabs = [...bar.querySelectorAll("[data-t]")];
-  const small = innerWidth <= 1180;
-  const GAP = small ? 1 : 2,
-    ICON = small ? 30 : 32;
-  let x = small ? 6 : 8,
-    w = ICON;
-  for (const t of tabs) {
-    const on = t.getAttribute("aria-selected") === "true";
-    const tw = on ? ICON + 6 + (t.querySelector(".lb")?.scrollWidth || 0) : ICON;
-    if (on) {
-      w = tw;
+  const bs = getComputedStyle(bar);
+  const gap = parseFloat(bs.columnGap) || 0;
+  let x = parseFloat(bs.paddingLeft) || 0,
+    w = 0;
+  for (const t of bar.querySelectorAll("[data-t]")) {
+    const ts = getComputedStyle(t);
+    const icon = t.querySelector("i")?.offsetWidth || 16;
+    const shut = Math.max(parseFloat(ts.minWidth) || 0, (parseFloat(ts.paddingLeft) || 0) + (parseFloat(ts.paddingRight) || 0) + icon);
+    if (t.getAttribute("aria-selected") === "true") {
+      w = shut + 6 + (parseFloat(t.style.getPropertyValue("--lbw")) || 0);
       break;
     }
-    x += tw + GAP;
+    x += shut + gap;
   }
-  if (!animate) {
-    const prev = pill.style.transition;
-    pill.style.transition = "none";
-    pill.style.transform = `translateX(${x}px)`;
-    pill.style.width = `${w}px`;
-    void pill.offsetWidth;
-    pill.style.transition = prev;
-  } else {
-    pill.style.transform = `translateX(${x}px)`;
-    pill.style.width = `${w}px`;
-  }
+  const at = `${x.toFixed(1)}|${w.toFixed(1)}`;
+  if (at === pillAt) return; // already there, or already on its way
+  const first = !pillAt;
+  pillAt = at;
+  if (first || !animate) pill.style.transition = "none";
+  pill.style.transform = `translateX(${x}px)`;
+  pill.style.width = `${w}px`;
+  if (first || !animate) void pill.offsetWidth, (pill.style.transition = "");
 }
 // the new tab's content comes in from the side you moved towards
 function slideIn(from, to) {
@@ -1645,7 +1659,18 @@ function turnView(t, agentName) {
 
 // ---------- wiring ----------
 export function initPanels() {
-  for (const b of document.querySelectorAll("#ltabs [data-t]")) b.addEventListener("click", () => ((S.leftTab = b.dataset.t), $("frame").classList.remove("ui-off"), renderLeft()));
+  // A tab click builds the panel first and starts moving the tabs on the next frame, so building it
+  // never lands in the middle of the move (a held frame mid-move is what made the row jump).
+  let fill = 0;
+  for (const b of document.querySelectorAll("#ltabs [data-t]"))
+    b.addEventListener("click", () => {
+      if (S.leftTab === b.dataset.t) return;
+      S.leftTab = b.dataset.t;
+      $("frame").classList.remove("ui-off");
+      renderLeftBody(); // the heavy part first, inside the click...
+      cancelAnimationFrame(fill);
+      fill = requestAnimationFrame(selectTab); // ...then the tabs move on a fresh frame, with nothing left to hold them up
+    });
   // ← → move between the tabs, as in any tab list
   $("ltabs").addEventListener("keydown", (e) => {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
@@ -1657,7 +1682,11 @@ export function initPanels() {
     next.focus();
   });
   addEventListener("resize", () => movePill(false));
+  // labels are measured once the type is in (a font arriving late changes their width)
+  measureLabels();
   requestAnimationFrame(() => movePill(false));
+  document.fonts?.ready.then(() => (measureLabels(), movePill(false)));
+  document.fonts?.addEventListener?.("loadingdone", () => (measureLabels(), movePill(false)));
   for (const b of document.querySelectorAll("#rTabs button")) b.addEventListener("click", () => ((S.rightTab = b.dataset.t), renderRight()));
   on("left-tab", (t) => ((S.leftTab = t), renderLeft()));
   on("sel", () => {

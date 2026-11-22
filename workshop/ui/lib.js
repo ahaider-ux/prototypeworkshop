@@ -352,3 +352,61 @@ export function loadPage(fr, src) {
   if (!held) return void (fr.src = src);
   held.push(() => fr.dataset.want === src && (fr.src = src));
 }
+
+// ---------- tooltips ----------
+// One floating label for every [data-tip] (data-tip-up puts it above). It shows after 300 ms of
+// hover or keyboard focus (at once if another was just showing), and goes on leave, press, scroll
+// or Escape. It lives outside every panel, so it never widens one or gets clipped by one.
+export function initTips() {
+  if (matchMedia("(hover: none)").matches) return;
+  const tip = document.createElement("div");
+  tip.className = "tipl";
+  tip.setAttribute("role", "tooltip");
+  document.body.append(tip);
+  let on = null,
+    timer = 0,
+    warmUntil = 0;
+  const place = (el) => {
+    const r = el.getBoundingClientRect();
+    if (!r.width && !r.height) return hide();
+    tip.textContent = el.getAttribute("data-tip") || "";
+    const tw = tip.offsetWidth,
+      th = tip.offsetHeight;
+    let up = el.hasAttribute("data-tip-up");
+    let y = up ? r.top - th - 6 : r.bottom + 6;
+    if (!up && y + th > innerHeight - 4) y = r.top - th - 6; // no room below: above
+    if (up && y < 4) y = r.bottom + 6;
+    const x = Math.max(8, Math.min(innerWidth - tw - 8, r.left + r.width / 2 - tw / 2));
+    tip.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+    tip.classList.add("on");
+  };
+  const show = (el) => {
+    clearTimeout(timer);
+    if (on === el) return;
+    on = el;
+    const go = () => on === el && el.isConnected && place(el);
+    if (performance.now() < warmUntil) go();
+    else timer = setTimeout(go, 300);
+  };
+  function hide() {
+    clearTimeout(timer);
+    if (on && tip.classList.contains("on")) warmUntil = performance.now() + 400;
+    on = null;
+    tip.classList.remove("on");
+  }
+  addEventListener("pointerover", (e) => {
+    const el = e.target.closest?.("[data-tip]");
+    if (el) show(el);
+    else if (on) hide();
+  });
+  addEventListener("pointerout", (e) => on && !on.contains(e.relatedTarget) && hide());
+  addEventListener("focusin", (e) => {
+    const el = e.target.closest?.("[data-tip]");
+    if (el && e.target.matches(":focus-visible")) show(el);
+  });
+  addEventListener("focusout", () => hide());
+  addEventListener("pointerdown", () => hide(), true);
+  addEventListener("scroll", () => hide(), true);
+  addEventListener("keydown", (e) => e.key === "Escape" && hide(), true);
+}
+
