@@ -154,8 +154,11 @@ export function mountHomeCanvas(host, items, { open, newTile = null, key = "" })
     if (!cv) return;
     el.classList.toggle("noboard", !it.board);
     const got = it.board ? G.bitmapFor(it.board) : null;
+    const was = el.classList.contains("waiting");
     el.classList.toggle("waiting", !!it.board && !got);
     if (!got) return;
+    // a picture that arrives while you watch fades in over its placeholder rather than popping
+    if (was && !rmo()) (el.classList.add("fresh"), setTimeout(() => el.classList.remove("fresh"), 320));
     const bmp = got.bmp;
     const s = sizeOf(+el.dataset.idx);
     const W = Math.round(s.w * res),
@@ -455,9 +458,11 @@ export function mountHomeCanvas(host, items, { open, newTile = null, key = "" })
   apply();
   request();
   // the first look: tiles arrive from the middle out; coming back, the one you opened is already
-  // there and the field gathers round it
-  if (!rmo()) {
+  // there and the field gathers round it. Under the intro, they arrive once the logo has landed.
+  const firstLook = () => {
     root.classList.add(backCell ? "return" : "arrive");
+    G.setBusy(true); // pictures decode once the tiles have arrived, not in the middle of it
+    setTimeout(() => !raf && !drag && G.setBusy(false), 560); // the middle tiles are in by then
     for (const el of tiles.values()) {
       const [cx, cy] = el.dataset.cell.split(",").map(Number);
       const d = Math.hypot(cx + cam.x / CW, cy + cam.y / CH);
@@ -468,6 +473,14 @@ export function mountHomeCanvas(host, items, { open, newTile = null, key = "" })
       root.classList.remove("arrive", "return");
       for (const el of tiles.values()) el.classList.remove("hback");
     }, 900);
+  };
+  if (!rmo()) {
+    if (document.querySelector(".intro")) {
+      // under the intro: nothing shows until it has handed over, then the field arrives
+      root.classList.add("held");
+      addEventListener("atelier:landed", () => root.isConnected && (root.classList.remove("held"), firstLook()), { once: true });
+    }
+    else firstLook();
   }
 
   return {

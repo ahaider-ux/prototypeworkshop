@@ -44,7 +44,7 @@ const PAGE = (kind) =>
 const PIECES = () => [
   ["frame", -490, -276, 300, 196, 1380, 3200, `<span class="flbl">Start screen</span>${PAGE("desk")}`],
   ["box hl", -475, -231, 150, 84, 1560, 2980, `<div class="box" style="width:150px;height:84px"><span class="lb"><i>1</i><span>Tighten the cards</span></span></div>`],
-  ["play", -342, -178, 0, 0, 1640, 2900, `<button type="button" class="bplay on" tabindex="-1"><span class="pic">${IC.play}</span><span class="plb">Play</span></button>`],
+  ["play", -262, -122, 0, 0, 1640, 2900, `<button type="button" class="bplay on" tabindex="-1"><span class="pic">${IC.play}</span><span class="plb">Play</span></button>`],
   ["frame sel", 350, -276, 140, 290, 1420, 3150, `<span class="flbl on">Checkout</span>${PAGE("phone")}<span class="isel">${CORNERS}</span><span class="sizetag">390 × 844</span>`],
   ["ink", 340, -54, 160, 70, 1600, 2880, "INK:circle"],
   ["note", -176, -286, 164, 0, 1520, 2840, `<div class="note warm" style="width:164px;position:relative"><div class="tx">Tighten the cards, they feel cramped</div><div class="by">You · now</div></div>`],
@@ -54,13 +54,13 @@ const PIECES = () => [
   ["panel tabs", -490, -52, 0, 0, 1440, 3300, "TABS"],
   ["panel branches", -490, 2, 250, 0, 1480, 3100, `<div class="shd"><span>Branches</span><span class="n">3</span></div><div class="pgs"><div class="pg on">${IC.board}<span class="t">Main</span></div><div class="pg">${IC.fork}<span class="t">Denser sidebar</span><span class="m ch cnt" data-to="3">2</span></div><div class="pg">${IC.fork}<span class="t">Roomier cards</span><span class="m ch">1</span></div></div>`],
   ["panel act", -490, 160, 250, 0, 1620, 2820, `<div class="arow"><span class="av agent">C</span><div class="tx"><div><b>Claude</b> <span class="tm">now</span></div><div class="msg">Finished "Polish pass": cards are 8px tighter</div></div></div>`],
-  ["panel recipe", 250, 54, 240, 0, 1500, 2960, `<div class="isec rcard"><div class="ih"><b>Polish pass</b><span class="tagro info">Auto</span><span class="tagro">v2</span></div><div class="rcs"><div class="rcbar" aria-hidden="true"><i class="m" style="flex:4"></i><i class="o" style="flex:1"></i></div><span class="rcst">5 runs · 4 merged · 80% kept</span></div><div class="rca"><button type="button" class="createbtn sm" tabindex="-1" disabled><span class="shimmer">Running…</span></button></div></div>`],
+  ["panel recipe", 250, 54, 240, 0, 1500, 2960, `<div class="isec rcard"><div class="ih"><b>Polish pass</b><span class="tagro info">Auto</span><span class="tagro">v2</span></div><div class="rcs"><div class="rcbar" aria-hidden="true"><i class="m" style="flex:4"></i><i class="o" style="flex:1"></i></div><span class="rcst">5 runs · 4 merged · 80% kept</span></div><div class="rca"><button type="button" class="createbtn sm" tabindex="-1"><span class="shimmer">Running…</span></button></div></div>`],
   ["merge", 70, 108, 0, 0, 1560, 3040, `<button type="button" class="createbtn" tabindex="-1">${IC.check}Review and merge</button>`],
-  ["toast", 150, 184, 0, 0, 2440, 3000, `<div class="toast is-open" style="position:relative"><div class="tcol"><span class="tt2">Merged Denser sidebar into Main</span><span class="tdesc">3 changes · the branch is archived</span></div></div>`],
+  ["toast", 150, 208, 0, 0, 2440, 3000, `<div class="toast is-open" style="position:relative"><div class="tcol"><span class="tt2">Merged Denser sidebar into Main</span></div></div>`],
   ["tray", -214, 196, 0, 0, 1580, 2920, `<div class="inktray" style="position:relative;left:auto;bottom:auto;transform:none">${["#111111", "#e03131", "#f76707", "#ffd43b", "#2f9e44", "#1c7ed6"].map((c, i) => `<span class="inkdot${i === 1 ? " on" : ""}" style="--ink:${c}"></span>`).join("")}</div>`],
   ["panel comp", -220, 78, 256, 0, 1680, 2860, `<div class="ccomp"><span class="cav">Y</span><div class="cbox"><span class="ctx">Make the button bolder</span><div class="cbar"><span class="cagent" aria-pressed="true">${IC.spark}Agent fixes this</span><span class="sp"></span><span class="csend">${IC.send}</span></div></div></div>`],
   ["toolbar", -267, 262, 0, 0, 1400, 3330, "TOOLBAR"],
-  ["cursor you", -150, 12, 0, 0, 1600, 2900, `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5 13 8l-4.3 1.2L7 13.5Z"/></svg><b>You</b>`],
+  ["cursor you", -176, 0, 0, 0, 1600, 2900, `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5 13 8l-4.3 1.2L7 13.5Z"/></svg><b>You</b>`],
   ["cursor agent", 228, -72, 0, 0, 1650, 2880, `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5 13 8l-4.3 1.2L7 13.5Z"/></svg><b>Claude</b>`],
 ];
 
@@ -142,6 +142,8 @@ function copyOf(id) {
   return c;
 }
 
+// the app is uncovered: the home canvas brings its pictures in now, once the logo has settled
+const landed = () => dispatchEvent(new Event("atelier:landed"));
 // index.html hides the app before first paint when the intro is due, so it never flashes up first
 const reveal = () => document.documentElement.removeAttribute("data-intro");
 
@@ -175,7 +177,7 @@ export function playIntro({ force = false } = {}) {
     removeEventListener("keydown", onKey, true);
     if (land === true && landInHeader()) return;
     root.classList.add("out");
-    setTimeout(() => (root.remove(), releasePages(), done()), 420);
+    setTimeout(() => (root.remove(), landed(), releasePages(), done()), 420);
   };
   // The ending: the paper lifts off the app and the lockup flies into the header, the name onto
   // the name and the pin onto the pin, so the intro hands over to the real logo it was all along.
@@ -185,6 +187,11 @@ export function playIntro({ force = false } = {}) {
     const pin = logo?.querySelector(".pinmark");
     const word = root.querySelector(".ilock");
     if (!wm || !pin || !word) return false;
+    // the pin was the i's dot: as it flies off it leaves one behind, and the word takes the header's
+    // spacing, so what lands is letter for letter the logo it hands over to
+    const li = word.querySelector(".li");
+    if (li) (li.textContent = "i"), li.classList.remove("li");
+    word.classList.add("flying");
     const B = wm.getBoundingClientRect(),
       C = pin.getBoundingClientRect(),
       A = word.getBoundingClientRect(),
@@ -192,15 +199,28 @@ export function playIntro({ force = false } = {}) {
     if (!B.width || !C.width || !A.width) return false;
     const kk = k();
     const sc = B.width / A.width; // land exactly on the header's word, edge to edge
-    const ease = "cubic-bezier(.22,1,.36,1)";
+    // a journey across the screen: it eases out of the middle and settles softly into the header
+    // (an ease-out alone covers half the way in the first frames and reads as a jump)
+    const ease = "cubic-bezier(.65,0,.25,1)",
+      FLY = 760;
     const from = getComputedStyle(word).transform;
     word.style.transformOrigin = "0 0";
-    word.animate([{ transform: from }, { transform: `translate(${(B.left - A.left) / kk}px, ${(B.top + B.height / 2 - A.top - (A.height * sc) / 2) / kk}px) ${from === "none" ? "" : from} scale(${sc})` }], { duration: 560, easing: ease, fill: "forwards" });
-    const mt = getComputedStyle(mk).transform;
-    mk.animate([{ transform: mt }, { transform: `translate(${(C.left + C.width / 2 - S.left - S.width / 2) / kk}px, ${(C.top + C.height / 2 - S.top - S.height / 2) / kk}px) scale(${C.width / (72 * kk)})` }], { duration: 560, easing: ease, fill: "forwards" });
+    word.animate([{ transform: from }, { transform: `translate(${(B.left - A.left) / kk}px, ${(B.top + B.height / 2 - A.top - (A.height * sc) / 2) / kk}px) ${from === "none" ? "" : from} scale(${sc})` }], { duration: FLY, easing: ease, fill: "forwards" });
+    // the pin rides on the i all the way in (same path, same clock as the word), then hops off to
+    // its own place beside the name, and the i's dot is there underneath it
+    const P = mk.getBoundingClientRect();
+    const L = { x: B.left, y: B.top + B.height / 2 - (A.height * sc) / 2 }; // where the word's corner lands
+    const at2 = (x, y, size) => `translate(${(x - S.left - S.width / 2) / kk}px, ${(y - S.top - S.height / 2) / kk}px) scale(${size / (72 * kk)})`;
+    const ride = at2(L.x + (P.left + P.width / 2 - A.left) * sc, L.y + (P.top + P.height / 2 - A.top) * sc, P.width * sc);
+    const home = at2(C.left + C.width / 2, C.top + C.height / 2, C.width);
+    const arc = at2((L.x + (P.left + P.width / 2 - A.left) * sc + C.left + C.width / 2) / 2, Math.min(L.y + (P.top + P.height / 2 - A.top) * sc, C.top + C.height / 2) - 3, (P.width * sc + C.width) / 2);
+    mk.animate([{ transform: getComputedStyle(mk).transform }, { transform: ride }], { duration: FLY, easing: ease, fill: "forwards" });
+    const HOP = 260;
+    setTimeout(() => mk.animate([{ transform: ride }, { transform: arc, offset: 0.45 }, { transform: home }], { duration: HOP, easing: "cubic-bezier(.3,.7,.4,1)", fill: "forwards" }), FLY);
     logo.classList.add("landing");
     root.classList.add("land");
-    setTimeout(() => (logo.classList.remove("landing"), root.remove(), releasePages(), done()), 600);
+    setTimeout(landed, FLY - 60); // the home arrives as the word settles, while the pin hops home
+    setTimeout(() => (logo.classList.remove("landing"), root.remove(), releasePages(), done()), FLY + HOP + 40);
     return true;
   };
   const onKey = (e) => e.key === "Escape" && (e.preventDefault(), end());

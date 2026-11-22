@@ -129,3 +129,25 @@ test("ui: the logo font is for the wordmark only", () => {
   assert.deepEqual(uses.sort(), [".ilock", ".tlogo b.wm"]);
   for (const f of ["app.js", "panels.js", "canvas.js", "home.js", "lib.js"]) assert.ok(!read(f).includes("--display"), `${f} sets the logo font`);
 });
+
+// The comment peek greys its header's meta text with ".pinpeek .ph span", which outranked the
+// avatar's own colour: an agent's "C" went grey on black and all but vanished.
+test("ui: a comment peek's avatar keeps its letter colour", () => {
+  const css = read("app.css");
+  assert.ok(!/\.pinpeek \.ph span\{/.test(css), "the meta-text rule must not reach the avatar span");
+  assert.match(css, /\.pinpeek \.ph span:not\(\.cav\)\{color:var\(--text-secondary\)\}/);
+});
+
+// The intro's ending: the pin was the i's dot, so as it flies into the header the word takes a real
+// "i" and the header's spacing (it used to land dotless and gain its dot at the swap), and the
+// flight eases in and out (an ease-out alone covered half the way in the first frames: a jump).
+test("ui: the intro lands letter for letter on the header logo", () => {
+  const js = read("intro.js");
+  const land = js.slice(js.indexOf("const landInHeader"), js.indexOf("const onKey"));
+  assert.match(land, /li\.textContent = "i"/);
+  assert.match(land, /classList\.add\("flying"\)/);
+  assert.ok(land.indexOf('li.textContent = "i"') < land.indexOf("getBoundingClientRect"), "swap before measuring");
+  assert.match(land, /cubic-bezier\(\.65,0,\.25,1\)/);
+  assert.match(read("app.css"), /\.ilock\.flying\{letter-spacing:-\.01em\}/);
+  assert.match(read("app.css"), /\.tlogo b\.wm\{[^}]*letter-spacing:-\.01em/, "the header's spacing it must match");
+});

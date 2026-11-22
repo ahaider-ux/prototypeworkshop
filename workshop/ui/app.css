@@ -968,7 +968,7 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .pinpeek{position:absolute;z-index:41;width:260px;padding:12px;border-radius:12px;background:var(--glass-bg,var(--bg-layer));-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass,var(--sh-md));pointer-events:none;display:flex;flex-direction:column;gap:6px;font-size:12px;line-height:16px}
 .pinpeek .ph{display:flex;align-items:center;gap:6px}
 .pinpeek .ph b{font-weight:500}
-.pinpeek .ph span{color:var(--text-secondary)}
+.pinpeek .ph span:not(.cav){color:var(--text-secondary)} /* not the avatar: its letter keeps its own colour */
 .pinpeek p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;color:var(--text-primary)}
 .pinpeek .pr{color:var(--text-accent)}
 .cav{width:24px;height:24px;border-radius:99px;flex-shrink:0;display:grid;place-items:center;background:var(--tag-grey);color:var(--text-primary);font:600 12px/1 var(--fakt)}
@@ -1063,26 +1063,28 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .intro{position:fixed;inset:0;z-index:1000;overflow:hidden;background:var(--i-paper);color:var(--i-ink);font-family:var(--fakt);cursor:default;transition:opacity 400ms cubic-bezier(.22,1,.36,1),transform 400ms cubic-bezier(.22,1,.36,1)}
 .intro.out{opacity:0;transform:scale(1.02);pointer-events:none}
 /* the landing: the paper lifts off the app while the lockup flies into the header */
-.intro.land{background:transparent;pointer-events:none;transition:background-color 400ms cubic-bezier(.22,1,.36,1) 100ms}
+.intro.land{background:transparent;pointer-events:none;transition:background-color 480ms cubic-bezier(.4,0,.2,1) 180ms}
 .tlogo.landing .pinmark,.tlogo.landing .wm{visibility:hidden}
 /* index.html sets data-intro before first paint when the intro is due: the app stays hidden until it covers it */
 html[data-intro] body{background:var(--i-paper)}
 html[data-intro] .app{visibility:hidden}
 .istage{position:absolute;left:50%;top:50%;width:1600px;height:1000px;transform:translate(-50%,-50%) scale(var(--k,1));transform-origin:50% 50%}
 /* the app's pieces at their real size, shown at poster scale */
-.icol{position:absolute;inset:0;transform-origin:50% 50%;transform:scale(1.5);animation:i-push 1400ms linear 1400ms both}
+.icol{position:absolute;inset:0;transform-origin:50% 50%;transform:scale(1.5);will-change:transform;animation:i-push 1400ms linear 1400ms both}
 @keyframes i-push{from{transform:scale(1.5)}to{transform:scale(1.56)}}
 /* a piece pops in with a little overshoot, and leaves by a cut */
 .ip{position:absolute;opacity:0;transform-origin:50% 50%;animation:i-in 420ms cubic-bezier(.22,1,.36,1) var(--in) both;pointer-events:none}
 @keyframes i-in{0%{opacity:0;transform:scale(.6)}1%{opacity:1}55%{transform:scale(1.045)}100%{opacity:1;transform:scale(1)}}
 .ip.cut{display:none!important}
+/* glass over flat paper shows only paper: no blur, which would be redone every frame under the slow push */
+.intro .ip *{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 .ip button{pointer-events:none}
 /* frames: a page with its title, and the selection as the canvas draws it */
 .ip.p-frame{background:var(--i-white);box-shadow:0 0 0 1px var(--border-subtle)}
 .ip.p-frame .flbl{position:absolute;left:0;top:-24px;font-size:14px;color:var(--text-secondary);white-space:nowrap}
 .ip.p-frame .flbl.on{color:var(--text-accent)}
 .ipg{position:absolute;inset:0;display:grid;gap:10px;padding:14px}
-.ipg i{border-radius:4px;background:var(--bg-input)}
+.ipg i{border-radius:4px;background:var(--bg-secondary)}
 .ipg.desk{grid-template-columns:22% 1fr 1fr 1fr;grid-template-rows:12% 1fr 1fr}
 .ipg.desk .sb{grid-row:1/4}
 .ipg.desk .hd{grid-column:2/4}
@@ -1123,7 +1125,7 @@ html[data-intro] .app{visibility:hidden}
 .ip.p-cursor.p-you svg{fill:var(--text-accent)}.ip.p-cursor.p-you b{background:var(--text-accent)}
 .ip.p-cursor.p-agent svg{fill:var(--i-orange)}.ip.p-cursor.p-agent b{background:var(--i-orange)}
 /* translate, not transform: the pop-in animation owns transform */
-.ip.p-cursor.go{translate:244px 122px}
+.ip.p-cursor.go{translate:270px 134px}
 /* the mark: a comment pin with an eye; it blinks */
 .pinmark{display:block;width:100%;height:100%;overflow:visible;--m-b:var(--text-accent);--m-e:var(--i-white)}
 .pinmark .pb{fill:var(--m-b)}
@@ -1169,6 +1171,7 @@ html[data-intro] .app{visibility:hidden}
 .ilock .lt{opacity:0;transform:translateY(10px)}
 .ilock .lt.on{opacity:1;transform:none;transition:transform 260ms cubic-bezier(.34,1.56,.64,1)}
 .ilock .li{padding:0 .05em}
+.ilock.flying{letter-spacing:-.01em} /* the header's spacing, so the swap is seamless */
 .iund{position:absolute;left:50%;top:100%;width:400px;height:36px;margin:2px 0 0 -200px;pointer-events:none;transition:opacity 120ms ease}
 .intro.land .iund{opacity:0}
 .ilock .lcar{position:absolute;bottom:4px;width:5px;height:76px;background:var(--text-accent);display:none;left:0}
@@ -1235,6 +1238,8 @@ html[data-intro] .app{visibility:hidden}
 .htile.waiting .htt{background:var(--skel)}
 .htile.waiting .htt::after{content:"";position:absolute;inset:0;background:var(--skel-hi);opacity:0;animation:hpulse 1100ms ease-in-out infinite alternate}
 @keyframes hpulse{to{opacity:.8}}
+.htile.fresh canvas{animation:hfresh 280ms ease-out}
+@keyframes hfresh{from{opacity:0}}
 .htile.noboard .htt::after{content:"No screens yet";position:absolute;inset:0;display:grid;place-items:center;font-size:12px;color:var(--text-placeholder)}
 /* the caption shows under a tile reached by keyboard, and always on touch screens (no pointer to name it) */
 .hcap{position:absolute;left:0;right:0;top:calc(100% + 12px);display:flex;flex-direction:column;gap:2px;padding:0 4px;opacity:0;pointer-events:none;transition:opacity 150ms ease}
@@ -1271,6 +1276,7 @@ html[data-intro] .app{visibility:hidden}
 .htile.ping .htt{animation:hping 900ms cubic-bezier(.22,1,.36,1)}
 @keyframes hping{30%{box-shadow:0 0 0 2px var(--text-accent),0 0 0 8px var(--ring-default)}100%{box-shadow:0 0 0 1px var(--border-subtle),0 0 0 0 transparent}}
 /* the first look: tiles arrive from the middle out */
+.hcanvas.held .htile{opacity:0}
 .hcanvas.arrive .htile{animation:harrive 460ms cubic-bezier(.22,1,.36,1) var(--d,0ms) both}
 @keyframes harrive{from{opacity:0;scale:.94}to{opacity:1;scale:1}}
 .hhint{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);padding:4px 14px;border-radius:99px;background:var(--bg-canvas);box-shadow:0 0 0 1px var(--border-subtle);font-size:16px;color:var(--text-secondary);pointer-events:none;transition:opacity 400ms ease}
@@ -1288,4 +1294,4 @@ html[data-intro] .app{visibility:hidden}
 @media (max-width:1100px){.hbl .vsep,.hrl,.hchips{display:none}}
 /* a phone: the space's name, the view switch and Import as an icon; Connect lives in the space menu */
 @media (max-width:700px){.hbar{left:8px;right:8px;top:8px;gap:8px}.hb{height:44px;padding-left:16px}.hbl{flex:1 1 auto}.hname{overflow:hidden;text-overflow:ellipsis}.hcount,.hbr .dbtn{display:none}.hbr .createbtn{width:32px;padding:0;gap:0;font-size:0}}
-@media (prefers-reduced-motion:reduce){.hcanvas.arrive .htile,.hcanvas.return .htile,.hcanvas.return .htile .htt,.htile.ping .htt,.htile.waiting .htt::after{animation:none}.htile.hot .htt,.htile.chosen .htt,.hcanvas:not(.grabbing) .htile.hot:active .htt,.hcur i{transform:none}}
+@media (prefers-reduced-motion:reduce){.hcanvas.arrive .htile,.hcanvas.return .htile,.hcanvas.return .htile .htt,.htile.ping .htt,.htile.waiting .htt::after,.htile.fresh canvas{animation:none}.htile.hot .htt,.htile.chosen .htt,.hcanvas:not(.grabbing) .htile.hot:active .htt,.hcur i{transform:none}}
