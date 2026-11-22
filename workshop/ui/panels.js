@@ -215,7 +215,7 @@ function renderActivity(body, foot, env) {
   } catch {}
   if (!list.length) body.append(h(`<div class="pempty"><b>Nothing here yet</b>Requests, branches, merges, frames, notes and agents' updates show up here, for people and agents alike. Agents read it before they start.</div>`));
   let day = "";
-  const box = h(`<div class="acts"></div>`);
+  const box = h(`<div class="actfeed"></div>`); // not .acts: that is the banner's button row
   for (const e of list) {
     const d = new Date(e.at).toDateString();
     if (d !== day) {
@@ -316,7 +316,7 @@ function railBadges() {
 function agentLine() {
   const ws = S.ws;
   const hs = ws?.harnesses || [];
-  return hs.length ? `${hs[0].client} is connected` : ws?.agent ? `Requests run with ${ws.agent.name}` : "No agent connected";
+  return hs.length ? `Requests go to ${hs[0].client}` : ws?.agent ? `Requests run with ${ws.agent.name}` : "No agent connected"; // the status row below says who is connected
 }
 
 function pageMeta(e) {
@@ -641,7 +641,8 @@ export function renderBanner() {
       if (d.behind) parts.push(`${d.behind} behind`);
     }
     b.append(h(IC.fork), h(`<b title="${esc(env.name)}">${esc(env.name)}</b>`), h(`<span class="meta">${parts.join(" · ")}</span>`), h(`<span class="vsep"></span>`), h(`<span class="acts"></span>`));
-    const cmp = add(`<button type="button" class="ghbtn sm" aria-pressed="${S.compare}">${IC.compare}${S.compare ? "Hide compare" : `Compare with ${esc(pageName(parent))}`}</button>`, () => fire("compare"));
+    const cmpLabel = S.compare ? "Hide compare" : `Compare with ${pageName(parent)}`;
+    const cmp = add(`<button type="button" class="ghbtn sm bcmp" aria-pressed="${S.compare}" aria-label="${esc(cmpLabel)}" data-tip="${esc(cmpLabel)}">${IC.compare}<span class="bl">${esc(cmpLabel)}</span></button>`, () => fire("compare"));
     cmp.title = `Show ${pageName(parent)}'s screens above this branch's`;
     if (d?.behind) add(`<button type="button" class="dbtn sm">Update from ${esc(pageName(parent))}</button>`, () => fire("update-from-main", env.id));
     const rv = add(`<button type="button" class="createbtn sm">Review and merge</button>`, () => fire("review", env.id));

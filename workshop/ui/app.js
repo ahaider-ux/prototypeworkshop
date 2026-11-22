@@ -25,10 +25,28 @@ const store = {
 };
 
 // ---------- data ----------
-async function loadWorkspace() {
-  const ws = await api("workspace");
+// Answers can arrive out of order (a branch created, an agent writing to it a moment later, a second
+// load started meanwhile). An older answer must never overwrite a newer one: a load that a newer load
+// has overtaken waits for that one instead, and a prototype fetched on its own after a load began keeps
+// its fresher record. (A stale record keeps a stale look, and the canvas keeps a stale picture.)
+let wsSeq = 0,
+  wsLatest = null;
+const envFetched = new Map(); // env id → when its own record was last asked for
+function loadWorkspace() {
+  const seq = ++wsSeq;
+  const started = performance.now();
+  const run = (async () => {
+    const ws = await api("workspace");
+    if (seq !== wsSeq) return wsLatest;
+    applyWorkspace(ws, started);
+  })();
+  wsLatest = run;
+  return run;
+}
+function applyWorkspace(ws, started) {
+  const prev = S.envs;
   S.ws = ws;
-  S.envs = new Map(ws.envs.map((e) => [e.id, e]));
+  S.envs = new Map(ws.envs.map((e) => [e.id, (envFetched.get(e.id) || 0) > started && prev.get(e.id) ? prev.get(e.id) : e]));
   S.items = new Map(ws.items.map((i) => [i.id, i]));
   if (S.sel && S.sel.item && !S.items.has(S.sel.item)) clearSel();
   S.tabs = S.tabs.filter((id) => S.envs.has(id) && !isBranch(S.envs.get(id)));
@@ -1062,6 +1080,7 @@ async function onEvent(ev) {
   if (ev.kind === "env") {
     if (!S.envs.has(ev.id)) return loadWorkspace();
     try {
+      envFetched.set(ev.id, performance.now());
       S.envs.set(ev.id, await api(`envs/${ev.id}`));
     } catch {
       return loadWorkspace();
@@ -1069,7 +1088,7 @@ async function onEvent(ev) {
     S.diffs.delete(ev.id);
     for (const e of envList()) if (e.parent === ev.id) S.diffs.delete(e.id);
     // branches that still read this prototype's files look different now too
-    await Promise.all(envList().filter((e) => e.base === ev.id).map(async (e) => S.envs.set(e.id, await api(`envs/${e.id}`).catch(() => e))));
+    await Promise.all(envList().filter((e) => e.base === ev.id).map(async (e) => (envFetched.set(e.id, performance.now()), S.envs.set(e.id, await api(`envs/${e.id}`).catch(() => e)))));
     reloadEnv(ev.id, ev.files || []);
     for (const e of envList()) if (e.base === ev.id) reloadEnv(e.id, ev.files || []);
     if (S.view === "home") return renderHome();

@@ -917,7 +917,7 @@ export class Store {
     Object.assign(meta, { name: title, description: "", parent: id, base: id, branch: { from: id, at: now(), snapshot: await this.snapshotOf(id) }, created: now(), author });
     await this.writeMeta(nid, meta);
     await this.copyBoards(id, nid, author);
-    await this.log({ kind: "branch", text: `Branched "${title}" from ${src.parent ? `"${src.name}"` : "main"}`, env: nid, by: author });
+    await this.log({ kind: "branch", text: `Branched "${title}" from ${src.parent ? `"${src.name}"` : "Main"}`, env: nid, by: author });
     return this.getEnv(nid);
   }
 

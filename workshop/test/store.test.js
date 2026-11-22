@@ -472,3 +472,14 @@ test("comments: a pin moves on its board, and comments and resolves reach the ac
   assert.ok(texts.includes("Replied: Agreed"));
   assert.ok(texts.some((t) => /^Resolved a comment: Too tight/.test(t)));
 });
+
+test("activity: a branch of a prototype says it came from Main, as the canvas calls it everywhere", async () => {
+  const s = await Store.open(await tmp());
+  const e = await s.createEnv({ html: HTML, name: "Sample" });
+  const br = await s.branchEnv(e.id, { name: "Denser", author: "You" });
+  const sub = await s.branchEnv(br.id, { name: "Even denser", author: "You" });
+  const texts = (await s.activity()).map((a) => a.text);
+  assert.ok(texts.includes('Branched "Denser" from Main'), texts.join(" / "));
+  assert.ok(texts.includes('Branched "Even denser" from "Denser"'), texts.join(" / "));
+  assert.ok(sub.id);
+});

@@ -84,3 +84,23 @@ test("ui: the tab row moves on one path", () => {
   assert.doesNotMatch(panels, /ICON = small \? 30 : 32/, "the pill is placed from computed geometry, not constants");
   assert.match(panels, /if \(at === pillAt\) return/, "a re-render never snaps the pill");
 });
+
+// Found clicking through branching and merging:
+// - the activity feed's list was .acts, the same name as the banner's button row, which then stacked
+//   its buttons in a column and hung "Review and merge" off the banner;
+// - --lw/--rw lived on the stage, so the toasts (outside it) got none and sat over the top-left corner;
+// - a field inside .afld-in drew its own ring inside the wrapper's: two rings.
+test("ui: branch banner, toast placement and field focus", () => {
+  const css = read("app.css");
+  assert.doesNotMatch(css, /(^|\n)\.acts\{[^}]*flex-direction:column/, "no bare .acts column rule");
+  assert.match(read("panels.js"), /class="actfeed"/);
+  assert.match(css, /\.app\{--lw:\d+px;--rw:\d+px\}/, "panel widths are set on the whole app");
+  assert.match(css, /\.afld-in input:focus-visible\{box-shadow:none\}/);
+});
+
+// An older workspace answer must never overwrite a newer one (it keeps a stale look and picture).
+test("ui: workspace loads are order-safe", () => {
+  const app = read("app.js");
+  assert.match(app, /if \(seq !== wsSeq\) return wsLatest;/);
+  assert.match(app, /envFetched\.get\(e\.id\) \|\| 0\) > started/);
+});

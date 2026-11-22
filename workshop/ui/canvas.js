@@ -1262,6 +1262,9 @@ export function drawHud() {
   } else if (s?.kind === "el" && S.mode === "design") {
     selRect = elScreenRect(s.item, s.el);
     placeBox(HUD.sel, selRect, selRect ? s.info?.label || s.el.localName : null);
+    // an element at the top of its board would put its tag over the board's title: tag it below instead
+    const bt = selRect && item(s.item) ? screenRect(item(s.item)) : null;
+    if (bt && selRect.y - bt.y < 24) HUD.sel.classList.add("flip");
   } else placeBox(HUD.sel, null);
   const many = s?.kind === "multi" ? selIds() : [];
   for (const [id, el] of NEL) el.classList.toggle("on", s?.item === id || many.includes(id));
