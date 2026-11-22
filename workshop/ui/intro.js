@@ -24,7 +24,7 @@ const KEY = "atelier-intro-v2";
 const W = 1600,
   H = 1000;
 // the mark: a comment pin with an eye
-export const PIN_MARK = `<svg class="pinmark" viewBox="0 0 24 24" aria-hidden="true"><path class="pb" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><g class="eye"><circle class="ew" cx="13.4" cy="10.6" r="3.6"/><circle class="ep" cx="14.3" cy="10.9" r="1.6"/></g></svg>`;
+export const PIN_MARK = `<svg class="pinmark" viewBox="0 0 24 24" aria-hidden="true"><path class="pb" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><g class="eye"><circle class="ew" cx="13.4" cy="10.6" r="3.6"/></g></svg>`;
 const CORNERS = `<i class="ic1"></i><i class="ic2"></i><i class="ic3"></i><i class="ic4"></i>`;
 // a real marker stroke, from Atelier's own pen engine
 const inkPath = (pts, pen = "marker", size = 7) => outline(pts, pen, size, 1);
