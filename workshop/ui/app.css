@@ -614,6 +614,10 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 /* the human voice: handwritten hints and annotations, never on buttons or labels */
 .hand{font-family:var(--hand);font-size:15px;line-height:1.3;color:var(--text-secondary)}
 .app.home-on .work{display:none}
+/* opening a prototype from home: the editor fades in where the chosen picture landed */
+.app:not(.home-on) .work{animation:workin 180ms ease-out}
+@keyframes workin{from{opacity:0}}
+@media (prefers-reduced-motion:reduce){.app:not(.home-on) .work{animation:none}}
 
 /* ═══ Inspector additions ═══ */
 .lineage{display:flex;flex-direction:column;gap:4px;font-size:12px;line-height:1.5;color:var(--text-secondary)}
@@ -1214,13 +1218,17 @@ html[data-intro] .app{visibility:hidden}
 .home.hc{overflow:hidden;position:relative}
 .hcanvas{position:absolute;inset:0;overflow:clip;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
 .hcanvas.grabbing{cursor:grabbing}
-.hcanvas.grabbing .htile{pointer-events:none} /* no hover flicker under a drag */
+.hcanvas.grabbing .htile{pointer-events:none}
 .hworld{position:absolute;left:0;top:0;will-change:transform}
-.htile{position:absolute;left:0;top:0;width:320px;display:flex;flex-direction:column;gap:10px;padding:0;border-radius:12px;background:none;text-align:left;cursor:pointer}
-.htt{position:relative;display:block;width:320px;height:200px;border-radius:12px;overflow:hidden;background:var(--bg-layer);box-shadow:0 0 0 1px var(--border-subtle),var(--sh-sm);transition:box-shadow 180ms cubic-bezier(.22,1,.36,1),transform 150ms cubic-bezier(.22,1,.36,1)}
+/* tiles: pictures only, each in its screen's shape (size set by home.js); captions come from the pointer */
+.htile{position:absolute;left:0;top:0;padding:0;border-radius:12px;background:none;text-align:left;cursor:inherit}
+.htile.hot{z-index:2}
+.htt{position:absolute;inset:0;display:block;border-radius:12px;overflow:hidden;background:var(--bg-layer);box-shadow:0 0 0 1px var(--border-subtle),var(--sh-sm);transition:transform 180ms cubic-bezier(.22,1,.36,1),box-shadow 180ms cubic-bezier(.22,1,.36,1)}
+.htile.tall,.htile.tall .htt{border-radius:20px}
 .htt canvas{display:block;width:100%;height:100%}
-.htile:hover .htt{box-shadow:0 0 0 1px var(--border-default),var(--sh-md)}
-.htile:active .htt{transform:scale(.97)}
+/* the picture under the pointer swells (after design.cash.app): slower in than out */
+.htile.hot .htt{transform:scale(1.1);box-shadow:0 0 0 1px var(--border-default),var(--sh-md);transition-duration:240ms}
+.hcanvas:not(.grabbing) .htile.hot:active .htt{transform:scale(1.07);transition-duration:120ms}
 .htile:focus-visible{box-shadow:none}
 .htile:focus-visible .htt{box-shadow:0 0 0 2px var(--ring-default)}
 /* a picture on its way: a quiet pulse in the skeleton tones */
@@ -1228,19 +1236,44 @@ html[data-intro] .app{visibility:hidden}
 .htile.waiting .htt::after{content:"";position:absolute;inset:0;background:var(--skel-hi);opacity:0;animation:hpulse 1100ms ease-in-out infinite alternate}
 @keyframes hpulse{to{opacity:.8}}
 .htile.noboard .htt::after{content:"No screens yet";position:absolute;inset:0;display:grid;place-items:center;font-size:12px;color:var(--text-placeholder)}
-.hcap{display:flex;flex-direction:column;gap:2px;padding:0 4px}
+/* the caption shows under a tile reached by keyboard, and always on touch screens (no pointer to name it) */
+.hcap{position:absolute;left:0;right:0;top:calc(100% + 12px);display:flex;flex-direction:column;gap:2px;padding:0 4px;opacity:0;pointer-events:none;transition:opacity 150ms ease}
 .hcap b{font:500 13px/1.3 var(--fakt);color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hcap .m{font-size:12px;line-height:1.4;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.htile:focus-visible .hcap{opacity:1}
+@media (hover:none){.hcap{opacity:1}}
 .htile.hnew .htt{display:grid;place-items:center;background:transparent;box-shadow:inset 0 0 0 1.5px var(--border-default);color:var(--text-secondary)}
-.htile.hnew:hover .htt{background:var(--bg-layer)}
+.htile.hnew.hot .htt{background:var(--bg-layer)}
 .hplus .ic{width:20px;height:20px}
+/* the pointer: a dot that grows over a picture and names it (mouse and pen only) */
+.hcur{position:absolute;left:0;top:0;z-index:4;pointer-events:none;opacity:0;transition:opacity 150ms ease}
+.hcur i{position:absolute;left:-5px;top:-5px;width:10px;height:10px;border-radius:50%;background:var(--tip-bg);box-shadow:0 0 0 1.5px var(--tip-ink);transition:transform 180ms cubic-bezier(.22,1,.36,1)}
+.hcur.on i{transform:scale(1.5)}
+.hcanvas.down .hcur i{transform:scale(.7);transition-duration:100ms}
+.hlab{position:absolute;left:16px;top:12px;display:flex;gap:6px;height:28px;padding:0 12px;align-items:center;border-radius:99px;background:var(--tip-bg);color:var(--tip-ink);font-size:12px;white-space:nowrap;opacity:0;transform:translateY(-2px) scale(.94);transform-origin:0 50%;transition:opacity 120ms ease,transform 120ms ease}
+.hlab b{font-weight:500}
+.hlab span{opacity:.6}
+.hlab span:empty{display:none}
+.hcur.on .hlab{opacity:1;transform:none;transition-duration:180ms}
+.hcanvas.grabbing .hlab{opacity:0}
+@media (hover:hover) and (pointer:fine){.hcanvas.pointing,.hcanvas.pointing .htile{cursor:none}.hcanvas.pointing .hcur{opacity:1}}
+/* opening one: the field clears, it glides to the middle and swells, then the editor takes over */
+.hcanvas.leaving .htile:not(.chosen){opacity:0;transition:opacity 200ms ease-out}
+.htile.chosen{z-index:3}
+.htile.chosen .htt{transform:scale(1.16);box-shadow:0 0 0 1px var(--border-default),var(--sh-md);transition:transform 340ms cubic-bezier(.32,.72,0,1)}
+.hcanvas.leaving .hcur,.hcanvas.leaving .hhint,.home.hleaving .hbar{opacity:0;transition:opacity 160ms ease-out}
+/* coming back: the one you opened settles and the field gathers round it */
+.hcanvas.return .htile:not(.hback){animation:hreturn 320ms ease-out var(--d,0ms) both}
+.hcanvas.return .htile.hback .htt{animation:hsettle 420ms cubic-bezier(.22,1,.36,1) both}
+@keyframes hreturn{from{opacity:0}}
+@keyframes hsettle{from{transform:scale(1.16)}}
 /* pointed out from the bar */
 .htile.ping .htt{animation:hping 900ms cubic-bezier(.22,1,.36,1)}
 @keyframes hping{30%{box-shadow:0 0 0 2px var(--text-accent),0 0 0 8px var(--ring-default)}100%{box-shadow:0 0 0 1px var(--border-subtle),0 0 0 0 transparent}}
 /* the first look: tiles arrive from the middle out */
-.hcanvas.arrive .htile{animation:harrive 420ms cubic-bezier(.22,1,.36,1) var(--d,0ms) both}
-@keyframes harrive{from{opacity:0;translate:0 12px}to{opacity:1;translate:0 0}}
-.hhint{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);font-size:16px;color:var(--text-secondary);pointer-events:none;transition:opacity 400ms ease}
+.hcanvas.arrive .htile{animation:harrive 460ms cubic-bezier(.22,1,.36,1) var(--d,0ms) both}
+@keyframes harrive{from{opacity:0;scale:.94}to{opacity:1;scale:1}}
+.hhint{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);padding:4px 14px;border-radius:99px;background:var(--bg-canvas);box-shadow:0 0 0 1px var(--border-subtle);font-size:16px;color:var(--text-secondary);pointer-events:none;transition:opacity 400ms ease}
 .hcanvas.used .hhint{opacity:0}
 /* the bar over it */
 .hbar{position:absolute;left:16px;right:16px;top:16px;z-index:5;display:flex;justify-content:space-between;gap:12px;pointer-events:none}
@@ -1253,4 +1286,6 @@ html[data-intro] .app{visibility:hidden}
 .hchip:hover{background:var(--bg-secondary-hover)}
 .hchip:active{transform:scale(.97)}
 @media (max-width:1100px){.hbl .vsep,.hrl,.hchips{display:none}}
-@media (prefers-reduced-motion:reduce){.hcanvas.arrive .htile,.htile.ping .htt,.htile.waiting .htt::after{animation:none}}
+/* a phone: the space's name, the view switch and Import as an icon; Connect lives in the space menu */
+@media (max-width:700px){.hbar{left:8px;right:8px;top:8px;gap:8px}.hb{height:44px;padding-left:16px}.hbl{flex:1 1 auto}.hname{overflow:hidden;text-overflow:ellipsis}.hcount,.hbr .dbtn{display:none}.hbr .createbtn{width:32px;padding:0;gap:0;font-size:0}}
+@media (prefers-reduced-motion:reduce){.hcanvas.arrive .htile,.hcanvas.return .htile,.hcanvas.return .htile .htt,.htile.ping .htt,.htile.waiting .htt::after{animation:none}.htile.hot .htt,.htile.chosen .htt,.hcanvas:not(.grabbing) .htile.hot:active .htt,.hcur i{transform:none}}

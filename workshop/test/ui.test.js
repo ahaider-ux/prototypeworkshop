@@ -104,3 +104,20 @@ test("ui: workspace loads are order-safe", () => {
   assert.match(app, /if \(seq !== wsSeq\) return wsLatest;/);
   assert.match(app, /envFetched\.get\(e\.id\) \|\| 0\) > started/);
 });
+
+// On a phone the home bar's two pills used to fight for the width: the left one shrank to a stub
+// and the right one ran off the screen. Below 700px the bar keeps the name, the view switch and an
+// icon-only Import (Connect a folder is in the space menu).
+// Opening a prototype fades the bar out on #home; a fresh canvas must clear that, or the bar stays
+// invisible when you come back.
+test("ui: the home bar fits a phone, and coming back shows it again", () => {
+  const css = read("app.css");
+  const phone = css.match(/@media \(max-width:700px\)\{\.hbar[^\n]*/)?.[0] || "";
+  assert.match(phone, /\.hcount,\.hbr \.dbtn\{display:none\}/);
+  assert.match(phone, /\.hbr \.createbtn\{[^}]*font-size:0/);
+  assert.match(read("app.js"), /label: "Connect a folder…"/, "Connect stays reachable from the space menu");
+  const home = read("home.js");
+  const mount = home.slice(home.indexOf("export function mountHomeCanvas"));
+  assert.ok(mount.indexOf('host.classList.remove("hleaving")') < mount.indexOf("host.append(root)"), "mount clears the leaving state first");
+  assert.match(home.slice(home.indexOf("destroy()")), /host\.classList\.remove\("hleaving"\)/);
+});

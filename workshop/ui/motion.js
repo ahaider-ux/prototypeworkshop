@@ -16,6 +16,11 @@ export function spiral(n) {
   }
   return out.slice(0, n);
 }
+// a few cells in reading order, in as few rows as reads well: up to 3 in one row, then two rows
+export function block(n) {
+  const cols = n <= 3 ? n : Math.ceil(n / 2);
+  return Array.from({ length: n }, (_, i) => [i % cols, Math.floor(i / cols)]);
+}
 // cubic-bezier easing (x → y), solved with a few Newton steps
 export function bezier([x1, y1, x2, y2]) {
   // coefficients of B(t) = ((a·t + b)·t + c)·t for control points p1, p2 (p0 = 0, p3 = 1)
@@ -41,4 +46,12 @@ export function bezier([x1, y1, x2, y2]) {
 }
 // rubber band past an edge: the further you pull, the less it gives (as iOS does)
 export const rubber = (over, dim) => (1 - 1 / ((Math.abs(over) * 0.55) / dim + 1)) * dim * Math.sign(over);
+// a thumbnail's size on the home canvas: the screen's own shape, wide screens a fixed width and
+// tall ones a fixed height, so phones read as phones next to desktop pages. Odd or missing sizes
+// fall back to a desktop shape; extreme shapes are clamped so nothing becomes a sliver.
+export function tileSize(w, h, wide = 320, tall = 296) {
+  let r = w > 0 && h > 0 && Number.isFinite(w / h) ? w / h : 1.6;
+  r = Math.max(0.42, Math.min(2.4, r));
+  return r >= 1 ? { w: wide, h: Math.round(wide / r) } : { w: Math.round(tall * r), h: tall };
+}
 

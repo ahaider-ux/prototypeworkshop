@@ -287,7 +287,7 @@ function renderHomeCanvas(rs) {
     homeCv?.destroy();
     el.replaceChildren();
     el.classList.add("hc");
-    homeCv = mountHomeCanvas(el, items, { open: openItem, newTile: openImport });
+    homeCv = mountHomeCanvas(el, items, { open: openItem, newTile: openImport, key: S.ws.home || S.ws.name });
   } else homeCv.update(items);
   // the bar floating over it: the space, recent prototypes (each glides the canvas to its tile), the view
   el.querySelector(".hbar")?.remove();

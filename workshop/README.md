@@ -27,10 +27,14 @@ npm start
 Open http://127.0.0.1:4600. The server only listens on this computer.
 
 **Home.** Every prototype in the space sits on a canvas you can drag around, with momentum, or
-scroll with a trackpad or wheel. The most recent is in the middle and the rest spiral out from it.
-With seven or more the canvas wraps around forever; with fewer it has soft edges that pull back.
-The bar on top shows the space, the most recent prototypes (click one to glide to it) and a switch
-to a plain list. Thumbnails are pictures, not live pages, so it stays smooth however many there are.
+scroll with a trackpad or wheel. Each is a picture in its screen's own shape, so phones read as
+phones. The most recent is in the middle and the rest spiral out from it; with seven or more the
+canvas wraps around forever, and with fewer they sit in a small centred block with soft edges.
+The pointer becomes a dot that names the prototype it's over, and the picture swells a little.
+Opening one clears the canvas around it and glides it to the middle; when you come back, it's
+still there in the middle. On a touch screen the names sit under the pictures instead. The bar on
+top shows the space, the most recent prototypes (click one to glide to it) and a switch to a plain
+list. Thumbnails are pictures, not live pages, so it stays smooth however many there are.
 
 **Type.** Atelier sets big moments (the wordmark, page titles, the intro) in Zilla Slab, the
 interface in Schibsted Grotesk, and sticky notes in Shantell Sans, a marker handwriting. All three

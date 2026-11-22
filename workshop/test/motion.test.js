@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spiral, bezier, rubber } from "../ui/motion.js";
+import { spiral, block, bezier, rubber, tileSize } from "../ui/motion.js";
 
 test("motion: the home spiral visits every cell around the centre once, nearest first", () => {
   const cells = spiral(25);
@@ -40,4 +40,27 @@ test("motion: the rubber band gives less the further it is pulled, and never mor
   assert.ok(b > a && b < 1000);
   assert.ok(c < 1000);
   assert.equal(rubber(-100, 1000), -a);
+});
+
+// Thumbnails take their screen's shape, so a phone reads as a phone next to a desktop page. A board
+// with a missing, zero or absurd size must still get a sane tile, never NaN or a sliver.
+test("motion: home tiles keep the screen's shape within fixed bounds", () => {
+  assert.deepEqual(tileSize(1440, 900), { w: 320, h: 200 });
+  const phone = tileSize(390, 844);
+  assert.equal(phone.h, 296);
+  assert.ok(phone.w > 120 && phone.w < 150, `phone width ${phone.w}`);
+  for (const [w, h] of [[0, 0], [undefined, 900], [1440, 0], [NaN, NaN], [-5, 10], [Infinity, 1]]) {
+    const s = tileSize(w, h);
+    assert.ok(Number.isFinite(s.w) && Number.isFinite(s.h) && s.w > 0 && s.h > 0, `${w}x${h} → ${JSON.stringify(s)}`);
+  }
+  assert.ok(tileSize(10000, 10).h >= 320 / 2.4 - 1, "a very wide page is clamped, not a sliver");
+  assert.ok(tileSize(10, 10000).w >= 296 * 0.42 - 1, "a very tall page is clamped, not a sliver");
+});
+
+test("motion: a few prototypes sit in one row, then two, in reading order", () => {
+  assert.deepEqual(block(1), [[0, 0]]);
+  assert.deepEqual(block(3), [[0, 0], [1, 0], [2, 0]]);
+  assert.deepEqual(block(4), [[0, 0], [1, 0], [0, 1], [1, 1]]);
+  assert.deepEqual(block(7).at(-1), [2, 1]);
+  assert.equal(new Set(block(7).map((c) => c.join())).size, 7, "no cell twice");
 });
