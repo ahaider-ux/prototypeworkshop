@@ -65,6 +65,9 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   drawings carry only what's shown: hidden parts emptied, CSS trimmed to what matches, each picture
   once. They decode one at a time when idle. Bump `DRAWING` in `ui/gfx.js` when what goes into a
   drawing changes. `ui/snap.js` takes no imports: it runs inside any prototype.
+  The home canvas (`ui/home.js`) follows the same rules: one transform on one layer for the camera,
+  only tiles in view exist, thumbnails come from that pipeline (`thumbJob`, `onBitmap`), and decodes
+  wait while someone drags (`setBusy`). Its pure maths lives in `ui/motion.js`, tested in Node.
 - **The canvas shell scales below 1180px** (`fitShell`). Anything measured with
   `getBoundingClientRect` and written into a style inside `#frame` is divided by `frScale()`
   (`inFrame()` in `ui/lib.js` does it for menus).

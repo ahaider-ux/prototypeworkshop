@@ -7,6 +7,7 @@ import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDi
 import { rulesFor, loadOverrides } from "./styles.js";
 import { loadRecipes } from "./recipes.js";
 import { playIntro } from "./intro.js";
+import { mountHomeCanvas } from "./home.js";
 
 const store = {
   get(k, d) {
@@ -250,16 +251,81 @@ function lastEdit(rootId) {
   for (const tk of S.tasks) if (fam.has(tk.env)) see(tk.updatedAt);
   return t ? new Date(t).toISOString() : null;
 }
+// Home shows the space as a canvas of prototypes (home.js) or as a list of cards; the choice is
+// remembered in this browser.
+let homeCv = null;
+const homeView = () => {
+  try {
+    return localStorage.getItem("ws-home-view") === "list" ? "list" : "canvas";
+  } catch {
+    return "canvas";
+  }
+};
+function setHomeView(v) {
+  try {
+    localStorage.setItem("ws-home-view", v);
+  } catch {}
+  homeKey = "";
+  renderHome();
+}
+const viewSwitch = () => segmented([{ label: "Canvas", value: "canvas" }, { label: "List", value: "list" }], homeView(), setHomeView, { label: "Show prototypes as" });
+function homeItems(rs) {
+  return rs
+    .map((e) => {
+      const open = familyOf(e.id).filter((x) => isBranch(x.env) && !x.env.archived).length;
+      const edited = lastEdit(e.id);
+      const n = boardsOf(e.id).length;
+      return { id: e.id, name: e.name, edited, board: boardsOf(e.id)[0] || null, meta: [plural(n, "screen"), open ? plural(open, "open branch", "open branches") : "", edited ? `edited ${timeAgo(edited)}` : ""].filter(Boolean).join(" · ") };
+    })
+    .sort((a, b) => String(b.edited || "").localeCompare(String(a.edited || "")));
+}
+function renderHomeCanvas(rs) {
+  const el = $("home");
+  const items = homeItems(rs);
+  const openItem = (it) => go(S.envs.has(lastPage.get(it.id)) ? lastPage.get(it.id) : it.id);
+  if (!homeCv || !el.querySelector(".hcanvas")) {
+    homeCv?.destroy();
+    el.replaceChildren();
+    el.classList.add("hc");
+    homeCv = mountHomeCanvas(el, items, { open: openItem, newTile: openImport });
+  } else homeCv.update(items);
+  // the bar floating over it: the space, recent prototypes (each glides the canvas to its tile), the view
+  el.querySelector(".hbar")?.remove();
+  const bar = h(`<div class="hbar"><div class="hb hbl"><b class="hname">${esc(S.ws.name)}</b><span class="hcount">${plural(rs.length, "prototype")}</span><span class="vsep"></span><span class="hrl">Recent</span><span class="hchips"></span></div><div class="hb hbr"></div></div>`);
+  const chips = bar.querySelector(".hchips");
+  for (const it of items.slice(0, 4)) {
+    const c = h(`<button type="button" class="hchip" data-tip="Show it">${esc(it.name)}</button>`);
+    c.onclick = () => homeCv.show(it.id);
+    c.ondblclick = () => openItem(it);
+    chips.append(c);
+  }
+  const r = bar.querySelector(".hbr");
+  r.append(viewSwitch());
+  if (S.ws.spaces) {
+    const sp = h(`<button type="button" class="dbtn sm">${IC.folder}Connect a folder</button>`);
+    sp.onclick = () => openSpaces();
+    r.append(sp);
+  }
+  const im = h(`<button type="button" class="createbtn sm">${IC.upload}Import HTML</button>`);
+  im.onclick = openImport;
+  r.append(im);
+  el.append(bar);
+}
 function renderHome() {
   if (S.view !== "home") return;
   const rs = roots();
-  const key = JSON.stringify([S.ws.name, S.ws.home, rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen])]);
+  const key = JSON.stringify([homeView(), S.ws.name, S.ws.home, rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen, lastEdit(e.id)])]);
   if (key === homeKey) return;
   homeKey = key;
+  if (homeView() === "canvas" && rs.length) return renderHomeCanvas(rs);
+  homeCv?.destroy();
+  homeCv = null;
   const el = $("home");
+  el.classList.remove("hc");
   const inner = h(`<div class="in"></div>`);
   const linked = rs.some((e) => e.linked);
   const hh = h(`<div class="hh"><div class="tt"><h1>${esc(S.ws.name)}</h1><p>${S.ws.home ? `<span class="hpath" title="${esc(S.ws.home)}">${IC.folder}${esc(S.ws.home)}</span>` : ""}${linked ? "Prototypes here are edited in place. " : ""}Try each idea on a branch, mark it up or ask an agent, then review and merge.</p></div><div class="hacts">${S.ws.spaces ? `<button type="button" class="dbtn" data-a="sp">${IC.folder}Connect a folder</button>` : ""}<button type="button" class="createbtn" data-a="im">${IC.upload}Import HTML</button></div></div>`);
+  if (rs.length) hh.querySelector(".hacts").prepend(viewSwitch());
   hh.querySelector('[data-a="im"]').onclick = openImport;
   const spb = hh.querySelector('[data-a="sp"]');
   if (spb) spb.onclick = () => openSpaces();

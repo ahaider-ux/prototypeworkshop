@@ -26,6 +26,12 @@ npm start
 
 Open http://127.0.0.1:4600. The server only listens on this computer.
 
+**Home.** Every prototype in the space sits on a canvas you can drag around, with momentum, or
+scroll with a trackpad or wheel. The most recent is in the middle and the rest spiral out from it.
+With seven or more the canvas wraps around forever; with fewer it has soft edges that pull back.
+The bar on top shows the space, the most recent prototypes (click one to glide to it) and a switch
+to a plain list. Thumbnails are pictures, not live pages, so it stays smooth however many there are.
+
 **Type.** Atelier sets big moments (the wordmark, page titles, the intro) in Zilla Slab, the
 interface in Schibsted Grotesk, and sticky notes in Shantell Sans, a marker handwriting. All three
 are OFL-1.1. Font files don't live in this repository: Atelier serves them from a

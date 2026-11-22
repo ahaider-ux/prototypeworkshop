@@ -37,6 +37,16 @@ export function initGfx(canvasEl, hostEl, { ready, frame, look } = {}) {
   if (ready) onReady = ready;
   if (frame) onFrame = frame;
 }
+// other views that show these pictures (the home canvas) hear when one is ready
+const LISTENERS = new Set();
+export const onBitmap = (fn) => (LISTENERS.add(fn), () => LISTENERS.delete(fn));
+const ready = (k) => {
+  onReady(k);
+  for (const fn of LISTENERS) fn(k);
+};
+// While someone drags or flings a canvas, decodes wait: one would hold a frame for 100–300 ms.
+let busy = false;
+export const setBusy = (b) => (busy = !!b);
 export const rev = (env) => REV.get(env) || 0;
 export function invalidate(env) {
   REV.set(env, rev(env) + 1);
@@ -73,7 +83,7 @@ async function loadSaved(k, w, h) {
       if (again && CACHE.has(k)) {
         CACHE.get(k).bmp.close?.();
         CACHE.set(k, { ...CACHE.get(k), bmp: again });
-        onReady(k);
+        ready(k);
       }
     }, 900);
     return bmp;
@@ -94,8 +104,11 @@ function save(k, svg) {
 let decoding = Promise.resolve();
 const idle = () => new Promise((r) => (window.requestIdleCallback ? requestIdleCallback(() => r(), { timeout: 600 }) : setTimeout(r, 16)));
 // (src is set inside the turn: an SVG image starts parsing, the costly part, as soon as it has one)
+const calm = async () => {
+  while (busy) await new Promise((r) => setTimeout(r, 120));
+};
 function decodeInTurn(img, url) {
-  const turn = decoding.then(idle).then(() => ((img.src = url), img.decode()));
+  const turn = decoding.then(calm).then(idle).then(() => ((img.src = url), img.decode()));
   decoding = turn.catch(() => {});
   return turn;
 }
@@ -152,7 +165,7 @@ function store(k, bmp, w, h) {
       v.bmp.close?.();
     }
   }
-  onReady(k);
+  ready(k);
 }
 // a board that is mounted live hands over its picture directly
 export async function captureLive(it, doc) {

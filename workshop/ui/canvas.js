@@ -324,6 +324,8 @@ export function sync() {
   dirty = true;
 }
 
+// a background-pool job for one board (the home canvas uses it for its thumbnails)
+export const thumbJob = (it) => ({ key: G.keyOf(it), it: { ...it }, src: boardSrc({ ...it, id: `snap-${it.id}` }), textEdits: !!S.envs.get(it.env)?.patches?.length });
 function boardSrc(it) {
   const q = new URLSearchParams({ "ws-board": it.id });
   // a frame shows its own page of the prototype
