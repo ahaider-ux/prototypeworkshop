@@ -5,7 +5,7 @@
 // inside it; Interact hands the pointer to the page.
 
 import { S, on, fire, itemsOf, isBranch, screenName, pageItems, pageEnv, plural } from "./state.js";
-import { $, h, esc, clamp, frScale, api, toast, IC, menu, rmo, timeAgo } from "./lib.js";
+import { $, h, esc, clamp, frScale, api, toast, IC, menu, rmo, timeAgo, loadPage } from "./lib.js";
 import { commitRules, preview, endPreview, undoStyle, idle as stylesIdle } from "./styles.js";
 import * as G from "./gfx.js";
 import { record, rid, remap, undo as histUndo, redo as histRedo } from "./history.js";
@@ -356,7 +356,7 @@ function mount(id) {
   fr.addEventListener("load", () => b.frame === fr && onBoardLoad(b));
   b.el.insertBefore(fr, b.hit);
   b.el.classList.add("live");
-  fr.src = b.src;
+  loadPage(fr, b.src);
   gfxDirty = true;
 }
 // put a live page away; it leaves a fresh bitmap behind if it changed while live
@@ -372,6 +372,7 @@ function unmount(id, now = false) {
     b.ready = false;
     b.shown = false;
     b.el.classList.remove("live", "ready");
+    fr.dataset.want = ""; // a load still waiting on the intro must not land after this
     fr.src = "about:blank";
     fr.remove();
     gfxDirty = true;
@@ -615,7 +616,7 @@ export function reloadBoard(id) {
   b.shown = false;
   b.el.classList.remove("ready");
   b.src = boardSrc(it);
-  b.frame.src = b.src;
+  loadPage(b.frame, b.src);
   flash(id, "Updated");
 }
 function flash(id, text) {
@@ -816,12 +817,12 @@ function planLinks() {
       f.setAttribute("allow", "clipboard-write; fullscreen");
       f.loading = "lazy";
       f.title = embedLabel(it);
-      f.src = embedUrl(it.url);
+      loadPage(f, embedUrl(it.url));
       e.el.append(f);
       e.frame = f;
       e.url = it.url;
     } else if (on && e.url !== it.url) {
-      e.frame.src = embedUrl(it.url);
+      loadPage(e.frame, embedUrl(it.url));
       e.url = it.url;
     } else if (!on && e.frame) {
       e.frame.remove();

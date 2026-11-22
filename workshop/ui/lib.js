@@ -326,3 +326,21 @@ export async function copyText(text) {
     toast("Couldn't copy", "Select the text and copy it yourself");
   }
 }
+
+// Prototype pages wait while the intro plays: a page loading behind it takes the main thread for
+// 50–100 ms at a time and the intro stutters. Loads queue up and go, a few frames apart, once it ends.
+let held = null;
+export const holdPages = () => (held = held || []);
+export function releasePages() {
+  const q = held || [];
+  held = null;
+  q.forEach((fn, i) => setTimeout(fn, i * 40));
+}
+// resolves when pages may load
+export const pagesFree = () => (held ? new Promise((r) => held.push(r)) : Promise.resolve());
+// point a frame at a page, now or once the intro is over (only if nothing asked for another page since)
+export function loadPage(fr, src) {
+  fr.dataset.want = src;
+  if (!held) return void (fr.src = src);
+  held.push(() => fr.dataset.want === src && (fr.src = src));
+}

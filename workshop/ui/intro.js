@@ -17,7 +17,7 @@
 // Skips on a click or Esc. Shown once per browser; replay from the Atelier menu or /?intro.
 // Reduced motion: the final lockup only.
 
-import { h, IC } from "./lib.js";
+import { h, IC, holdPages, releasePages } from "./lib.js";
 import { outline } from "./ink.js";
 
 const KEY = "atelier-intro-v2";
@@ -154,6 +154,7 @@ export function playIntro({ force = false } = {}) {
   const root = h(`<div class="intro${still ? " still" : ""}" role="dialog" aria-label="Welcome to Atelier. Click or press Escape to continue."><div class="istage"><div class="icol"></div><div class="itile">${CORNERS}<div class="iopen"></div><div class="ibrand">${PIN_MARK}</div></div><div class="ilock" aria-hidden="true"><span class="lt">a</span><span class="lt">t</span><span class="lt">e</span><span class="lt">l</span><span class="lt li">ı</span><span class="lt">e</span><span class="lt">r</span><span class="lcar"></span><span class="iund">${inkSvg("under")}</span></div><div class="imk">${CORNERS}${PIN_MARK}</div></div></div>`);
   document.body.append(root);
   reveal(); // the intro covers the app now
+  holdPages(); // and the prototype pages behind it wait until it's over, so it plays smooth
   const stage = root.querySelector(".istage");
   const k = () => Math.min(innerWidth / W, innerHeight / H);
   const fit = () => stage.style.setProperty("--k", k().toFixed(4));
@@ -174,7 +175,7 @@ export function playIntro({ force = false } = {}) {
     removeEventListener("keydown", onKey, true);
     if (land === true && landInHeader()) return;
     root.classList.add("out");
-    setTimeout(() => (root.remove(), done()), 420);
+    setTimeout(() => (root.remove(), releasePages(), done()), 420);
   };
   // The ending: the paper lifts off the app and the lockup flies into the header, the name onto
   // the name and the pin onto the pin, so the intro hands over to the real logo it was all along.
@@ -199,7 +200,7 @@ export function playIntro({ force = false } = {}) {
     mk.animate([{ transform: mt }, { transform: `translate(${(C.left + C.width / 2 - S.left - S.width / 2) / kk}px, ${(C.top + C.height / 2 - S.top - S.height / 2) / kk}px) scale(${C.width / (72 * kk)})` }], { duration: 560, easing: ease, fill: "forwards" });
     logo.classList.add("landing");
     root.classList.add("land");
-    setTimeout(() => (logo.classList.remove("landing"), root.remove(), done()), 600);
+    setTimeout(() => (logo.classList.remove("landing"), root.remove(), releasePages(), done()), 600);
     return true;
   };
   const onKey = (e) => e.key === "Escape" && (e.preventDefault(), end());

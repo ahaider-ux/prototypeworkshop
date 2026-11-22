@@ -8,6 +8,8 @@
 // board shows: its prototype's look (a hash of its files, overrides and settings, from the server),
 // screen, state and size. Opening a page again, or a branch nobody has changed, draws at once.
 
+import { pagesFree } from "./lib.js";
+
 const LEVEL = 0.5; // bitmaps are kept at half size: sharp up to 50% zoom on a 1× screen
 const POOL = 3; // background pages loading at once
 const MAX_BITMAPS = 160; // Guard: bitmaps are ~2 MB each at half size; past this the oldest go
@@ -320,6 +322,7 @@ async function render({ key, it, src, textEdits }) {
   // saved from an earlier visit (or by a branch that looks the same): no page to load at all
   const kept = await loadSaved(key, it.w, it.h);
   if (kept) return store(key, kept, it.w, it.h);
+  await pagesFree(); // not while the intro plays (lib.js)
   const fr = document.createElement("iframe");
   fr.setAttribute("aria-hidden", "true");
   fr.tabIndex = -1;
