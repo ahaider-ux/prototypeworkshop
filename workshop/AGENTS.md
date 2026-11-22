@@ -33,7 +33,8 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
 - **Atelier has its own look, not Libra's.** The editor's colours, shadows, type and motion come
   from the Atelier tokens at the top of `ui/app.css` (warm oat neutrals on paper, a faint grain on the canvas and home, surfaces set apart by tone
   and hairlines before shadows, a tool-blue accent for selection and links only; empty states carry a
-  hand-drawn mark; type in
+  hand-drawn mark; shapes: what you press is a pill and icon buttons are circles, list rows are
+  rounded 8, fields 10, sheets 16 and panels 20; type in
   three tokens: `--display` Zilla Slab for big moments only, `--fakt` Schibsted Grotesk for the
   interface, `--hand` Shantell Sans for notes and handwritten marks, never on buttons; mono only for
   code). Font files are never committed here: `src/fonts.js` serves them from a craft-fonts
