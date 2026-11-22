@@ -20,16 +20,16 @@
   color-scheme:light;
   --text-primary:#1c1b18;--text-primary-warm:#1c1b18;--text-secondary:#5c5950;--text-placeholder:#77736a;--text-muted:#77736a;
   --text-disabled:#bab6ab;--text-accent:#2f6df6;--text-error:#d92d20;--text-success:#12805c;--badge:#2f6df6;
-  --bg-shell:#f6f4ee;--bg-base:#fbfaf6;--bg-layer:#fffefb;--bg-input:#f2f0e9;--bg-hover:#ebe8df;--bg-warm:#f3f1ea;--bg-canvas:#efece4;
-  --bg-secondary:#efede6;--bg-secondary-hover:#e6e2d8;--bg-primary:#1c1b18;--bg-primary-hover:#34322d;
+  --bg-shell:#f6f4ee;--bg-base:#fbfaf6;--bg-layer:#fffefb;--bg-input:#fffefb;--bg-hover:rgba(86,79,44,.09);--bg-warm:rgba(96,88,46,.06);--bg-canvas:#efece4;
+  --bg-secondary:rgba(96,88,46,.07);--bg-secondary-hover:rgba(86,79,44,.12);--bg-primary:#1c1b18;--bg-primary-hover:#34322d;
   --bg-error:#d92d20;--bg-error-hover:#b42318;--bg-overlay:rgba(28,27,24,.28);--accent-subtle:#edf2fe;
-  --tag-grey:#efece4;--tag-info-bg:#e5edfe;--tag-success-bg:#dff3ea;
-  --border-subtle:#e7e3d9;--border-crumb:#e7e3d9;--border-default:#d3cec2;--border-white:rgba(255,255,255,.9);
-  --switch-off:#dcd8cd;--switch-on:#2f6df6;--ring-default:rgba(47,109,246,.55);--menu-hover:#f2f0e9;
+  --tag-grey:rgba(96,88,46,.08);--tag-info-bg:#e5edfe;--tag-success-bg:#dff3ea;
+  --border-subtle:rgba(71,64,36,.13);--border-crumb:rgba(71,64,36,.13);--border-default:rgba(71,64,36,.24);--border-white:rgba(255,255,255,.9);
+  --switch-off:#dcd8cd;--switch-on:#2f6df6;--ring-default:rgba(47,109,246,.55);--menu-hover:rgba(96,88,46,.07);
   --on-primary:#fffefb;--on-accent:#fff;--tip-bg:#1c1b18;--tip-ink:#fbfaf6;--knob:#fff;
   --note-bg:#fff6d6;--note-edge:#f1e2a6;--guide:#f2482a;
   --i-paper:#f7f6f2;--i-ink:#18181b;--i-red:#e03131;--i-orange:#f76707;--i-yellow:#ffd43b;--i-lime:#dcefb4;--i-green:#2f9e44;--i-greenl:#b9dbb0;--i-violet:#7048e8;--i-peri:#c3cffb;--i-perid:#2c3e9e;--i-lav:#e4e1fb;--i-peach:#ffd9bd;--i-sky:#d7e6f7;--i-grey:#d6d6da;--i-greyl:#ececee;--i-white:#fff;--skel:#ece9e1;--skel-hi:#f7f5f0;
-  --sh-sm:0 1px 2px rgba(28,27,24,.05);--sh-md:0 6px 18px rgba(28,27,24,.07),0 0 0 .5px rgba(28,27,24,.08);--sh-field:0 0 0 1px rgba(28,27,24,.07);
+  --sh-sm:0 1px 2px rgba(28,27,24,.05);--sh-md:0 6px 18px rgba(28,27,24,.07),0 0 0 .5px rgba(28,27,24,.08);--sh-field:0 0 0 1px rgba(71,64,36,.16);
   --sh-btn:0 0 0 1px rgba(28,27,24,.07),0 1px 2px rgba(28,27,24,.04);
   --sh-chat:0 6px 18px rgba(28,27,24,.07),0 0 0 1px rgba(28,27,24,.07);--sh-modal:0 18px 44px rgba(28,27,24,.12),0 0 0 .5px rgba(28,27,24,.08);
   /* paper: a faint, even grain on the canvas and home, like a sheet under the work (texture, not a gradient) */
@@ -45,17 +45,17 @@
 :root[data-ltheme="dark"]{color-scheme:dark;
   --text-primary:#eeece6;--text-primary-warm:#eeece6;--text-secondary:#a9a59b;--text-placeholder:#959085;--text-muted:#948f84;--text-disabled:#5f5b53;
   --text-accent:#6b9bff;--text-error:#ff6b5e;--text-success:#4fcf98;--badge:#6b9bff;
-  --bg-shell:#171614;--bg-base:#1d1c19;--bg-layer:#23221f;--bg-input:#2c2a26;--menu-hover:#2c2a26;--bg-hover:#34322d;--bg-warm:#1d1c19;--bg-canvas:#131210;
-  --bg-secondary:#2c2a26;--bg-secondary-hover:#37352f;--bg-primary:#eeece6;--bg-primary-hover:#d6d3cb;--bg-overlay:rgba(0,0,0,.55);
-  --accent-subtle:rgba(107,155,255,.14);--tag-grey:#302e29;--tag-info-bg:rgba(107,155,255,.18);--tag-success-bg:rgba(79,207,152,.16);
-  --border-subtle:#302e29;--border-crumb:#302e29;--border-default:#46433c;--border-white:rgba(255,255,255,.06);
+  --bg-shell:#171614;--bg-base:#1d1c19;--bg-layer:#23221f;--bg-input:#1f1e1b;--menu-hover:rgba(255,248,226,.06);--bg-hover:rgba(255,248,226,.09);--bg-warm:rgba(255,248,226,.05);--bg-canvas:#131210;
+  --bg-secondary:rgba(255,248,226,.07);--bg-secondary-hover:rgba(255,248,226,.12);--bg-primary:#eeece6;--bg-primary-hover:#d6d3cb;--bg-overlay:rgba(0,0,0,.55);
+  --accent-subtle:rgba(107,155,255,.14);--tag-grey:rgba(255,248,226,.08);--tag-info-bg:rgba(107,155,255,.18);--tag-success-bg:rgba(79,207,152,.16);
+  --border-subtle:rgba(255,248,226,.09);--border-crumb:rgba(255,248,226,.09);--border-default:rgba(255,248,226,.17);--border-white:rgba(255,255,255,.06);
   --switch-off:#3c3a34;--switch-on:#6b9bff;--ring-default:rgba(107,155,255,.6);
   --on-primary:#1c1b18;--on-accent:#fff;--tip-bg:#eeece6;--tip-ink:#1c1b18;--knob:#fff;
   --note-bg:#3a3420;--note-edge:#4d4428;--guide:#ff6b4a;
   --i-paper:#f7f6f2;--i-ink:#18181b;--i-red:#e03131;--i-orange:#f76707;--i-yellow:#ffd43b;--i-lime:#dcefb4;--i-green:#2f9e44;--i-greenl:#b9dbb0;--i-violet:#7048e8;--i-peri:#c3cffb;--i-perid:#2c3e9e;--i-lav:#e4e1fb;--i-peach:#ffd9bd;--i-sky:#d7e6f7;--i-grey:#d6d6da;--i-greyl:#ececee;--i-white:#fff;--skel:#2b2925;--skel-hi:#36342f;
   --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .98 0 0 0 0 .94 .06 .06 0 0 -.05'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --sh-sm:0 1px 2px rgba(0,0,0,.5);--sh-md:0 12px 32px rgba(0,0,0,.5),0 0 0 .5px rgba(255,255,255,.08);
-  --sh-field:0 0 0 1px rgba(255,255,255,.06);--sh-btn:0 0 0 1px rgba(255,255,255,.07),0 1px 2px rgba(0,0,0,.4);
+  --sh-field:0 0 0 1px rgba(255,248,226,.11);--sh-btn:0 0 0 1px rgba(255,255,255,.07),0 1px 2px rgba(0,0,0,.4);
   --sh-chat:0 10px 30px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.07);--sh-modal:0 16px 40px rgba(0,0,0,.5),0 0 0 .5px rgba(255,255,255,.08);
 }
 
@@ -63,7 +63,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none!important}
 html,body{height:100%;overflow:hidden;overscroll-behavior:none}
-body{font-family:var(--fakt);background:var(--bg-shell);color:var(--text-primary);font-size:14px;line-height:1.3;-webkit-font-smoothing:antialiased}
+body{letter-spacing:.01em;font-family:var(--fakt);background:var(--bg-shell);color:var(--text-primary);font-size:14px;line-height:1.3;-webkit-font-smoothing:antialiased}
 img,svg{display:block}
 button{font-family:var(--fakt);border:none;background:none;cursor:pointer;color:inherit;font-size:14px}
 input,textarea,select{font-family:var(--fakt);border:none;background:none;outline:none;color:var(--text-primary);font-size:14px}
@@ -1189,3 +1189,5 @@ html[data-intro] .app{visibility:hidden}
 .ddtrig{padding:0 10px 0 14px}
 .lp .ddtrig{padding:0 8px 0 12px}
 .brtag{border-radius:99px;padding:0 10px 0 8px}
+/* meta tags read like Granola's "Today · 2" pills: outlined in the hairline, not filled (coloured ones stay filled) */
+.tagro:not(.info):not(.ok):not(.err){background:transparent;box-shadow:inset 0 0 0 1px var(--border-default);color:var(--text-secondary)}

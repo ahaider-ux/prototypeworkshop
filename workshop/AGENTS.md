@@ -32,7 +32,8 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   optional and only used for screenshots when it is already installed.
 - **Atelier has its own look, not Libra's.** The editor's colours, shadows, type and motion come
   from the Atelier tokens at the top of `ui/app.css` (warm oat neutrals on paper, a faint grain on the canvas and home, surfaces set apart by tone
-  and hairlines before shadows, a tool-blue accent for selection and links only; empty states carry a
+  and hairlines before shadows; soft fills, hovers and hairlines are translucent warm tints so they sit
+  on paper, white and glass alike; fields are white with a hairline; meta tags are outlined; a tool-blue accent for selection and links only; empty states carry a
   hand-drawn mark; shapes: what you press is a pill and icon buttons are circles, list rows are
   rounded 8, fields 10, sheets 16 and panels 20; padding follows the control scale at the end
   of `ui/app.css` (32-tall pills 14 a side, 28-tall 12, 24-tall 8, a leading icon takes 2 off the left); type in
