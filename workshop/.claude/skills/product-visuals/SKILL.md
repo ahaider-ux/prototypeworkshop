@@ -344,4 +344,5 @@ What worked:
 
 | Date | Direction | Look + devices | Why |
 |---|---|---|---|
+| 2026-11-23 | The mark in depth | Lit tile (a top-light gradient, a bright top rim, a dark lower edge, a soft shadow in the tile's own colour); the pin with light, shade, a rim and a set-in eye, from shared gradients | Flat fills read as clip art next to dimensional app icons (60fps.design's app gallery, the owner's examples); kept one colour and one shape, so it stays the same mark |
 | 2026-11-23 | Studio light, in depth | Studio light; hero at scale, popover on a cropped surface, lift, macro DOF, focus pull, pointer on the control | Matches the studio-white app; product-led like the references (Shopify admin, Paper, Flora); every piece real |

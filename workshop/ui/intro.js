@@ -27,8 +27,9 @@ import { outline } from "./ink.js";
 const KEY = "atelier-intro-v2";
 const W = 1600,
   H = 1000;
-// the mark: a comment pin with an eye
-export const PIN_MARK = `<svg class="pinmark" viewBox="0 0 24 24" aria-hidden="true"><path class="pb" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><g class="eye"><circle class="ew" cx="13.4" cy="10.6" r="3.6"/></g></svg>`;
+// the mark: a comment pin with an eye, with depth: its light, shade and top rim come from shared
+// gradients in index.html (white and black at low opacity), so they suit any colour the pin takes
+export const PIN_MARK = `<svg class="pinmark" viewBox="0 0 24 24" aria-hidden="true"><path class="pb" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><path class="pl" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><path class="ps" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><path class="pr" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><g class="eye"><circle class="ew" cx="13.4" cy="10.6" r="3.6"/><circle class="ei" cx="13.4" cy="10.6" r="3.6"/></g></svg>`;
 const CORNERS = `<i class="ic1"></i><i class="ic2"></i><i class="ic3"></i><i class="ic4"></i>`;
 // a real marker stroke, from Atelier's own pen engine
 const inkPath = (pts, pen = "marker", size = 7) => outline(pts, pen, size, 1);
@@ -282,7 +283,13 @@ export function playIntro({ force = false } = {}) {
   at(3580, () => root.classList.add("lock"));
   at(3820, blink);
   // the name types on while the pin hops up to watch; then it drops onto the i
-  at(3960, () => (root.classList.add("typing"), mk.classList.add("hop")));
+  // the pin rises to wait right above where the ı will be (the letters are laid out before they
+  // show), so when it drops it falls straight down onto the stem
+  at(3960, () => {
+    root.classList.add("typing");
+    const d = dotAt();
+    mk.animate([{ transform: getComputedStyle(mk).transform }, { transform: `translate(${d.cx - W / 2}px, ${d.cy - 78 - H / 2}px) scale(${(d.size * 1.25) / 72})` }], { duration: 460, easing: "cubic-bezier(.34,1.3,.64,1)", fill: "forwards" });
+  });
   const caret = root.querySelector(".ilock .lcar");
   const type = (i) => {
     letters[i].classList.add("on");
@@ -297,20 +304,20 @@ export function playIntro({ force = false } = {}) {
   at(END, () => end(true));
 
   // the pin, from wherever it is, onto the dot of the i
-  function placeDot(now) {
+  // where the pin sits as the i's dot: on top of the ı's stem, centred over it, overlapping a hair
+  function dotAt() {
     const word = root.querySelector(".ilock");
     const li = word.querySelector(".li");
     const W0 = word.getBoundingClientRect(); // the word itself doesn't move while the pin drops
     const s = stage.getBoundingClientRect();
     const kk = k();
-    const em = li.offsetHeight; // the line is 1em tall
-    const size = em * 0.34;
+    const size = li.offsetHeight * 0.34; // the line is 1em tall
     const st = stemOf(word, li);
-    // the pin sits on top of the ı's stem, centred over it, overlapping it a hair so it reads as its dot
-    const cx = (W0.left - s.left) / kk + st.x;
-    const cy = (W0.top - s.top) / kk + st.top - size * 0.42;
+    return { cx: (W0.left - s.left) / kk + st.x, cy: (W0.top - s.top) / kk + st.top - size * 0.42, size };
+  }
+  function placeDot(now) {
+    const { cx, cy, size } = dotAt();
     const target = `translate(${cx - W / 2}px, ${cy - H / 2}px) scale(${size / 72})`;
-    mk.classList.remove("hop");
     if (now) return void (mk.style.transform = target);
     mk.animate([{ transform: getComputedStyle(mk).transform }, { transform: target }], { duration: 380, easing: "cubic-bezier(.34,1.4,.64,1)", fill: "forwards" });
     setTimeout(() => {

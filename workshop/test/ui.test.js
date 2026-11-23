@@ -208,8 +208,9 @@ test("ui: the intro pin is placed from the live font's layout", () => {
   const js = read("intro.js");
   assert.match(js, /export function stemOf\(word, li\)/);
   assert.match(js, /height:1ex;vertical-align:baseline/);
-  const place = js.slice(js.indexOf("function placeDot"), js.indexOf("return finished;", js.indexOf("function placeDot")));
+  const place = js.slice(js.indexOf("function dotAt"), js.indexOf("return finished;", js.indexOf("function dotAt")));
   assert.match(place, /stemOf\(word, li\)/);
+  assert.match(place, /function placeDot\(now\) \{\s*const \{ cx, cy, size \} = dotAt\(\);/, "the drop and the wait above use the same spot");
   assert.ok(!/measureText|getContext/.test(js), "no canvas measurement");
 });
 
@@ -248,4 +249,27 @@ test("ui: product pictures keep to the content rules", () => {
   const ids = [...v.matchAll(/\{ id: "([a-z]+)", title:/g)].map((m) => m[1]);
   assert.equal(ids[0], "intro", "the flow starts with the intro step");
   for (const id of ids) assert.ok(art.includes(`  ${id}: () =>`), `${id} has its picture`);
+});
+
+// The intro's letters used to rise and overshoot as they typed, and the word changed its spacing as
+// it set off for the header, so letters jumped. Typed letters now appear where they stand, the
+// spacing is the header's from the start, and the last flash's pin is exactly the lone pin.
+test("ui: the intro's letters and pin never jump", () => {
+  const css = read("app.css");
+  assert.match(css, /\.ilock \.lt\{opacity:0;filter:blur\(3px\)\}/);
+  assert.ok(!/\.ilock \.lt(\.on)?\{[^}]*transform/.test(css), "no rise or overshoot on letters");
+  const lock = /\.ilock\{[^}]*letter-spacing:([-.\d]+em)/.exec(css)?.[1];
+  const flying = /\.ilock\.flying\{letter-spacing:([-.\d]+em)\}/.exec(css)?.[1];
+  assert.equal(lock, flying, "the word keeps its spacing when it flies");
+  assert.match(css, /\.itile\.f4 \.ibrand \.pinmark\{width:75%;height:75%;--m-b:var\(--text-accent\)/, "the last flash is the lone pin's size and colour");
+  assert.ok(!/"hop"/.test(read("intro.js")), "the pin waits above the ı, measured, not at a fixed hop");
+});
+
+// The mark has depth everywhere it appears: light, shade, a top rim and a set-in eye, from shared
+// gradients; and Atelier has an app icon in the tab.
+test("ui: the mark has depth, and the tab has the app icon", () => {
+  const html = read("index.html");
+  for (const id of ["pm-light", "pm-shade", "pm-rim", "pm-eye"]) assert.ok(html.includes(`id="${id}"`), id);
+  for (const src of [html, read("intro.js")]) assert.match(src, /class="pb"[^>]*\/><path class="pl"[^>]*\/><path class="ps"[^>]*\/><path class="pr"/);
+  assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="data:image\/svg\+xml,/);
 });
