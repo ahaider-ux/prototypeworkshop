@@ -46,12 +46,15 @@ export function bezier([x1, y1, x2, y2]) {
 }
 // rubber band past an edge: the further you pull, the less it gives (as iOS does)
 export const rubber = (over, dim) => (1 - 1 / ((Math.abs(over) * 0.55) / dim + 1)) * dim * Math.sign(over);
-// a thumbnail's size on the home canvas: the screen's own shape, wide screens a fixed width and
-// tall ones a fixed height, so phones read as phones next to desktop pages. Odd or missing sizes
-// fall back to a desktop shape; extreme shapes are clamped so nothing becomes a sliver.
-export function tileSize(w, h, wide = 320, tall = 296) {
-  let r = w > 0 && h > 0 && Number.isFinite(w / h) ? w / h : 1.6;
-  r = Math.max(0.42, Math.min(2.4, r));
-  return r >= 1 ? { w: wide, h: Math.round(wide / r) } : { w: Math.round(tall * r), h: tall };
+// where a screen's picture goes inside a card's picture area (W × H): a wide page fills it from the
+// top (cover); a tall one (a phone) sits whole in the middle with a margin. Odd or missing sizes
+// fill the area rather than producing NaN.
+export function fitIn(w, h, W, H) {
+  if (!(w > 0 && h > 0 && W > 0 && H > 0) || ![w, h, W, H].every(Number.isFinite)) return { x: 0, y: 0, w: W || 0, h: H || 0, cover: true };
+  if (w >= h) {
+    const s = Math.max(W / w, H / h);
+    return { x: (W - w * s) / 2, y: 0, w: w * s, h: h * s, cover: true };
+  }
+  const s = Math.min(W / w, H / h) * 0.86;
+  return { x: (W - w * s) / 2, y: (H - h * s) / 2, w: w * s, h: h * s, cover: false };
 }
-

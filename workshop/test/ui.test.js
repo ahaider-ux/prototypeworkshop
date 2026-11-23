@@ -173,3 +173,18 @@ test("ui: the intro's pin steps aside while the word lands", () => {
   assert.ok(land.indexOf('classList.remove("landing")') < land.indexOf('classList.add("pinin")'), "the header pin appears as the word is set");
   assert.match(read("app.css"), /\.tlogo\.pinin \.pinmark\{animation:i-pinin/);
 });
+
+// Made-up apps once filled the canvas and the intro, with no real buttons behind them. Cards are
+// only real prototypes; a spare place is an empty-state card whose click does the real thing, and
+// the intro's screen is Atelier's own empty state, not a fake design.
+test("ui: nothing made up stands in for a prototype", () => {
+  const app = read("app.js");
+  const homeCanvas = app.slice(app.indexOf("function renderHomeCanvas"), app.indexOf("function renderHome()"));
+  for (const run of ["run: openImport", "run: () => openSpaces()", "run: openConnect"]) assert.ok(homeCanvas.includes(run), `the home's empty-state cards do something real: ${run}`);
+  const home = read("home.js");
+  assert.match(home, /if \(idx < 0\) return actions\[-idx - 1\]\?\.run\?\.\(\)/);
+  const intro = read("intro.js");
+  const page = intro.slice(intro.indexOf("const PAGE"), intro.indexOf("\n", intro.indexOf("const PAGE")));
+  assert.match(page, /class="pempty/, "the intro's screen is the empty state");
+  assert.ok(!/class="ipg|class="pc"/.test(page), "no made-up page or project cards");
+});

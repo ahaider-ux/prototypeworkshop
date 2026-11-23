@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spiral, block, bezier, rubber, tileSize } from "../ui/motion.js";
+import { spiral, block, bezier, rubber, fitIn } from "../ui/motion.js";
 
 test("motion: the home spiral visits every cell around the centre once, nearest first", () => {
   const cells = spiral(25);
@@ -42,19 +42,21 @@ test("motion: the rubber band gives less the further it is pulled, and never mor
   assert.equal(rubber(-100, 1000), -a);
 });
 
-// Thumbnails take their screen's shape, so a phone reads as a phone next to a desktop page. A board
-// with a missing, zero or absurd size must still get a sane tile, never NaN or a sliver.
-test("motion: home tiles keep the screen's shape within fixed bounds", () => {
-  assert.deepEqual(tileSize(1440, 900), { w: 320, h: 200 });
-  const phone = tileSize(390, 844);
-  assert.equal(phone.h, 296);
-  assert.ok(phone.w > 120 && phone.w < 150, `phone width ${phone.w}`);
+// A card's picture: a wide page fills it from the top, a phone sits whole in the middle. A board
+// with a missing, zero or absurd size must still get a sane rectangle, never NaN.
+test("motion: a screen's picture fits its card", () => {
+  const wide = fitIn(1440, 900, 304, 190);
+  assert.equal(wide.cover, true);
+  assert.equal(wide.y, 0);
+  assert.ok(wide.w >= 304 - 0.01 && wide.h >= 190 - 0.01, "fills the area");
+  const phone = fitIn(390, 844, 304, 190);
+  assert.equal(phone.cover, false);
+  assert.ok(phone.h < 190 && phone.x > 0 && phone.y > 0, "whole, with a margin");
+  assert.ok(Math.abs(phone.x * 2 + phone.w - 304) < 0.01, "centred");
   for (const [w, h] of [[0, 0], [undefined, 900], [1440, 0], [NaN, NaN], [-5, 10], [Infinity, 1]]) {
-    const s = tileSize(w, h);
-    assert.ok(Number.isFinite(s.w) && Number.isFinite(s.h) && s.w > 0 && s.h > 0, `${w}x${h} → ${JSON.stringify(s)}`);
+    const r = fitIn(w, h, 304, 190);
+    assert.ok([r.x, r.y, r.w, r.h].every(Number.isFinite) && r.w > 0 && r.h > 0, `${w}x${h} → ${JSON.stringify(r)}`);
   }
-  assert.ok(tileSize(10000, 10).h >= 320 / 2.4 - 1, "a very wide page is clamped, not a sliver");
-  assert.ok(tileSize(10, 10000).w >= 296 * 0.42 - 1, "a very tall page is clamped, not a sliver");
 });
 
 test("motion: a few prototypes sit in one row, then two, in reading order", () => {

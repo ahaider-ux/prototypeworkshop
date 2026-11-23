@@ -283,12 +283,18 @@ function renderHomeCanvas(rs) {
   const el = $("home");
   const items = homeItems(rs);
   const openItem = (it) => go(S.envs.has(lastPage.get(it.id)) ? lastPage.get(it.id) : it.id);
+  // what this space can do next: shown as empty-state cards beside a few prototypes, never made-up ones
+  const actions = [
+    { title: "Import HTML", desc: "Bring in a prototype: a file or a whole folder", icon: IC.upload, run: openImport },
+    ...(S.ws.spaces ? [{ title: "Connect a folder", desc: "Edit a project's prototypes where they live", icon: IC.folder, run: () => openSpaces() }] : []),
+    ...(S.ws.harnesses?.length ? [] : [{ title: "Connect an agent", desc: "Let Claude work on branches while you review", icon: IC.agent, run: openConnect }]),
+  ];
   if (!homeCv || !el.querySelector(".hcanvas")) {
     homeCv?.destroy();
     el.replaceChildren();
     el.classList.add("hc");
-    homeCv = mountHomeCanvas(el, items, { open: openItem, newTile: openImport, key: S.ws.home || S.ws.name });
-  } else homeCv.update(items);
+    homeCv = mountHomeCanvas(el, items, { open: openItem, actions, key: S.ws.home || S.ws.name });
+  } else homeCv.update(items, actions);
   // the bar floating over it: the space, recent prototypes (each glides the canvas to its tile), the view
   el.querySelector(".hbar")?.remove();
   const bar = h(`<div class="hbar"><div class="hb hbl"><b class="hname">${esc(S.ws.name)}</b><span class="hcount">${plural(rs.length, "prototype")}</span><span class="vsep"></span><span class="hrl">Recent</span><span class="hchips"></span></div><div class="hb hbr"></div></div>`);
@@ -314,7 +320,7 @@ function renderHomeCanvas(rs) {
 function renderHome() {
   if (S.view !== "home") return;
   const rs = roots();
-  const key = JSON.stringify([homeView(), S.ws.name, S.ws.home, rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen, lastEdit(e.id)])]);
+  const key = JSON.stringify([homeView(), S.ws.name, S.ws.home, S.ws.spaces, S.ws.harnesses?.length || 0, rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen, lastEdit(e.id)])]);
   if (key === homeKey) return;
   homeKey = key;
   if (homeView() === "canvas" && rs.length) return renderHomeCanvas(rs);

@@ -1,8 +1,9 @@
 // Home: every prototype in the space on a canvas you can throw around.
 //
-// The interaction follows design.cash.app (observed in the browser; nothing copied): pictures only,
-// each in its screen's own shape, far apart on an endless field; a dot in place of the pointer that
-// names what it's over; the picture under it swells a little; and opening one clears the field
+// Every prototype is a project card: its picture, its name and when it was last edited, readable
+// before the picture has even arrived. The interaction follows design.cash.app (observed in the
+// browser; nothing copied): cards far apart on an endless field, a dot in place of the pointer, the
+// card under it swells a little; and opening one clears the field
 // around it and glides it to the middle before the editor takes over. Coming back lands on the
 // prototype you opened. With only a few prototypes the field has soft edges instead of repeating
 // three tiles forever.
@@ -16,36 +17,37 @@
 import { h, IC, rmo } from "./lib.js";
 import * as G from "./gfx.js";
 import { thumbJob } from "./canvas.js";
-import { spiral, block, bezier, rubber, tileSize } from "./motion.js";
+import { spiral, block, bezier, rubber, fitIn } from "./motion.js";
 
-const CW = 440, // one cell: the widest thumbnail (320) and a wide gutter
-  CH = 392,
+const CW = 400, // one cell: a card (320 × 264) and an 80 gutter
+  CH = 344,
   WRAP_MIN = 7, // fewer prototypes than this and the canvas has edges instead of repeating them
-  SWELL = 1.1, // the picture under the pointer
+  SWELL = 1.05, // the card under the pointer
   LEAVE_MS = 340; // opening one: the field clears and it glides to the middle
 const DECAY = 325; // ms: how quickly a fling slows down (the time constant iOS scrolling uses)
 const EASE = [0.32, 0.72, 0, 1]; // glides: quick to start, long soft landing
 const ease = bezier(EASE);
 const mod = (a, n) => ((a % n) + n) % n;
-const NEW = { w: 320, h: 200 }; // the "Import a prototype" tile and prototypes with no screens yet
+const CARD = { w: 320, h: 264 }, // every prototype is a card: its picture, its name, when it was edited
+  PIC = { w: 304, h: 190 }; // the picture inside it
 
 // where each space's canvas was left, and which prototype was opened from it (for this page's life)
 const memory = new Map();
 
-// items: [{ id, name, meta, board, edited }] most recent first. open(item) opens one; newTile adds an
-// "Import a prototype" tile when the canvas has edges; key names the space, for coming back.
-export function mountHomeCanvas(host, items, { open, newTile = null, key = "" }) {
-  const root = h(`<div class="hcanvas" role="region" aria-label="Prototypes. Drag to look around."><div class="hworld"></div><div class="hcur" aria-hidden="true"><i></i><span class="hlab"><b></b><span></span></span></div><div class="hhint hand" aria-hidden="true">drag to look around</div></div>`);
+// items: [{ id, name, meta, board, edited }] most recent first. open(item) opens one. actions:
+// [{ title, desc, icon, run }], what a space can do next (import, connect a folder, connect an
+// agent): with only a few prototypes the spare places hold these as empty-state cards, so the canvas
+// never needs made-up content to look full. key names the space, for coming back.
+export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
+  const root = h(`<div class="hcanvas" role="region" aria-label="Prototypes. Drag to look around."><div class="hworld"></div><div class="hcur" aria-hidden="true"><i></i></div><div class="hhint hand" aria-hidden="true">drag to look around</div></div>`);
   const world = root.querySelector(".hworld");
   const cur = root.querySelector(".hcur");
-  const lab = cur.querySelector(".hlab");
   host.classList.remove("hleaving");
   host.append(root);
   let list = items,
-    sizes = [],
     wrap = false,
     k = 1, // the repeating pattern is k × k cells
-    slotOf = new Map(), // "x,y" → index into list (or -1 for the new tile)
+    slotOf = new Map(), // "x,y" → index into list, or -1, -2 … for actions[0], actions[1] …
     bounds = null;
   const cam = { x: 0, y: 0 }; // a cell's centre is its thumbnail's centre: (0,0) is the middle tile
   let vw = root.clientWidth || innerWidth,
@@ -53,7 +55,6 @@ export function mountHomeCanvas(host, items, { open, newTile = null, key = "" })
 
   function layout() {
     wrap = list.length >= WRAP_MIN;
-    sizes = list.map((it) => (it.board ? tileSize(it.board.w, it.board.h) : NEW));
     slotOf = new Map();
     if (wrap) {
       k = Math.ceil(Math.sqrt(list.length));
@@ -61,15 +62,15 @@ export function mountHomeCanvas(host, items, { open, newTile = null, key = "" })
       spiral(k * k).forEach(([x, y], i) => slotOf.set(`${x},${y}`, i % list.length));
     } else {
       // a few: a small block in reading order, most recent first, centred in the view
-      const cells = block(list.length + (newTile ? 1 : 0));
-      cells.forEach(([x, y], i) => slotOf.set(`${x},${y}`, i < list.length ? i : -1));
+      const cells = block(list.length + actions.length);
+      cells.forEach(([x, y], i) => slotOf.set(`${x},${y}`, i < list.length ? i : -(i - list.length + 1)));
       const xs = cells.map((c) => c[0]),
         ys = cells.map((c) => c[1]);
       bounds = { x0: Math.min(...xs) * CW - CW / 2, x1: Math.max(...xs) * CW + CW / 2, y0: Math.min(...ys) * CH - CH / 2, y1: Math.max(...ys) * CH + CH / 2 };
     }
   }
   const middle = () => (bounds && !wrap ? { x: -(bounds.x0 + bounds.x1) / 2, y: -(bounds.y0 + bounds.y1) / 2 } : { x: 0, y: 0 });
-  const sizeOf = (idx) => (idx >= 0 ? sizes[idx] || NEW : NEW);
+  const sizeOf = () => CARD;
   // which item a cell shows
   function at(cx, cy) {
     if (wrap) {
@@ -95,15 +96,17 @@ export function mountHomeCanvas(host, items, { open, newTile = null, key = "" })
     el.style.width = `${s.w}px`;
     el.style.height = `${s.h}px`;
     const tt = el.querySelector(".htt");
-    if (idx === -1) {
+    if (idx < 0) {
+      // an empty-state card: what this space can do next, and it does it
+      const a = actions[-idx - 1] || {};
       el.className = "htile hnew";
-      el.querySelector("b").textContent = "Import a prototype";
-      el.querySelector(".m").textContent = "an HTML file, or a whole document";
-      el.setAttribute("aria-label", "Import a prototype");
-      tt.replaceChildren(h(`<span class="hplus">${IC.plus}</span>`));
+      el.querySelector("b").textContent = a.title || "";
+      el.querySelector(".m").textContent = a.desc || "";
+      el.setAttribute("aria-label", a.title || "");
+      tt.replaceChildren(h(`<span class="hplus">${a.icon || IC.plus}</span>`));
     } else {
       const it = list[idx];
-      el.className = `htile${s.h > s.w ? " tall" : ""}`;
+      el.className = "htile";
       el.querySelector("b").textContent = it.name;
       el.querySelector(".m").textContent = it.meta;
       el.setAttribute("aria-label", `Open ${it.name}`);
@@ -160,18 +163,18 @@ export function mountHomeCanvas(host, items, { open, newTile = null, key = "" })
     // a picture that arrives while you watch fades in over its placeholder rather than popping
     if (was && !rmo()) (el.classList.add("fresh"), setTimeout(() => el.classList.remove("fresh"), 320));
     const bmp = got.bmp;
-    const s = sizeOf(+el.dataset.idx);
-    const W = Math.round(s.w * res),
-      H = Math.round(s.h * res);
+    const W = Math.round(PIC.w * res),
+      H = Math.round(PIC.h * res);
     if (cv.width !== W || cv.height !== H) (cv.width = W), (cv.height = H);
     const c = cv.getContext("2d");
-    // a page is a white browser tab underneath, in either theme (as the canvas draws boards): a page
-    // shorter than its screen mustn't show the tile's dark paper through it
+    const r = fitIn(bmp.width, bmp.height, W, H);
+    // a page is a white browser tab underneath, in either theme (as the canvas draws boards): a wide
+    // page fills the picture from the top; a phone sits whole in the middle on the card's tint
+    c.clearRect(0, 0, W, H);
     c.fillStyle = "#fff";
-    c.fillRect(0, 0, W, H);
-    // the tile has the screen's shape, so the picture fills it; a clamped extreme shape fills from the top
-    const sc = Math.max(W / bmp.width, H / bmp.height);
-    c.drawImage(bmp, (W - bmp.width * sc) / 2, 0, bmp.width * sc, bmp.height * sc);
+    if (r.cover) c.fillRect(0, 0, W, H);
+    else c.fillRect(r.x, r.y, r.w, r.h);
+    c.drawImage(bmp, r.x, r.y, r.w, r.h);
   }
   function request() {
     const jobs = list.filter((it) => it.board && !G.hasFresh(it.board)).map((it) => thumbJob(it.board));
@@ -210,11 +213,6 @@ export function mountHomeCanvas(host, items, { open, newTile = null, key = "" })
     hot = next;
     const el = tiles.get(hot);
     el?.classList.add("hot");
-    if (el) {
-      const idx = +el.dataset.idx;
-      lab.firstChild.textContent = idx === -1 ? "Import a prototype" : list[idx]?.name || "";
-      lab.lastChild.textContent = idx === -1 ? "" : (list[idx]?.meta || "").split(" · ")[0];
-    }
     cur.classList.toggle("on", !!el);
   }
   const point = () => setHot(inside && !leaving ? hitAt(px, py) : null);
@@ -240,6 +238,7 @@ export function mountHomeCanvas(host, items, { open, newTile = null, key = "" })
     glide = null,
     spring = false;
   const apply = () => {
+    root.classList.toggle("fits", !wrap && !!bounds && bounds.x1 - bounds.x0 <= vw && bounds.y1 - bounds.y0 <= vh);
     world.style.transform = `translate3d(${Math.round((cam.x + vw / 2) * 2) / 2}px, ${Math.round((cam.y + vh / 2) * 2) / 2}px, 0)`;
     sync();
     if (inside) point();
@@ -317,7 +316,7 @@ export function mountHomeCanvas(host, items, { open, newTile = null, key = "" })
   // A keyboard open is immediate (nothing animates on keyboard actions), as is reduced motion.
   function choose(el, animate) {
     const idx = +el.dataset.idx;
-    if (idx === -1) return newTile?.();
+    if (idx < 0) return actions[-idx - 1]?.run?.();
     const it = list[idx];
     if (!it || leaving) return;
     const [cx, cy] = el.dataset.cell.split(",").map(Number);
@@ -485,11 +484,11 @@ export function mountHomeCanvas(host, items, { open, newTile = null, key = "" })
 
   return {
     // new data (names, counts, pictures) without moving the camera
-    update(next) {
-      const was = list.map((x) => x.id).join() + sizes.map((s) => `${s.w}x${s.h}`).join();
+    update(next, nextActions = null) {
+      const was = list.map((x) => x.id).join();
       list = next;
-      const now = next.map((x) => x.id).join() + next.map((it) => (it.board ? tileSize(it.board.w, it.board.h) : NEW)).map((s) => `${s.w}x${s.h}`).join();
-      if (now !== was) {
+      if (next.map((x) => x.id).join() !== was || (nextActions && nextActions.map((a) => a.title).join() !== actions.map((a) => a.title).join())) {
+        if (nextActions) actions = nextActions;
         layout();
         if (!wrap) Object.assign(cam, middle());
         setHot(null);

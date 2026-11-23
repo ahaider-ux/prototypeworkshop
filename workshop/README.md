@@ -26,15 +26,17 @@ npm start
 
 Open http://127.0.0.1:4600. The server only listens on this computer.
 
-**Home.** Every prototype in the space sits on a canvas you can drag around, with momentum, or
-scroll with a trackpad or wheel. Each is a picture in its screen's own shape, so phones read as
-phones. The most recent is in the middle and the rest spiral out from it; with seven or more the
-canvas wraps around forever, and with fewer they sit in a small centred block with soft edges.
-The pointer becomes a dot that names the prototype it's over, and the picture swells a little.
-Opening one clears the canvas around it and glides it to the middle; when you come back, it's
-still there in the middle. On a touch screen the names sit under the pictures instead. The bar on
-top shows the space, the most recent prototypes (click one to glide to it) and a switch to a plain
-list. Thumbnails are pictures, not live pages, so it stays smooth however many there are.
+**Home.** Every prototype in the space is a card on a canvas you can drag around, with momentum, or
+scroll with a trackpad or wheel: its picture, its name and when it was last edited, readable before
+the picture arrives (a phone sits whole on a soft tint). The most recent is in the middle and the
+rest spiral out from it; with seven or more the canvas wraps around forever, and with fewer they sit
+in a small centred block with soft edges. Cards are only ever real prototypes: in a small space the
+spare places hold empty-state cards for what you can do next (Import HTML, Connect a folder, Connect
+an agent), each opening the real thing. The pointer becomes a dot, and the card under it swells a
+little. Opening one clears the canvas around it and glides it to the middle; when you come back,
+it's still there in the middle. The bar on top shows the space, the most recent prototypes (click
+one to glide to it) and a switch to a plain list. Pictures are saved drawings, not live pages, so
+it stays smooth however many there are.
 
 **Type.** Atelier sets only its wordmark (the logo and the intro) in Zilla Slab; everything in the
 app, titles included, is Schibsted Grotesk, and sticky notes in Shantell Sans, a marker handwriting. All three
@@ -46,8 +48,9 @@ required to run it.
 
 The first time a browser opens Atelier, a six-second intro plays, product-led and restrained: one
 tile cuts through the app's tools in black and white, then a single story in Atelier's own
-interface, large and calm. A screen is selected, a hand rings its cards, Claude says it's on it and
-its cursor goes there, the cards tighten, and a toast says it's merged. Hand-drawn ink moves like
+interface, large and calm. An empty frame (Atelier's own empty state: the intro never fakes a design) is
+selected, a hand rings it, Claude says it's on it and its cursor goes there, and a toast says the
+branch is ready to review. Hand-drawn ink moves like
 stop-motion, eight frames a second, drawn on and then gently "boiling". Everything cuts away, the
 tile flashes through the palette, the name types on, the mark (a comment pin with an eye) drops
 onto the "i" with a squash, and a hand underlines it. Then the pin fades as the word flies into the

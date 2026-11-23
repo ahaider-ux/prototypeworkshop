@@ -1,17 +1,18 @@
 // The first-run intro: six seconds that show what Atelier does, in its own interface.
 //
 // Creative direction: product-led and restrained, the way the studios people admire present
-// software. The real interface, large and calm, one story at a time, never a wall of parts: a screen
-// is selected, a hand rings what's wrong, an agent says it's on it and goes there, the cards tighten,
-// a toast says it's merged. Ink and paper with one blue accent (the agent's cursor and the hand's
+// software. The real interface, large and calm, one story at a time, never a wall of parts: an empty
+// frame is selected, a hand rings it, an agent says it's on it and goes there, and a toast says its
+// branch is ready to review. Nothing made up stands in for a prototype: what isn't real is shown in
+// Atelier's own empty state. Ink and paper with one blue accent (the agent's cursor and the hand's
 // marker are the only other colours); no gradients. The brand is the comment pin with an eye: a
 // little critic that peeks at your work, and in the end drops onto the "i" of the name.
 //
 // Beats:
 //   0.15–1.3 s one crop-marked tile cutting through the app's tools, in black and white
 //   1.4–1.7 s  the screen, the toolbar and the agent's comment arrive around it
-//   1.65 s     a hand rings the cards; 1.75 s the agent's cursor heads there
-//   2.3 s      the cards tighten; 2.45 s "Merged into Main"
+//   1.65 s     a hand rings the empty frame; 1.75 s the agent's cursor heads there
+//   2.45 s     "Branch ready to review"
 //   2.75–3.25 s everything cuts away, outside in
 //   3.25–3.6 s the tile flashes through the palette down to the pin
 //   3.6–4.9 s  the pin alone (it blinks), hops up while "atelıer" types, then drops onto the i
@@ -35,20 +36,21 @@ const circlePts = (cx, cy, rx, ry, turns = 1.12) => Array.from({ length: 60 }, (
   const a = -2.2 + (i / 59) * Math.PI * 2 * turns;
   return [cx + Math.cos(a) * rx * (1 + i / 400), cy + Math.sin(a) * ry * (1 - i / 500)];
 });
-// a little product page inside the frame: flat boxes, the way a wireframe reads at a glance
-const PAGE = `<div class="ipg desk"><i class="sb"></i><i class="hd"></i><i class="c1"></i><i class="c2"></i><i class="c3"></i><i class="c4"></i><i class="c5"></i><i class="c6"></i></div>`;
+// the screen being worked on: an empty frame, in Atelier's own empty state (no made-up design: the
+// intro never pretends to be someone's prototype)
+const PAGE = `<div class="pempty iempty"><b>Start screen</b>Ask an agent to design it</div>`;
 
 // [class, x, y, w, h, in ms, out ms, html]. x/y: the top-left in the collage, from its centre. The
 // collage is shown at 1.5–1.56×, so everything stays inside ±440 × ±270 (paper all round it) and
 // clear of the centre tile (±64). Few pieces, each one doing something: no decoration.
 const PIECES = () => [
   ["toolbar", -267, 196, 0, 0, 1420, 2760, "TOOLBAR"],
-  ["frame", -430, -150, 300, 196, 1400, 2820, `<span class="flbl on">Pricing</span>${PAGE}<span class="isel">${CORNERS}</span>`],
-  ["ink", -356, -118, 216, 88, 1640, 2820, "INK:circle"],
+  ["frame", -430, -150, 300, 196, 1400, 2820, `<span class="flbl on">Start screen</span>${PAGE}<span class="isel">${CORNERS}</span>`],
+  ["ink", -425, -127, 290, 150, 1640, 2820, "INK:circle"],
   ["pin", 96, -196, 0, 0, 1480, 3060, `<span class="pin agent" style="position:relative;margin:0"><span class="pi">C</span></span>`],
-  ["peek", 140, -228, 0, 0, 1560, 2880, `<div class="pinpeek" style="position:relative"><div class="ph"><span class="cav agent">C</span><b>Claude</b><span>now</span></div><p>On it: tightening the cards, on a branch.</p></div>`],
+  ["peek", 140, -228, 0, 0, 1560, 2880, `<div class="pinpeek" style="position:relative"><div class="ph"><span class="cav agent">C</span><b>Claude</b><span>now</span></div><p>On it: designing this screen, on a branch.</p></div>`],
   ["cursor", 300, -40, 0, 0, 1600, 2820, `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5 13 8l-4.3 1.2L7 13.5Z"/></svg><b>Claude</b>`],
-  ["toast", 144, 72, 0, 0, 2450, 2960, `<div class="toast is-open" style="position:relative"><div class="tcol"><span class="tt2">${IC.check}Merged into Main</span></div></div>`],
+  ["toast", 144, 72, 0, 0, 2450, 2960, `<div class="toast is-open" style="position:relative"><div class="tcol"><span class="tt2">${IC.fork}Branch ready to review</span></div></div>`],
 ];
 
 // Hand-drawn marks move like hand-drawn marks: on eights (125 ms a frame), drawn on in four frames
@@ -56,7 +58,7 @@ const PIECES = () => [
 // paper. The interface around them moves smooth. Machines glide, hands flicker.
 const FRAME_MS = 125;
 const INKS = {
-  circle: { w: 216, h: 88, color: "red", strokes: [circlePts(108, 44, 96, 34)], pen: "marker", size: 6 },
+  circle: { w: 290, h: 150, color: "red", strokes: [circlePts(145, 75, 130, 62)], pen: "marker", size: 6 },
   under: {
     w: 400, h: 36, color: "blue", pen: "marker", size: 9,
     strokes: [Array.from({ length: 30 }, (_, i) => { const t = i / 29; return [12 + 374 * t, 24 - 3 * Math.sin(Math.PI * t) - 10 * t * t]; })],
@@ -246,7 +248,6 @@ export function playIntro({ force = false } = {}) {
     at(tout, () => el.classList.add("cut")); // a cut, never a fade
   }
   at(1750, () => col.querySelector(".p-cursor")?.classList.add("go")); // the agent goes to the cards
-  at(2300, () => col.querySelector(".ipg")?.classList.add("tight")); // and tightens them
   // the opening tile
   const tile = root.querySelector(".itile");
   const open = root.querySelector(".iopen");
