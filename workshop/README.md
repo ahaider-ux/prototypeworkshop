@@ -26,17 +26,18 @@ npm start
 
 Open http://127.0.0.1:4600. The server only listens on this computer.
 
-**Home.** Every prototype in the space is a card on a canvas you can drag around, with momentum, or
-scroll with a trackpad or wheel: its picture, its name and when it was last edited, readable before
-the picture arrives (a phone sits whole on a soft tint). The most recent is in the middle and the
-rest spiral out from it; with seven or more the canvas wraps around forever, and with fewer they sit
-in a small centred block with soft edges. Cards are only ever real prototypes: in a small space the
-spare places hold empty-state cards for what you can do next (Import HTML, Connect a folder, Connect
-an agent), each opening the real thing. The pointer becomes a dot, and the card under it swells a
-little. Opening one clears the canvas around it and glides it to the middle; when you come back,
-it's still there in the middle. The bar on top shows the space, the most recent prototypes (click
-one to glide to it) and a switch to a plain list. Pictures are saved drawings, not live pages, so
-it stays smooth however many there are.
+**Home.** A sidebar that stays put (Home, Prototypes, Learn, Activity, your recent prototypes and
+whether an agent is connected), and a main area that changes with it. **Home** greets you, shows
+what Atelier does in its own interface, your recent prototypes, and short Learn cards; each card
+opens a step-by-step Learn dialog. **Prototypes** is every prototype as a card on a canvas you can
+drag around, with momentum, or scroll with a trackpad or wheel: its picture, its name and when it
+was last edited. The most recent is in the middle and the rest spiral out from it; with seven or
+more the canvas wraps around forever, and with fewer they sit in a small centred block. Cards are
+only ever real prototypes: in a small space the spare places hold empty-state cards for what you can
+do next (Import HTML, Connect a folder, Connect an agent), each opening the real thing. Opening one
+clears the canvas around it and glides it to the middle; when you come back, it's still there.
+**Activity** is what people and agents did across the space. Pictures are saved drawings, not live
+pages, so it stays smooth however many there are.
 
 **Look.** "Studio white": neutral greys, white surfaces lifted off a soft studio light, raised white
 pills and an ink pill for the main action, hairlines and soft shadows, status lights that glow, and

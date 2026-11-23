@@ -79,6 +79,11 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   hit-testing, so it stays right while the field coasts. Its pure maths lives in `ui/motion.js`,
   tested in Node. Nothing made up stands in for a prototype, on the home or in the intro: a slot
   without a real one is an empty state (`.pempty`, or the home's action cards) that does something real.
+  The home is a sidebar that stays (sections, recent prototypes, the agent) and a main area that
+  changes with the section (`#/`, `#/prototypes`, `#/learn`, `#/activity`): only the main area
+  re-renders. Product pictures (the home hero, the Learn cards and the Learn dialog) live in
+  `ui/visuals.js`, built from Atelier's own classes; follow the `product-visuals` skill
+  (`.claude/skills/product-visuals/SKILL.md`) for any new one.
 - **The canvas shell scales below 1180px** (`fitShell`). Anything measured with
   `getBoundingClientRect` and written into a style inside `#frame` is divided by `frScale()`
   (`inFrame()` in `ui/lib.js` does it for menus).

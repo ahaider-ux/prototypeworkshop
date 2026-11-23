@@ -529,3 +529,53 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
     },
   };
 }
+
+// The Home section's recent prototypes: the same project cards, in a plain grid (no camera), with
+// their pictures from the same pipeline. Returns { el, destroy }.
+export function cardGrid(items, { open, actions = [] }) {
+  const el = h(`<div class="hgrid"></div>`);
+  const res = Math.min(2.4, window.devicePixelRatio || 1);
+  const cards = [];
+  const draw = (card, it) => {
+    const cv = card.querySelector("canvas");
+    card.classList.toggle("noboard", !it.board);
+    const got = it.board ? G.bitmapFor(it.board) : null;
+    const was = card.classList.contains("waiting");
+    card.classList.toggle("waiting", !!it.board && !got);
+    if (!got || !cv) return;
+    const W = Math.round(PIC.w * res),
+      H = Math.round(PIC.h * res);
+    if (cv.width !== W || cv.height !== H) (cv.width = W), (cv.height = H);
+    const c = cv.getContext("2d");
+    const r = fitIn(got.bmp.width, got.bmp.height, W, H);
+    c.clearRect(0, 0, W, H);
+    c.fillStyle = "#fff"; // a page is a white browser tab underneath, in either theme
+    if (r.cover) c.fillRect(0, 0, W, H);
+    else c.fillRect(r.x, r.y, r.w, r.h);
+    c.drawImage(got.bmp, r.x, r.y, r.w, r.h);
+    if (was && !rmo()) (card.classList.add("fresh"), setTimeout(() => card.classList.remove("fresh"), 320));
+  };
+  for (const it of items) {
+    const card = h(`<button type="button" class="htile hcard"><span class="htt"><canvas aria-hidden="true"></canvas></span><span class="hcap"><b></b><span class="m"></span></span></button>`);
+    card.querySelector("b").textContent = it.name;
+    card.querySelector(".m").textContent = it.meta;
+    card.setAttribute("aria-label", `Open ${it.name}`);
+    card.onclick = () => open(it);
+    draw(card, it);
+    cards.push([card, it]);
+    el.append(card);
+  }
+  for (const a of actions) {
+    const card = h(`<button type="button" class="htile hcard hnew"><span class="htt"><span class="hplus">${a.icon || IC.plus}</span></span><span class="hcap"><b></b><span class="m"></span></span></button>`);
+    card.querySelector("b").textContent = a.title;
+    card.querySelector(".m").textContent = a.desc || "";
+    card.onclick = () => a.run?.();
+    el.append(card);
+  }
+  const jobs = items.filter((it) => it.board && !G.hasFresh(it.board)).map((it) => thumbJob(it.board));
+  if (jobs.length) G.want(jobs);
+  const off = G.onBitmap((k) => {
+    for (const [card, it] of cards) if (it.board && G.keyOf(it.board) === k) draw(card, it);
+  });
+  return { el, destroy: off };
+}

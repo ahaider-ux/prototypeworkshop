@@ -224,3 +224,28 @@ test("ui: tab labels are measured once the row is on screen", () => {
   const move = js.slice(js.indexOf("function movePill"), js.indexOf("function movePill") + 400);
   assert.match(move, /if \(!labelsMeasured\(\)\) measureLabels\(\);/);
 });
+
+// The home is a sidebar that stays and a main area that changes: picking a section re-renders only
+// the main area (the sidebar is built once and updated in place), and every section has a route.
+test("ui: the home's sidebar stays while its sections swap", () => {
+  const app = read("app.js");
+  assert.match(app, /const SECTIONS = \["home", "prototypes", "learn", "activity"\]/);
+  assert.match(app, /function homeShell\(\) \{[\s\S]*?if \(side\) return home;/, "built once");
+  for (const f of ["renderLanding", "renderLearnPage", "renderActivityPage"]) {
+    const body = app.slice(app.indexOf(`function ${f}`), app.indexOf("\n}\n", app.indexOf(`function ${f}`)));
+    assert.ok(body.includes("main.replaceChildren"), `${f} replaces only the main area`);
+    assert.ok(!/\$\("home"\)\.replaceChildren/.test(body), `${f} leaves the sidebar alone`);
+  }
+});
+
+// The product pictures ship in the app, so they follow the same content rules as live art: no
+// people or avatars, no placeholder text, and a pointer only on a control it's acting on.
+test("ui: product pictures keep to the content rules", () => {
+  const v = read("visuals.js");
+  const art = v.slice(v.indexOf("const ART = {"), v.indexOf("// what each step says"));
+  assert.ok(!/class="cav|avatar|lorem|placeholder|John|Jane/i.test(art), "no avatars, people or placeholder text");
+  assert.equal((art.match(/class="pv-x pv-aim"|cls: "pv-aim"/g) || []).length, (art.match(/data-aim/g) || []).length, "every pointer has a control to land on");
+  const ids = [...v.matchAll(/\{ id: "([a-z]+)", title:/g)].map((m) => m[1]);
+  assert.equal(ids[0], "intro", "the flow starts with the intro step");
+  for (const id of ids) assert.ok(art.includes(`  ${id}: () =>`), `${id} has its picture`);
+});

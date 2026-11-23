@@ -7,7 +7,8 @@ import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDi
 import { rulesFor, loadOverrides } from "./styles.js";
 import { loadRecipes } from "./recipes.js";
 import { playIntro } from "./intro.js";
-import { mountHomeCanvas } from "./home.js";
+import { mountHomeCanvas, cardGrid } from "./home.js";
+import { FEATURES, featureCard, artEl, openLearn } from "./visuals.js";
 
 const store = {
   get(k, d) {
@@ -133,9 +134,14 @@ function renderAgent() {
 // ---------- where you are: Home, or a page of a prototype ----------
 // #/ is Home; #/p/<prototype> is its main page; #/p/<prototype>/<branch> one of its branches.
 const lastPage = new Map(store.get("ws-last", []));
+// the home's sections: one sidebar that stays, and the main area that changes under it
+const SECTIONS = ["home", "prototypes", "learn", "activity"];
 function parseHash() {
   const m = /^#\/p\/([^/?#]+)(?:\/([^/?#]+))?/.exec(location.hash);
-  if (!m) return { view: "home" };
+  if (!m) {
+    const sec = /^#\/([a-z]+)$/.exec(location.hash)?.[1];
+    return { view: "home", section: SECTIONS.includes(sec) ? sec : "home" };
+  }
   const dec = (s) => {
     try {
       return decodeURIComponent(s);
@@ -177,11 +183,19 @@ function showHome() {
   $("frame").classList.add("home-on");
   sync();
   renderTabs();
+  const sec = parseHash().section || "home";
+  const moved = S.homeSection && S.homeSection !== sec;
+  S.homeSection = sec;
   homeKey = "";
-  renderHome();
-  document.title = `${S.ws.name} · Atelier`;
-  store.set("ws-route", "#/");
+  renderHome(moved);
+  document.title = `${sec === "home" ? S.ws.name : sec[0].toUpperCase() + sec.slice(1)} · Atelier`;
+  store.set("ws-route", sec === "home" ? "#/" : `#/${sec}`);
 }
+const goSection = (sec) => {
+  const want = sec === "home" ? "#/" : `#/${sec}`;
+  if (location.hash === want || (want === "#/" && !location.hash)) showHome();
+  else location.hash = want;
+};
 function openPage(page) {
   const changed = S.page !== page || S.view !== "proto";
   const root = rootOf(page);
@@ -280,7 +294,7 @@ function homeItems(rs) {
     .sort((a, b) => String(b.edited || "").localeCompare(String(a.edited || "")));
 }
 function renderHomeCanvas(rs) {
-  const el = $("home");
+  const el = homeMain();
   const items = homeItems(rs);
   const openItem = (it) => go(S.envs.has(lastPage.get(it.id)) ? lastPage.get(it.id) : it.id);
   // what this space can do next: shown as empty-state cards beside a few prototypes, never made-up ones
@@ -317,16 +331,133 @@ function renderHomeCanvas(rs) {
   r.append(im);
   el.append(bar);
 }
-function renderHome() {
+// The home: a sidebar that stays put (sections, recent prototypes, the agent) and a main area that
+// changes with the section. Picking a section swaps only the main area, with a short fade.
+let homeGrid = null;
+function homeShell() {
+  const home = $("home");
+  let side = home.querySelector(".hside");
+  if (side) return home;
+  home.replaceChildren(
+    h(`<aside class="hside" aria-label="Home"><button type="button" class="createbtn hside-new">${IC.upload}Import HTML</button><nav class="hnav" aria-label="Sections"><button type="button" data-s="home">${IC.home}<span>Home</span></button><button type="button" data-s="prototypes">${IC.board}<span>Prototypes</span><span class="n"></span></button><button type="button" data-s="learn">${IC.spark}<span>Learn</span></button><button type="button" data-s="activity">${IC.version}<span>Activity</span></button></nav><div class="hside-sec"><div class="hside-h">Recent</div><div class="hrecent"></div></div><div class="sp"></div><div class="hagent"></div><div class="hside-foot"><button type="button" data-a="new">What's new</button><span aria-hidden="true">·</span><button type="button" data-a="keys">Shortcuts</button></div></aside>`),
+    h(`<div class="hmain" id="homeMain"></div>`),
+  );
+  side = home.querySelector(".hside");
+  side.querySelector(".hside-new").onclick = openImport;
+  for (const b of side.querySelectorAll("[data-s]")) b.onclick = () => goSection(b.dataset.s);
+  side.querySelector('[data-a="new"]').onclick = () => learn(0);
+  side.querySelector('[data-a="keys"]').onclick = openShortcuts;
+  return home;
+}
+const homeMain = () => homeShell().querySelector(".hmain");
+const learn = (i) => openLearn(i, { learn: () => goSection("learn"), agent: S.ws.harnesses?.length ? null : openConnect });
+const openItemOf = (it) => go(S.envs.has(lastPage.get(it.id)) ? lastPage.get(it.id) : it.id);
+const greeting = () => {
+  const hr = new Date().getHours();
+  return hr < 5 ? "Working late" : hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening";
+};
+function renderSide(rs, items) {
+  const side = homeShell().querySelector(".hside");
+  for (const b of side.querySelectorAll("[data-s]")) {
+    const on = b.dataset.s === S.homeSection;
+    b.classList.toggle("on", on);
+    on ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current");
+  }
+  side.querySelector('[data-s="prototypes"] .n').textContent = rs.length || "";
+  const rec = side.querySelector(".hrecent");
+  rec.replaceChildren(...items.slice(0, 5).map((it) => {
+    const r = h(`<button type="button" class="hrec">${IC.board}<span class="t"></span></button>`);
+    r.querySelector(".t").textContent = it.name;
+    r.title = it.meta;
+    r.onclick = () => openItemOf(it);
+    return r;
+  }));
+  if (!items.length) rec.append(h(`<span class="hrec-none">Prototypes you open show here</span>`));
+  // the agent: a status light and what it means, and the way to connect one when there isn't one
+  const hs = S.ws.harnesses || [];
+  const ag = side.querySelector(".hagent");
+  ag.replaceChildren(
+    h(hs.length
+      ? `<div class="hagent-in"><span class="hdot on"></span><div><b>${esc(hs[0].client)} is connected</b><span>It works on branches; you review and merge.</span></div></div>`
+      : `<div class="hagent-in"><span class="hdot"></span><div><b>No agent yet</b><span>Connect Claude Code or another agent to hand it requests.</span></div></div>`),
+  );
+  if (!hs.length) {
+    const b = h(`<button type="button" class="dbtn sm">${IC.agent}Connect an agent</button>`);
+    b.onclick = openConnect;
+    ag.append(b);
+  }
+}
+function renderHome(moved = false) {
   if (S.view !== "home") return;
   const rs = roots();
-  const key = JSON.stringify([homeView(), S.ws.name, S.ws.home, S.ws.spaces, S.ws.harnesses?.length || 0, rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen, lastEdit(e.id)])]);
+  const key = JSON.stringify([S.homeSection, homeView(), S.ws.name, S.ws.home, S.ws.spaces, S.ws.harnesses?.length || 0, rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen, lastEdit(e.id)])]);
   if (key === homeKey) return;
   homeKey = key;
+  const items = homeItems(rs);
+  renderSide(rs, items);
+  const main = homeMain();
+  if (moved && !matchMedia("(prefers-reduced-motion: reduce)").matches) main.animate([{ opacity: 0, filter: "blur(2px)" }, { opacity: 1, filter: "blur(0)" }], { duration: 180, easing: "ease-out" });
+  if (S.homeSection !== "prototypes" || !(homeView() === "canvas" && rs.length)) (homeCv?.destroy(), (homeCv = null), main.classList.remove("hc"));
+  if (S.homeSection !== "home") (homeGrid?.destroy(), (homeGrid = null));
+  if (S.homeSection === "home") return renderLanding(main, rs, items);
+  if (S.homeSection === "learn") return renderLearnPage(main);
+  if (S.homeSection === "activity") return renderActivityPage(main);
   if (homeView() === "canvas" && rs.length) return renderHomeCanvas(rs);
-  homeCv?.destroy();
-  homeCv = null;
-  const el = $("home");
+  renderHomeList(rs);
+}
+// what this space can do next, as empty-state cards (never made-up prototypes)
+const nextActions = () => [
+  { title: "Import HTML", desc: "Bring in a prototype: a file or a whole folder", icon: IC.upload, run: openImport },
+  ...(S.ws.spaces ? [{ title: "Connect a folder", desc: "Edit a project's prototypes where they live", icon: IC.folder, run: () => openSpaces() }] : []),
+  ...(S.ws.harnesses?.length ? [] : [{ title: "Connect an agent", desc: "Let Claude work on branches while you review", icon: IC.agent, run: openConnect }]),
+];
+// Home: a greeting, the intro to Atelier, the recent prototypes and what to learn next
+function renderLanding(main, rs, items) {
+  homeGrid?.destroy();
+  const page = h(`<div class="hl"><header class="hl-h"><h1><span>${esc(greeting())}</span>What are you prototyping next?</h1></header><section class="hl-hero"><div class="hl-hc"><span class="tagro info">New here?</span><h2>Branch, mark up, merge</h2><p>Try ideas on branches, mark them up or hand them to an agent, then review and merge what works.</p><div class="hl-acts"><button type="button" class="createbtn" data-a="tour">See how it works</button><button type="button" class="dbtn" data-a="im">${IC.upload}Import HTML</button></div></div><div class="hl-art"></div></section><section class="hl-sec"><div class="hl-sh"><h2>Recent prototypes</h2>${rs.length ? `<button type="button" class="hl-more" data-s="prototypes">View all${IC.chevr}</button>` : ""}</div><div class="hl-recent"></div></section><section class="hl-sec"><div class="hl-sh"><div><h2>Learn Atelier</h2><p>What it does, in a minute each.</p></div><button type="button" class="hl-more" data-s="learn">See all${IC.chevr}</button></div><div class="hl-learn"></div></section></div>`);
+  page.querySelector(".hl-art").replaceWith(Object.assign(artEl("intro"), { className: "pv hl-art" }));
+  page.querySelector('[data-a="tour"]').onclick = () => learn(0);
+  page.querySelector('[data-a="im"]').onclick = openImport;
+  for (const b of page.querySelectorAll("[data-s]")) b.onclick = () => goSection(b.dataset.s);
+  homeGrid = cardGrid(items.slice(0, 4), { open: openItemOf, actions: items.length >= 4 ? [] : nextActions().slice(0, 4 - items.length) });
+  page.querySelector(".hl-recent").append(homeGrid.el);
+  const lc = page.querySelector(".hl-learn");
+  for (const i of [1, 2, 3, 4]) lc.append(featureCard(i, learn));
+  main.replaceChildren(page);
+}
+function renderLearnPage(main) {
+  const page = h(`<div class="hl"><header class="hl-h"><h1><span>Learn Atelier</span>Everything it does, a step at a time</h1></header><div class="hl-learn all"></div></div>`);
+  const lc = page.querySelector(".hl-learn");
+  FEATURES.forEach((_, i) => lc.append(featureCard(i, learn)));
+  main.replaceChildren(page);
+}
+// Activity: what people and agents did across the space, newest first
+async function renderActivityPage(main) {
+  const page = h(`<div class="hl"><header class="hl-h"><h1><span>Activity</span>What happened across this space</h1></header><div class="hl-acts-list"></div></div>`);
+  main.replaceChildren(page);
+  const list = page.querySelector(".hl-acts-list");
+  list.append(h(`<div class="pempty"><b class="shimmer">Loading…</b></div>`));
+  let rows = [];
+  try {
+    rows = await api("activity?limit=80");
+  } catch {}
+  if (S.homeSection !== "activity" || !page.isConnected) return;
+  rows = (Array.isArray(rows) ? rows : rows?.items || []).slice().reverse();
+  list.replaceChildren();
+  if (!rows.length) return list.append(h(`<div class="pempty"><b>Nothing here yet</b>Branches, merges, notes and agents' updates show up here as they happen.</div>`));
+  for (const e of rows) {
+    const env = e.env && S.envs.get(e.env);
+    const r = h(`<button type="button" class="hact"><span class="hact-k">${e.by && /claude|agent|codex|cursor/i.test(e.by) ? IC.spark : IC.version}</span><span class="hact-t"><span class="x"></span><span class="m"></span></span><span class="hact-w"></span></button>`);
+    r.querySelector(".x").textContent = e.text;
+    r.querySelector(".m").textContent = [e.by, env ? pageName(env) : ""].filter(Boolean).join(" · ");
+    r.querySelector(".hact-w").textContent = timeAgo(e.at);
+    if (env) r.onclick = () => go(env.id);
+    else r.disabled = true;
+    list.append(r);
+  }
+}
+function renderHomeList(rs) {
+  const el = homeMain();
   el.classList.remove("hc");
   const inner = h(`<div class="in"></div>`);
   const linked = rs.some((e) => e.linked);
