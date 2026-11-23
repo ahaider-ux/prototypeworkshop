@@ -299,9 +299,9 @@ function renderHomeCanvas(rs) {
   const openItem = (it) => go(S.envs.has(lastPage.get(it.id)) ? lastPage.get(it.id) : it.id);
   // what this space can do next: shown as empty-state cards beside a few prototypes, never made-up ones
   const actions = [
-    { title: "Import HTML", desc: "Bring in a prototype: a file or a whole folder", icon: IC.upload, run: openImport },
-    ...(S.ws.spaces ? [{ title: "Connect a folder", desc: "Edit a project's prototypes where they live", icon: IC.folder, run: () => openSpaces() }] : []),
-    ...(S.ws.harnesses?.length ? [] : [{ title: "Connect an agent", desc: "Let Claude work on branches while you review", icon: IC.agent, run: openConnect }]),
+    { title: "Import HTML", desc: "A file or a whole folder", icon: IC.upload, run: openImport },
+    ...(S.ws.spaces ? [{ title: "Connect a folder", desc: "Edit prototypes where they live", icon: IC.folder, run: () => openSpaces() }] : []),
+    ...(S.ws.harnesses?.length ? [] : [{ title: "Connect an agent", desc: "It works on branches; you review", icon: IC.agent, run: openConnect }]),
   ];
   if (!homeCv || !el.querySelector(".hcanvas")) {
     homeCv?.destroy();
@@ -352,10 +352,6 @@ function homeShell() {
 const homeMain = () => homeShell().querySelector(".hmain");
 const learn = (i) => openLearn(i, { learn: () => goSection("learn"), agent: S.ws.harnesses?.length ? null : openConnect });
 const openItemOf = (it) => go(S.envs.has(lastPage.get(it.id)) ? lastPage.get(it.id) : it.id);
-const greeting = () => {
-  const hr = new Date().getHours();
-  return hr < 5 ? "Working late" : hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening";
-};
 function renderSide(rs, items) {
   const side = homeShell().querySelector(".hside");
   for (const b of side.querySelectorAll("[data-s]")) {
@@ -407,14 +403,15 @@ function renderHome(moved = false) {
 }
 // what this space can do next, as empty-state cards (never made-up prototypes)
 const nextActions = () => [
-  { title: "Import HTML", desc: "Bring in a prototype: a file or a whole folder", icon: IC.upload, run: openImport },
-  ...(S.ws.spaces ? [{ title: "Connect a folder", desc: "Edit a project's prototypes where they live", icon: IC.folder, run: () => openSpaces() }] : []),
-  ...(S.ws.harnesses?.length ? [] : [{ title: "Connect an agent", desc: "Let Claude work on branches while you review", icon: IC.agent, run: openConnect }]),
+  { title: "Import HTML", desc: "A file or a whole folder", icon: IC.upload, run: openImport },
+  ...(S.ws.spaces ? [{ title: "Connect a folder", desc: "Edit prototypes where they live", icon: IC.folder, run: () => openSpaces() }] : []),
+  ...(S.ws.harnesses?.length ? [] : [{ title: "Connect an agent", desc: "It works on branches; you review", icon: IC.agent, run: openConnect }]),
 ];
-// Home: a greeting, the intro to Atelier, the recent prototypes and what to learn next
+// Home, after the way Paper and Flora open: the page's name, a welcome banner that says what Atelier
+// is and offers the tour, the prototypes you worked on last, and short guides to get started
 function renderLanding(main, rs, items) {
   homeGrid?.destroy();
-  const page = h(`<div class="hl"><header class="hl-h"><h1><span>${esc(greeting())}</span>What are you prototyping next?</h1></header><section class="hl-hero"><div class="hl-hc"><span class="tagro info">New here?</span><h2>Branch, mark up, merge</h2><p>Try ideas on branches, mark them up or hand them to an agent, then review and merge what works.</p><div class="hl-acts"><button type="button" class="createbtn" data-a="tour">See how it works</button><button type="button" class="dbtn" data-a="im">${IC.upload}Import HTML</button></div></div><div class="hl-art"></div></section><section class="hl-sec"><div class="hl-sh"><h2>Recent prototypes</h2>${rs.length ? `<button type="button" class="hl-more" data-s="prototypes">View all${IC.chevr}</button>` : ""}</div><div class="hl-recent"></div></section><section class="hl-sec"><div class="hl-sh"><div><h2>Learn Atelier</h2><p>What it does, in a minute each.</p></div><button type="button" class="hl-more" data-s="learn">See all${IC.chevr}</button></div><div class="hl-learn"></div></section></div>`);
+  const page = h(`<div class="hl"><header class="hl-h"><h1>Home</h1></header><section class="hl-hero"><div class="hl-hc"><h2>Welcome to Atelier</h2><p>Prototype in HTML with your team and AI agents on one canvas. Try ideas on branches, mark them up, and merge what works.</p><div class="hl-acts"><button type="button" class="createbtn" data-a="tour">Take the tour</button><button type="button" class="dbtn" data-a="im">${IC.upload}Import HTML</button></div></div><div class="hl-art"></div></section><section class="hl-sec"><div class="hl-sh"><h2>Recent prototypes</h2>${rs.length ? `<button type="button" class="hl-more" data-s="prototypes">View all${IC.chevr}</button>` : ""}</div><div class="hl-recent"></div></section><section class="hl-sec"><div class="hl-sh"><div><h2>Get started</h2><p>Short guides to what you can do here.</p></div><button type="button" class="hl-more" data-s="learn">All guides${IC.chevr}</button></div><div class="hl-learn"></div></section></div>`);
   page.querySelector(".hl-art").replaceWith(Object.assign(artEl("intro"), { className: "pv hl-art" }));
   page.querySelector('[data-a="tour"]').onclick = () => learn(0);
   page.querySelector('[data-a="im"]').onclick = openImport;
@@ -426,14 +423,14 @@ function renderLanding(main, rs, items) {
   main.replaceChildren(page);
 }
 function renderLearnPage(main) {
-  const page = h(`<div class="hl"><header class="hl-h"><h1><span>Learn Atelier</span>Everything it does, a step at a time</h1></header><div class="hl-learn all"></div></div>`);
+  const page = h(`<div class="hl"><header class="hl-h"><h1>Learn</h1><p>Short guides to everything you can do in Atelier.</p></header><div class="hl-learn all"></div></div>`);
   const lc = page.querySelector(".hl-learn");
   FEATURES.forEach((_, i) => lc.append(featureCard(i, learn)));
   main.replaceChildren(page);
 }
 // Activity: what people and agents did across the space, newest first
 async function renderActivityPage(main) {
-  const page = h(`<div class="hl"><header class="hl-h"><h1><span>Activity</span>What happened across this space</h1></header><div class="hl-acts-list"></div></div>`);
+  const page = h(`<div class="hl"><header class="hl-h"><h1>Activity</h1><p>What people and agents changed in this space, newest first.</p></header><div class="hl-acts-list"></div></div>`);
   main.replaceChildren(page);
   const list = page.querySelector(".hl-acts-list");
   list.append(h(`<div class="pempty"><b class="shimmer">Loading…</b></div>`));

@@ -38,17 +38,17 @@
   --note-bg:#fff6d6;--note-edge:#f1e2a6;--guide:#f2482a;
   --i-paper:#fafafa;--i-ink:#121212;--i-red:#e03131;--i-orange:#f76707;--i-yellow:#ffd43b;--i-lime:#dcefb4;--i-green:#2f9e44;--i-greenl:#b9dbb0;--i-violet:#7048e8;--i-peri:#c3cffb;--i-perid:#2c3e9e;--i-lav:#e4e1fb;--i-peach:#ffd9bd;--i-sky:#d7e6f7;--i-grey:#d6d6da;--i-greyl:#ececee;--i-white:#fff;--skel:#efefef;--skel-hi:#f8f8f8;
   --sh-sm:0 1px 2px rgba(0,0,0,.05);--sh-md:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.07),0 0 0 .5px rgba(0,0,0,.07);--sh-field:0 0 0 1px rgba(0,0,0,.1);
-  --sh-btn:0 0 0 .5px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.06),0 2px 8px rgba(0,0,0,.04),inset 0 1px 0 #fff;
+  --sh-btn:0 0 0 1px rgba(0,0,0,.09),0 1px 1px rgba(0,0,0,.03);
   --sh-chat:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.07),0 0 0 .5px rgba(0,0,0,.08);--sh-modal:0 2px 6px rgba(0,0,0,.04),0 24px 64px rgba(0,0,0,.14),0 0 0 .5px rgba(0,0,0,.08);
-  /* raised controls: a white pill lit from above, and the ink pill for the one main action */
-  --raise:linear-gradient(180deg,#ffffff 0%,#f5f5f5 100%);
-  --raise-ink:linear-gradient(180deg,#3a3a3a 0%,#121212 100%);
-  --sh-ink:0 1px 2px rgba(0,0,0,.18),0 4px 14px rgba(0,0,0,.14),inset 0 1px 0 rgba(255,255,255,.16);--sh-ink-hover:0 1px 2px rgba(0,0,0,.22),0 8px 22px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.22);
-  --sh-btn-hover:0 0 0 .5px rgba(0,0,0,.18),0 1px 2px rgba(0,0,0,.08),0 4px 14px rgba(0,0,0,.07),inset 0 1px 0 #fff;
+  /* controls: flat white with a hairline, and the flat ink pill for the one main action (no gloss) */
+  --raise:#ffffff;
+  --raise-ink:#121212;
+  --sh-ink:0 1px 2px rgba(0,0,0,.12);--sh-ink-hover:0 1px 2px rgba(0,0,0,.16);
+  --sh-btn-hover:0 0 0 1px rgba(0,0,0,.15),0 1px 2px rgba(0,0,0,.05);
   /* the studio light behind the home: white from above, falling to a soft grey (light, not decoration) */
   --studio:radial-gradient(140% 90% at 50% -12%,#ffffff 0%,#f8f8f7 42%,#ededec 100%);--i-studio:var(--studio);
-  /* product pictures: a pale cool base with soft blooms (white, ice, mint) */
-  --pv-base:#f2f4f6;--i-page-ink:#666666;--i-page-fill:rgba(0,0,0,.05);--i-page-line:rgba(0,0,0,.12);--i-lit:linear-gradient(180deg,rgba(255,255,255,.24) 0%,rgba(255,255,255,0) 46%,rgba(0,0,0,.07) 100%);--i-lit-rim:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(0,0,0,.14);--i-onyx:linear-gradient(180deg,#3d3d42 0%,#161618 58%,#0b0b0c 100%);--sh-onyx:0 1px 2px rgba(0,0,0,.25),0 20px 44px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.18);--sh-pin:drop-shadow(0 7px 10px rgba(0,0,0,.24));--bloom-a:rgba(255,255,255,.95);--bloom-b:rgba(198,222,255,.6);--bloom-c:rgba(206,238,222,.55);
+  /* product pictures: a flat canvas with a faint dot grid */
+  --pv-base:#f4f4f3;--pv-dot:rgba(0,0,0,.09);--i-page-ink:#666666;--i-page-fill:rgba(0,0,0,.05);--i-page-line:rgba(0,0,0,.12);--i-lit:linear-gradient(180deg,rgba(255,255,255,.24) 0%,rgba(255,255,255,0) 46%,rgba(0,0,0,.07) 100%);--i-lit-rim:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(0,0,0,.14);
   --grain:none;
   --display:'Atelier Display','Inter',ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;--hand:'Atelier Hand','Shantell Sans','Comic Neue','Segoe Print','Bradley Hand',cursive;
   --fakt:'Atelier Sans','Inter',ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;--ivar:var(--fakt);
@@ -70,15 +70,15 @@
   --note-bg:#3a3420;--note-edge:#4d4428;--guide:#ff6b4a;
   --i-paper:#fafafa;--i-ink:#121212;--i-red:#e03131;--i-orange:#f76707;--i-yellow:#ffd43b;--i-lime:#dcefb4;--i-green:#2f9e44;--i-greenl:#b9dbb0;--i-violet:#7048e8;--i-peri:#c3cffb;--i-perid:#2c3e9e;--i-lav:#e4e1fb;--i-peach:#ffd9bd;--i-sky:#d7e6f7;--i-grey:#d6d6da;--i-greyl:#ececee;--i-white:#fff;--skel:#232323;--skel-hi:#2c2c2c;
   --sh-sm:0 1px 2px rgba(0,0,0,.5);--sh-md:0 12px 32px rgba(0,0,0,.5),0 0 0 .5px rgba(255,255,255,.08);
-  --sh-field:0 0 0 1px rgba(255,255,255,.1);--sh-btn:0 0 0 .5px rgba(255,255,255,.1),0 1px 2px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06);
+  --sh-field:0 0 0 1px rgba(255,255,255,.1);--sh-btn:0 0 0 1px rgba(255,255,255,.09);
   --sh-chat:0 10px 30px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.07);--sh-modal:0 16px 48px rgba(0,0,0,.55),0 0 0 .5px rgba(255,255,255,.08);
-  --raise:linear-gradient(180deg,#2a2a2a 0%,#212121 100%);
-  --raise-ink:linear-gradient(180deg,#ffffff 0%,#e4e4e4 100%);
-  --sh-ink:0 1px 2px rgba(0,0,0,.45),0 4px 14px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.7);--sh-ink-hover:0 1px 2px rgba(0,0,0,.5),0 8px 22px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.8);
-  --sh-btn-hover:0 0 0 .5px rgba(255,255,255,.18),0 1px 2px rgba(0,0,0,.5),0 4px 14px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.08);
+  --raise:#222222;
+  --raise-ink:#f2f2f2;
+  --sh-ink:0 1px 2px rgba(0,0,0,.4);--sh-ink-hover:0 1px 2px rgba(0,0,0,.45);
+  --sh-btn-hover:0 0 0 1px rgba(255,255,255,.16);
   --studio:radial-gradient(140% 90% at 50% -12%,#202020 0%,#151515 45%,#0d0d0d 100%);
   --i-studio:radial-gradient(140% 90% at 50% -12%,#ffffff 0%,#f8f8f7 42%,#ededec 100%); /* the intro is always on paper */
-  --pv-base:#171819;--i-page-ink:#666666;--i-page-fill:rgba(0,0,0,.05);--i-page-line:rgba(0,0,0,.12);--i-lit:linear-gradient(180deg,rgba(255,255,255,.24) 0%,rgba(255,255,255,0) 46%,rgba(0,0,0,.07) 100%);--i-lit-rim:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(0,0,0,.14);--i-onyx:linear-gradient(180deg,#3d3d42 0%,#161618 58%,#0b0b0c 100%);--sh-onyx:0 1px 2px rgba(0,0,0,.25),0 20px 44px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.18);--sh-pin:drop-shadow(0 7px 10px rgba(0,0,0,.24));--bloom-a:rgba(255,255,255,.07);--bloom-b:rgba(107,155,255,.16);--bloom-c:rgba(79,207,152,.1);
+  --pv-base:#161616;--pv-dot:rgba(255,255,255,.08);--i-page-ink:#666666;--i-page-fill:rgba(0,0,0,.05);--i-page-line:rgba(0,0,0,.12);--i-lit:linear-gradient(180deg,rgba(255,255,255,.24) 0%,rgba(255,255,255,0) 46%,rgba(0,0,0,.07) 100%);--i-lit-rim:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(0,0,0,.14);
 }
 
 /* ═══ Base ═══ */
@@ -1118,7 +1118,7 @@ html[data-intro] .app{visibility:hidden}
 /* real marker strokes, drawn on */
 /* hand-drawn marks: the path is redrawn frame by frame (on eights) by intro.js */
 .ip.p-ink svg,.iund svg{width:100%;height:100%;overflow:visible}
-.ik.red{fill:var(--i-red)}.ik.green{fill:var(--i-green)}.ik.blue{fill:var(--text-accent)}.ik.ink{fill:var(--i-ink)}
+.ik.red{fill:var(--i-red)}.ik.green{fill:var(--i-green)}.ik.blue{fill:var(--text-accent)}
 .ip.p-peek .pinpeek{pointer-events:none}
 .ip.p-toolbar .tb{position:relative;left:auto;bottom:auto;transform:none;max-width:none}
 .ip.p-toast .toast{width:auto;min-width:0} /* hugs its words, lined up under the comment */
@@ -1130,7 +1130,7 @@ html[data-intro] .app{visibility:hidden}
 .ip.p-cursor b{margin-top:18px;padding:3px 9px;border-radius:99px;font-size:13px;font-weight:500;color:var(--i-white);background:var(--i-orange)}
 .ip.p-cursor.go{translate:-506px 36px} /* arrives at the frame's corner, beside the empty state, not on it */
 /* the mark: a comment pin with an eye; it blinks */
-.pinmark{display:block;width:100%;height:100%;overflow:visible;--m-b:var(--i-ink);--m-e:var(--i-white)} /* black: the mark of the house */
+.pinmark{display:block;width:100%;height:100%;overflow:visible;--m-b:var(--text-accent);--m-e:var(--i-white)}
 .pinmark .pb{fill:var(--m-b)}
 /* depth: light from the top-left, shade low on the right, a bright rim on the top edge, and the
    eye set in (shaded at its top). The gradients are white and black at low opacity (index.html),
@@ -1157,13 +1157,13 @@ html[data-intro] .app{visibility:hidden}
 .ibrand .pinmark{position:relative;z-index:1}
 .ot{position:absolute;inset:0;display:grid;place-items:center}
 .ot .ic{width:38px;height:38px;stroke-width:1.6}
-.ot.blue{background:var(--i-onyx);color:var(--i-white)}
+.ot.blue{background:var(--text-accent);color:var(--i-white)}
 .ot.yellow{background:var(--i-yellow);color:var(--i-ink)}
 .ot.red{background:var(--i-red);color:var(--i-white)}
 .ot.ink{background:var(--i-ink);color:var(--i-white)}
 .ot.white{background:var(--i-white);color:var(--i-ink);box-shadow:inset 0 0 0 1px var(--border-subtle)}
-.ibrand{display:none;place-items:center;background:var(--i-onyx);box-shadow:var(--sh-onyx)} /* the brand tile: glossy black, lit from above, a white pin standing on it */
-.ibrand .pinmark{width:56%;height:56%;--m-b:var(--i-white);--m-e:var(--i-ink);filter:drop-shadow(0 6px 9px rgba(0,0,0,.5))}
+.ibrand{display:none;place-items:center;background:linear-gradient(180deg,color-mix(in srgb,var(--text-accent) 82%,#fff) 0%,var(--text-accent) 62%);box-shadow:0 18px 48px color-mix(in srgb,var(--text-accent) 34%,transparent),inset 0 1px 0 rgba(255,255,255,.28)} /* the brand tile, lit from above, glowing in its blue */
+.ibrand .pinmark{width:56%;height:56%;--m-b:var(--i-white);--m-e:var(--text-accent);filter:drop-shadow(0 6px 9px color-mix(in srgb,color-mix(in srgb,var(--text-accent) 60%,black) 45%,transparent))} /* a white pin standing on its tile */
 .itile.brand .ibrand{display:grid}
 .itile.brand>i{display:none}
 .itile.grow{width:190px;height:190px;margin:-95px 0 0 -95px;transition:width 300ms var(--ease-spring),height 300ms var(--ease-spring),margin 300ms var(--ease-spring)}
@@ -1172,13 +1172,12 @@ html[data-intro] .app{visibility:hidden}
 .itile.f1 .ibrand{background:var(--i-yellow)}.itile.f1 .pinmark{--m-b:var(--i-ink);--m-e:var(--i-white)}
 .itile.f2{width:160px;height:160px;margin:-80px 0 0 -80px}.itile.f2 .ibrand .pinmark{width:58%;height:58%}.itile.f2 .ibrand{background:var(--i-red)}.itile.f2 .pinmark{--m-b:var(--i-white);--m-e:var(--i-red)}
 .itile.f3{width:124px;height:124px;margin:-62px 0 0 -62px}.itile.f3 .ibrand .pinmark{width:62%;height:62%}.itile.f3 .ibrand{background:var(--i-ink)}.itile.f3 .pinmark{--m-b:var(--i-yellow);--m-e:var(--i-ink)}
-.itile.f4{width:96px;height:96px;margin:-48px 0 0 -48px}.itile.f4 .ibrand .pinmark{width:75%;height:75%;--m-b:var(--i-ink);--m-e:var(--i-white);filter:var(--sh-pin)}.itile.f4 .ibrand{background:var(--i-white);box-shadow:inset 0 0 0 1px var(--border-subtle)} /* 72px and black: exactly the lone pin that follows, so nothing jumps */
+.itile.f4{width:96px;height:96px;margin:-48px 0 0 -48px}.itile.f4 .ibrand .pinmark{width:75%;height:75%;--m-b:var(--text-accent);--m-e:var(--i-white);filter:drop-shadow(0 8px 12px color-mix(in srgb,var(--text-accent) 30%,transparent))} /* 72px and blue: exactly the lone pin that follows, so nothing jumps */.itile.f4 .ibrand{background:var(--i-white);box-shadow:inset 0 0 0 1px var(--border-subtle)}
 /* the lockup: "atelıer", and the pin that becomes its dot */
 .imk{position:absolute;left:50%;top:50%;width:72px;height:72px;margin:-36px 0 0 -36px;display:none;transition:transform 340ms var(--ease-spring)}
 .intro.lock .itile{display:none}
 .intro.lock .imk{display:block}
-.imk .pinmark{filter:var(--sh-pin)}
-.intro.dotted .imk .pinmark{filter:drop-shadow(0 2px 3px rgba(0,0,0,.16))} /* on the letter: a tight shadow, so the gap above the stem stays clean */
+.imk .pinmark{filter:drop-shadow(0 8px 12px color-mix(in srgb,var(--text-accent) 30%,transparent))}
 .intro.typing .imk>i,.intro.dotted .imk>i{display:none}
 .ilock{position:absolute;left:50%;top:50%;transform:translate(-50%,-38%);display:none;align-items:baseline;font:700 136px/1 var(--display);letter-spacing:-.03em;color:var(--i-ink)} /* the header's spacing: nothing shifts when it flies there */
 .intro.lock .ilock{display:flex}
@@ -1188,7 +1187,7 @@ html[data-intro] .app{visibility:hidden}
 .ilock.flying{letter-spacing:-.03em} /* the header's spacing, so the swap is seamless */
 .iund{position:absolute;left:50%;top:100%;width:400px;height:36px;margin:2px 0 0 -200px;pointer-events:none;transition:opacity 120ms ease}
 .intro.land .iund{opacity:0}
-.ilock .lcar{position:absolute;bottom:4px;width:5px;height:76px;background:var(--i-ink);display:none;left:0}
+.ilock .lcar{position:absolute;bottom:4px;width:5px;height:76px;background:var(--text-accent);display:none;left:0}
 .intro.typing .ilock .lcar{display:block}
 .intro.still .ilock{display:flex}
 .intro.still .ilock .lt{opacity:1;filter:none}
@@ -1196,7 +1195,7 @@ html[data-intro] .app{visibility:hidden}
 .intro.still .imk{display:block}
 .intro.still .imk>i{display:none}
 /* the header lockup: the pin, and the name in lowercase, heavy and tight */
-.tlogo .amark.pinmark{width:20px;height:20px;translate:0 -1px;--m-b:var(--bg-primary);--m-e:var(--on-primary);filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.3))} /* optically centred on the word: ascenders to baseline, not its line box */
+.tlogo .amark.pinmark{width:20px;height:20px;translate:0 -1px;filter:drop-shadow(0 1px 1.5px color-mix(in srgb,var(--m-b) 45%,transparent))} /* optically centred on the word: ascenders to baseline, not its line box */
 .tlogo b.wm{font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:-.03em}
 .tlogo:hover .pinmark .eye{animation:i-blink 180ms ease-in-out}
 
@@ -1309,9 +1308,9 @@ html[data-intro] .app{visibility:hidden}
    controls with a raised thumb, white fields with a hairline, sheets on the 16/20 radius scale, and
    status lights that glow. Layout and sizes stay in the rules above. */
 .dbtn,.ddtrig{background:var(--raise);border:0;box-shadow:var(--sh-btn);transition:background-color 120ms ease,box-shadow 150ms var(--ease-smooth),transform 150ms var(--ease-out)}
-.dbtn:hover,.ddtrig:hover{box-shadow:var(--sh-btn-hover)} /* a shadow eases where a gradient swap would snap */
-.createbtn{background:var(--raise-ink);border:0;box-shadow:var(--sh-ink);transition:box-shadow 150ms var(--ease-smooth),transform 150ms var(--ease-out)}
-.createbtn:hover{box-shadow:var(--sh-ink-hover)}
+.dbtn:hover,.ddtrig:hover{box-shadow:var(--sh-btn-hover);background:var(--bg-layer)}
+.createbtn{background:var(--raise-ink);border:0;box-shadow:var(--sh-ink);transition:box-shadow 150ms var(--ease-smooth),background-color 150ms ease,transform 150ms var(--ease-out)}
+.createbtn:hover{box-shadow:var(--sh-ink-hover);background:var(--bg-primary-hover)}
 .createbtn.err{background:var(--bg-error);box-shadow:0 1px 2px rgba(0,0,0,.14),0 4px 14px color-mix(in srgb,var(--bg-error) 32%,transparent),inset 0 1px 0 rgba(255,255,255,.18)}
 .createbtn.err:hover{background:var(--bg-error-hover)}
 .segds{background:var(--bg-secondary);border:0;box-shadow:inset 0 0 0 .5px var(--border-subtle)}
@@ -1360,15 +1359,16 @@ html[data-intro] .app{visibility:hidden}
 .hside-foot button:hover{color:var(--text-primary)}
 .hmain{flex:1;min-width:0;position:relative;overflow:auto;scrollbar-width:thin}
 /* the sections: a two-tone title (a grey lead-in, then the point), and generous air */
-.hl{max-width:1120px;margin:0 auto;padding:48px 40px 64px;display:flex;flex-direction:column;gap:40px}
-.hl-h h1{font:600 32px/1.15 var(--fakt);letter-spacing:-.03em;color:var(--text-primary)}
-.hl-h h1 span{display:block;color:var(--text-placeholder)}
-.hl-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);min-height:300px;border-radius:20px;overflow:hidden;background:var(--bg-layer);box-shadow:var(--sh-md)}
+.hl{max-width:1120px;margin:0 auto;padding:32px 40px 64px;display:flex;flex-direction:column;gap:32px}
+.hl-h{display:flex;flex-direction:column;gap:4px}
+.hl-h h1{font:600 20px/1.2 var(--fakt);letter-spacing:-.02em;color:var(--text-primary)}
+.hl-h p{font-size:14px;color:var(--text-secondary)}
+.hl-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);min-height:280px;border-radius:16px;overflow:hidden;background:var(--bg-layer);box-shadow:0 0 0 1px var(--border-subtle)}
 .hl-hc{padding:40px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:12px}
-.hl-hc h2{font:600 24px/1.2 var(--fakt);letter-spacing:-.025em}
+.hl-hc h2{font:600 28px/1.15 var(--fakt);letter-spacing:-.03em}
 .hl-hc p{font-size:14px;line-height:1.5;color:var(--text-secondary);max-width:340px}
 .hl-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-.pv.hl-art{min-height:300px}
+.pv.hl-art{min-height:280px;border-left:1px solid var(--border-subtle)}
 .hl-sec{display:flex;flex-direction:column;gap:16px}
 .hl-sh{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
 .hl-sh h2{font:600 16px/1.3 var(--fakt);letter-spacing:-.015em}
@@ -1385,8 +1385,8 @@ html[data-intro] .app{visibility:hidden}
 .hl-learn.all{grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:24px 16px}
 .lcard{display:flex;flex-direction:column;gap:12px;padding:0;text-align:left;border-radius:16px;transition:transform 150ms var(--ease-out)}
 .lcard:active{transform:scale(.97)}
-.pv.lart{aspect-ratio:16/10;border-radius:16px;box-shadow:0 0 0 1px var(--border-subtle),var(--sh-sm);transition:box-shadow 180ms var(--ease-smooth)}
-.lcard:hover .pv.lart{box-shadow:0 0 0 1px var(--border-default),var(--sh-md)}
+.pv.lart{aspect-ratio:16/10;border-radius:12px;box-shadow:0 0 0 1px var(--border-subtle);transition:box-shadow 180ms var(--ease-smooth)}
+.lcard:hover .pv.lart{box-shadow:0 0 0 1px var(--border-default),var(--sh-sm)}
 .lcap{display:flex;flex-direction:column;gap:4px;padding:0 4px}
 .lcap b{font:600 14px/1.3 var(--fakt);letter-spacing:-.01em;color:var(--text-primary)}
 .lcap span{font-size:12px;line-height:1.45;color:var(--text-secondary);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -1403,8 +1403,7 @@ html[data-intro] .app{visibility:hidden}
 @media (max-width:860px){.hside{display:none}.hl{padding:32px 20px 48px}.hl-hero{grid-template-columns:1fr}.hl-hc{padding:28px}}
 
 /* ═══ Product pictures (ui/visuals.js): real pieces of Atelier, in depth, on the studio light ═══ */
-.pv{position:relative;display:block;overflow:hidden;background:var(--pv-base);isolation:isolate}
-.pv-bloom{position:absolute;inset:-25%;background:radial-gradient(34% 40% at 26% 30%,var(--bloom-a),transparent 72%),radial-gradient(36% 42% at 76% 64%,var(--bloom-b),transparent 72%),radial-gradient(28% 34% at 62% 16%,var(--bloom-c),transparent 72%);pointer-events:none}
+.pv{position:relative;display:block;overflow:hidden;background:radial-gradient(circle at 1px 1px,var(--pv-dot) 1px,transparent 1.4px) 0 0/16px 16px,var(--pv-base);isolation:isolate} /* the canvas Atelier works on: flat, with a faint dot grid */
 .pv-box{position:absolute;left:50%;top:50%;width:360px;height:240px;transform:translate(-50%,-50%);transform-origin:50% 50%;pointer-events:none}
 .pv-x{position:absolute;transform:scale(var(--s,1));transform-origin:0 0;opacity:var(--o,1);filter:blur(var(--b,0px))}
 .pv-ink{position:absolute;inset:0;width:100%;height:100%;z-index:2;overflow:visible}
@@ -1463,3 +1462,19 @@ html[data-intro] .app{visibility:hidden}
 .lrn-x{position:absolute;top:12px;right:12px;z-index:5;background:var(--raise);box-shadow:var(--sh-btn)}
 @media (max-width:760px){.lrn{grid-template-columns:1fr}.lrn-a{display:none}.md.lrn-md{height:auto}}
 @media (prefers-reduced-motion:reduce){.lrn-pic.in{animation:none}.lcard:active,.hnav button:active{transform:none}}
+
+/* a picture's headline: a short plain phrase, the guide's point, set like a title card */
+.pv-hl{position:absolute;left:0;right:0;top:44px;text-align:center;font:500 25px/1.12 var(--fakt);letter-spacing:-.03em;color:var(--text-primary)}
+.pv-frame.pv-mini{height:76px;border-radius:4px}
+.pv-who{display:inline-flex;align-items:flex-start;gap:0}
+.pv-who .pv-cursor{width:18px;height:18px}
+.pv-tag{margin-top:13px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500;color:var(--i-white);white-space:nowrap}
+.pv-tag.you{background:var(--text-accent)}
+.pv-tag.agent{background:var(--i-orange)}
+.pv-who:has(.you) .pv-cursor{fill:var(--text-accent)}
+.pv-who:has(.agent) .pv-cursor{fill:var(--i-orange)}
+.pv .rca{padding-top:8px}
+.pv .tagro{background:transparent;box-shadow:inset 0 0 0 1px var(--border-default);color:var(--text-secondary)}
+.pv .pg .t{overflow:visible;text-overflow:clip} /* a picture never truncates */
+/* cards in a grid have the room for a second line, so nothing is cut off with an ellipsis */
+.htile.hcard .hcap .m{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}

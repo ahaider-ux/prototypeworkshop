@@ -243,9 +243,18 @@ test("ui: the home's sidebar stays while its sections swap", () => {
 // people or avatars, no placeholder text, and a pointer only on a control it's acting on.
 test("ui: product pictures keep to the content rules", () => {
   const v = read("visuals.js");
-  const art = v.slice(v.indexOf("const ART = {"), v.indexOf("// what each step says"));
+  const art = v.slice(v.indexOf("const ART = {"), v.indexOf("// what each guide says"));
   assert.ok(!/class="cav|avatar|lorem|placeholder|John|Jane/i.test(art), "no avatars, people or placeholder text");
-  assert.equal((art.match(/class="pv-x pv-aim"|cls: "pv-aim"/g) || []).length, (art.match(/data-aim/g) || []).length, "every pointer has a control to land on");
+  // a pointer is either aimed at a control (data-aim) or a labelled cursor ("You", "Claude")
+  const pointers = (art.match(/\$\{pointer\}/g) || []).length;
+  const owned = (art.match(/\$\{pointer\}<b class="pv-tag/g) || []).length + (art.match(/cls: "pv-aim"/g) || []).length;
+  assert.equal(pointers, owned, "every pointer has a control or a name");
+  // each picture says its point in a short headline (Paper-style), and never repeats its guide's title
+  for (const m of v.matchAll(/\{ id: "([a-z]+)", title: "([^"]+)"/g)) {
+    const pic = art.slice(art.indexOf(`  ${m[1]}: () =>`), art.indexOf("\n\n", art.indexOf(`  ${m[1]}: () =>`)));
+    assert.match(pic, /head\("/, `${m[1]} has a headline`);
+    assert.ok(!pic.toLowerCase().includes(m[2].toLowerCase()), `${m[1]}'s picture repeats its title`);
+  }
   const ids = [...v.matchAll(/\{ id: "([a-z]+)", title:/g)].map((m) => m[1]);
   assert.equal(ids[0], "intro", "the flow starts with the intro step");
   for (const id of ids) assert.ok(art.includes(`  ${id}: () =>`), `${id} has its picture`);
@@ -261,11 +270,7 @@ test("ui: the intro's letters and pin never jump", () => {
   const lock = /\.ilock\{[^}]*letter-spacing:([-.\d]+em)/.exec(css)?.[1];
   const flying = /\.ilock\.flying\{letter-spacing:([-.\d]+em)\}/.exec(css)?.[1];
   assert.equal(lock, flying, "the word keeps its spacing when it flies");
-  assert.match(css, /\.itile\.f4 \.ibrand \.pinmark\{width:75%;height:75%;--m-b:var\(--i-ink\)/, "the last flash is the lone pin's size and colour");
-  // black, not a SaaS blue: the tile, the pin and the app icon
-  assert.match(css, /\.ibrand\{display:none;place-items:center;background:var\(--i-onyx\)/);
-  assert.match(css, /\.pinmark\{[^}]*--m-b:var\(--i-ink\)/);
-  assert.ok(!/\.(ibrand|imk|itile)[^{]*\{[^}]*--text-accent/.test(css), "no blue in the mark");
+  assert.match(css, /\.itile\.f4 \.ibrand \.pinmark\{width:75%;height:75%;--m-b:var\(--text-accent\)/, "the last flash is the lone pin's size and colour");
   assert.ok(!/"hop"/.test(read("intro.js")), "the pin waits above the ı, measured, not at a fixed hop");
 });
 

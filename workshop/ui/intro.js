@@ -61,7 +61,7 @@ const FRAME_MS = 125;
 const INKS = {
   circle: { w: 290, h: 150, color: "red", strokes: [circlePts(145, 75, 130, 62)], pen: "marker", size: 6 },
   under: {
-    w: 400, h: 36, color: "ink", pen: "marker", size: 9,
+    w: 400, h: 36, color: "blue", pen: "marker", size: 9,
     strokes: [Array.from({ length: 30 }, (_, i) => { const t = i / 29; return [12 + 374 * t, 24 - 3 * Math.sin(Math.PI * t) - 10 * t * t]; })],
   },
 };
@@ -88,7 +88,7 @@ function inkFrames(spec) {
 }
 const inkSvg = (name) => `<svg viewBox="0 0 ${INKS[name].w} ${INKS[name].h}" aria-hidden="true"><path class="ik ${INKS[name].color}" data-ink="${name}" d=""/></svg>`;
 
-// what the opening tile cuts through: the app's own tools, in black and white
+// what the opening tile cuts through: the app's own tools, in black and white, blue only once
 const OPENERS = [
   `<span class="ot ink">${IC.frame}</span>`,
   `<span class="ot white">${IC.cmt}</span>`,
@@ -304,7 +304,7 @@ export function playIntro({ force = false } = {}) {
   at(END, () => end(true));
 
   // the pin, from wherever it is, onto the dot of the i
-  // where the pin sits as the i's dot: above the ı's stem, centred over it
+  // where the pin sits as the i's dot: on top of the ı's stem, centred over it, overlapping a hair
   function dotAt() {
     const word = root.querySelector(".ilock");
     const li = word.querySelector(".li");
@@ -313,10 +313,7 @@ export function playIntro({ force = false } = {}) {
     const kk = k();
     const size = li.offsetHeight * 0.34; // the line is 1em tall
     const st = stemOf(word, li);
-    // the pin's drawn shape ends 0.396 of its box below the centre (21.5 of 24); it sits a clear gap
-    // above the stem, as a dot does (about .05em, like Inter's own i), so black never runs into black
-    const gap = li.offsetHeight * 0.05;
-    return { cx: (W0.left - s.left) / kk + st.x, cy: (W0.top - s.top) / kk + st.top - gap - size * 0.396, size };
+    return { cx: (W0.left - s.left) / kk + st.x, cy: (W0.top - s.top) / kk + st.top - size * 0.42, size };
   }
   function placeDot(now) {
     const { cx, cy, size } = dotAt();

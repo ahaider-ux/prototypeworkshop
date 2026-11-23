@@ -65,10 +65,9 @@ Every picture is drawn once in a **360 × 240 design box** and scaled to fit its
 
 - **Photo.** Not used in Atelier: there are no photo assets. Don't add one without an asset whose
   licence is recorded (see the repository's asset rules).
-- **Studio light** (Atelier's pastel light, the default). The pale cool base `--pv-base` with soft
-  blooms `--bloom-a` (white), `--bloom-b` (ice blue) and `--bloom-c` (mint): radial gradients about
-  2–3× the element size, fading to transparent (`.pv-bloom`). Use it for the Learn cards, the hero,
-  the dialog and isolated UI.
+- **Canvas** (the default). A flat neutral base `--pv-base` with a faint 16px dot grid `--pv-dot`,
+  the surface Atelier itself works on. No blooms or glossy gradients. Use it for the Learn cards, the
+  hero, the dialog and isolated UI; lead each picture with a short plain headline (`head()`).
 - **Graphite** (Atelier's editorial dark: the dark theme of the same pictures). `--pv-base` and the
   blooms switch to their dark pair automatically under `data-ltheme="dark"`; the components are
   Atelier's own dark surfaces with `--sh-md` / `--sh-modal` elevation. Don't hand-tune a separate
@@ -344,6 +343,6 @@ What worked:
 
 | Date | Direction | Look + devices | Why |
 |---|---|---|---|
-| 2026-11-23 | The mark in black | The lit, dimensional mark kept; its colour black instead of blue: a glossy black tile with a white pin, a black pin on paper, the lockup's caret and underline in ink | Blue read as generic SaaS; black is the luxury register (a house's mark); a chrome version was tried and set aside by the owner in favour of this style |
+| 2026-11-23 | Guides, Paper-style | A short plain headline (lowercase, the guide's point) centred on a flat dotted canvas, with one real piece of Atelier under it; no blooms | The pastel blooms and glossy pills read as dated ("Windows Vista"); Paper's and Flora's guides lead with a plain phrase and one product element; sample content had no meaning to the person reading it |
 | 2026-11-23 | The mark in depth | Lit tile (a top-light gradient, a bright top rim, a dark lower edge, a soft shadow in the tile's own colour); the pin with light, shade, a rim and a set-in eye, from shared gradients | Flat fills read as clip art next to dimensional app icons (60fps.design's app gallery, the owner's examples); kept one colour and one shape, so it stays the same mark |
 | 2026-11-23 | Studio light, in depth | Studio light; hero at scale, popover on a cropped surface, lift, macro DOF, focus pull, pointer on the control | Matches the studio-white app; product-led like the references (Shopify admin, Paper, Flora); every piece real |

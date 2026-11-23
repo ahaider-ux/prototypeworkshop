@@ -27,9 +27,9 @@ npm start
 Open http://127.0.0.1:4600. The server only listens on this computer.
 
 **Home.** A sidebar that stays put (Home, Prototypes, Learn, Activity, your recent prototypes and
-whether an agent is connected), and a main area that changes with it. **Home** greets you, shows
-what Atelier does in its own interface, your recent prototypes, and short Learn cards; each card
-opens a step-by-step Learn dialog. **Prototypes** is every prototype as a card on a canvas you can
+whether an agent is connected), and a main area that changes with it. **Home** has a welcome banner
+with a tour, your recent prototypes, and short "Get started" guides; each guide opens a step-by-step
+dialog. **Prototypes** is every prototype as a card on a canvas you can
 drag around, with momentum, or scroll with a trackpad or wheel: its picture, its name and when it
 was last edited. The most recent is in the middle and the rest spiral out from it; with seven or
 more the canvas wraps around forever, and with fewer they sit in a small centred block. Cards are
@@ -39,8 +39,8 @@ clears the canvas around it and glides it to the middle; when you come back, it'
 **Activity** is what people and agents did across the space. Pictures are saved drawings, not live
 pages, so it stays smooth however many there are.
 
-**Look.** "Studio white": neutral greys, white surfaces lifted off a soft studio light, raised white
-pills and an ink pill for the main action, hairlines and soft shadows, status lights that glow, and
+**Look.** "Studio white": neutral greys, white surfaces lifted off a soft studio light, flat white
+pills with a hairline and a flat ink pill for the main action, hairlines and soft shadows, status lights that glow, and
 one blue for selection. Dark mode is the same in graphite.
 
 **Type.** Inter throughout: Bold for the wordmark (the logo and the intro), SemiBold for headings,
@@ -57,7 +57,7 @@ interface, large and calm. An empty frame (Atelier's own empty state: the intro 
 selected, a hand rings it, Claude says it's on it and its cursor goes there, and a toast says the
 branch is ready to review. Hand-drawn ink moves like
 stop-motion, eight frames a second, drawn on and then gently "boiling". Everything cuts away, the
-tile flashes through the palette, the name types on, the mark (a black comment pin with an eye) drops
+tile flashes through the palette, the name types on, the mark (a comment pin with an eye) drops
 onto the "i" with a squash, and a hand underlines it. Then the pin fades as the word flies into the
 header, and the header's own pin appears once the word is in place. Flat colour, no gradients. Click or
 press Esc to go straight in; replay it from the Atelier menu (**Play the intro**) or by opening

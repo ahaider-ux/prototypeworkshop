@@ -33,60 +33,56 @@ const piece = (x, y, html, { w = 0, s = 1, o = 1, b = 0, z = 1, cls = "" } = {})
 const PAGE = `<div class="pv-page"><i class="hd"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>`;
 const pointer = `<svg class="pv-cursor" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5 13 8l-4.3 1.2L7 13.5Z"/></svg>`;
 
+// Each picture, after how Paper presents its guides: a short plain phrase as the picture's headline,
+// centred on the canvas, and one real piece of Atelier under it, showing exactly that. Nothing else.
+const head = (t) => `<div class="pv-hl">${t}</div>`;
 const ART = {
-  // the whole idea at a glance: a selected empty frame, a hand rings it, the agent is on it, and
-  // its branch is ready (hero at scale + a popover spilling off a cropped surface)
+  // people and agents on one canvas: a selected frame, your cursor and Claude's
   intro: () =>
-    piece(28, 44, `<span class="pv-lbl">Start screen</span><div class="pv-frame"><div class="pv-empty pempty">Ask an agent to design it</div></div><span class="isel"><i class="ic1"></i><i class="ic2"></i><i class="ic3"></i><i class="ic4"></i></span>`, { w: 196, cls: "pv-sel" }) +
-    `<svg class="pv-ink" viewBox="0 0 ${BW} ${BH}" aria-hidden="true"><path class="ik red" d="${ring(126, 108, 94, 48)}"/></svg>` +
-    piece(188, 134, `<div class="pinpeek"><div class="ph"><span class="pv-ag">${IC.spark}</span><b>Claude</b><span>now</span></div><p>On it, on a branch.</p></div>`, { w: 160, z: 3 }) +
-    piece(118, 200, `<div class="toast is-open"><div class="tcol"><span class="tt2">${IC.fork}Branch ready to review</span></div></div>`, { s: 0.9, z: 2 }),
+    head("people and agents,<br>one canvas") +
+    piece(120, 128, `<div class="pv-frame pv-mini"></div><span class="isel"><i class="ic1"></i><i class="ic2"></i><i class="ic3"></i><i class="ic4"></i></span>`, { w: 120, cls: "pv-sel" }) +
+    piece(68, 204, `${pointer}<b class="pv-tag you">You</b>`, { z: 3, cls: "pv-who" }) +
+    piece(246, 112, `${pointer}<b class="pv-tag agent">Claude</b>`, { z: 3, cls: "pv-who" }),
 
-  // a branch, lifted out of its list: the list frosted behind, the one row crisp and nearer
+  import: () =>
+    head("bring in any<br>HTML prototype") +
+    piece(118, 150, `<button type="button" class="createbtn" tabindex="-1">${IC.upload}Import HTML</button>`, { z: 2 }),
+
   branch: () =>
-    piece(36, 46, `<div class="pv-panel"><div class="shd"><span>Branches</span><span class="n">3</span></div><div class="pgs"><div class="pg on">${IC.board}<span class="t">Main</span></div><div class="pg">${IC.fork}<span class="t">Denser sidebar</span><span class="m ch">1</span></div><div class="pg pv-slot"></div></div></div>`, { w: 210, o: 0.78, b: 1.2 }) +
-    piece(84, 146, `<div class="pg pv-lift">${IC.fork}<span class="t">Roomier cards</span><span class="m ch">2 changes</span></div>`, { w: 196, s: 1.3, z: 3 }),
+    head("try every idea<br>on a branch") +
+    piece(73, 132, `<div class="pv-panel"><div class="pgs"><div class="pg on">${IC.board}<span class="t">Main</span></div><div class="pg">${IC.fork}<span class="t">Bigger header</span><span class="m ch">2 changes</span></div></div></div>`, { w: 214, cls: "pv-c" }),
 
-  // a note at macro scale over its screen, blurred past reading; a hand's arrow points into it
   markup: () =>
-    piece(70, 26, `<div class="pv-frame pv-far">${PAGE}</div>`, { w: 250, o: 0.42, b: 5 }) +
-    piece(34, 70, `<div class="note warm"><div class="tx">Tighten the cards, they feel cramped</div></div>`, { w: 150, s: 1.35, z: 3, cls: "pv-tilt" }) +
-    `<svg class="pv-ink" viewBox="0 0 ${BW} ${BH}" aria-hidden="true"><path class="ik green" d="${arrow(Array.from({ length: 22 }, (_, i) => { const t = i / 21; return [222 + 70 * t, 150 - 46 * t + 18 * Math.sin(Math.PI * t)]; }))}"/><path class="ik green" d="${arrow([[280, 98], [293, 104], [287, 118]])}"/></svg>`,
+    head("mark it up<br>like paper") +
+    piece(124, 130, `<div class="note warm"><div class="tx">Make this bolder</div></div>`, { w: 112, cls: "pv-tilt" }),
 
-  // a request in the composer with the agent switched on, the pointer on the switch
   agent: () =>
-    piece(56, 34, `<div class="pv-panel pv-far"><div class="pv-rows"><i></i><i></i><i></i></div></div>`, { w: 250, o: 0.5, b: 3 }) +
-    piece(46, 98, `<div class="ccomp"><div class="cbox"><span class="ctx">Make the button bolder</span><div class="cbar"><span class="cagent" aria-pressed="true" data-aim>${IC.spark}Agent fixes this</span><span class="sp"></span><span class="csend">${IC.send}</span></div></div></div>`, { w: 236, s: 1.25, z: 3 }) +
-    piece(0, 0, pointer, { z: 4, cls: "pv-aim" }),
+    head("hand it<br>to an agent") +
+    piece(66, 134, `<div class="ccomp"><div class="cbox"><span class="ctx">Make the header bigger</span><div class="cbar"><span class="cagent" aria-pressed="true">${IC.spark}Agent fixes this</span><span class="sp"></span><span class="csend">${IC.send}</span></div></div></div>`, { w: 228 }),
 
-  // one change in review, in focus; the others step away; the pointer on Merge
   merge: () =>
-    piece(62, 30, `<div class="pv-chg"><span class="k">.cards</span><span>padding</span></div>`, { w: 200, s: 1.06, o: 0.3, b: 3.5 }) +
-    piece(52, 78, `<div class="pv-chg pv-focus"><span class="k">#hmGrid</span><span>gap</span><span class="pv-was">none</span><span class="pv-now">32px</span></div>`, { w: 230, s: 1.3, z: 3 }) +
-    piece(66, 150, `<div class="pv-chg"><span class="k">.side</span><span>width</span></div>`, { w: 200, s: 1.1, o: 0.4, b: 2 }) +
-    piece(196, 182, `<button type="button" class="createbtn" tabindex="-1" data-aim>${IC.check}Merge into Main</button>`, { z: 4 }) +
-    piece(0, 0, pointer, { z: 5, cls: "pv-aim" }),
+    head("review it,<br>then merge") +
+    piece(108, 150, `<button type="button" class="createbtn" tabindex="-1">${IC.check}Merge into Main</button>`, { z: 2 }),
 
-  // a recipe in focus, its neighbours in the deck behind
   recipes: () =>
-    piece(150, 22, `<div class="pv-card pv-far"><b>Check contrast</b></div>`, { w: 170, s: 1.06, o: 0.3, b: 3.5 }) +
-    piece(40, 70, `<div class="isec rcard pv-card"><div class="ih"><b>Polish pass</b><span class="tagro info">Auto</span></div><div class="rcs"><div class="rcbar" aria-hidden="true"><i class="m" style="flex:4"></i><i class="o" style="flex:1"></i></div><span class="rcst">5 runs · 4 merged</span></div></div>`, { w: 220, s: 1.28, z: 3 }) +
-    piece(196, 176, `<div class="pv-card pv-far"><b>Tidy spacing</b></div>`, { w: 150, s: 1.1, o: 0.45, b: 2 }),
+    head("save how<br>you work") +
+    piece(92, 132, `<div class="isec rcard pv-card"><div class="ih"><b>Polish pass</b><span class="tagro">Recipe</span></div><div class="rca"><button type="button" class="dbtn sm" tabindex="-1">${IC.play}Run</button></div></div>`, { w: 176 }),
 };
 
-// what each step says; try: what it does for real, when there's a real thing to do
+// what each guide says, in plain words: what you do, and what you get
 export const FEATURES = [
-  { id: "intro", title: "Introducing Atelier", text: "A canvas for your HTML prototypes, where people and agents try ideas on branches and merge what works." },
-  { id: "branch", title: "Try every idea on a branch", text: "Change anything on a branch while Main stays as it is. Nothing lands until you merge it." },
-  { id: "markup", title: "Mark it up like paper", text: "Notes, highlights, arrows and hand-drawn marks stay on the canvas, and agents read them as feedback." },
-  { id: "agent", title: "Hand it to an agent", text: "Ask in plain words. Claude takes the request, works on its own branch and tells you when it's ready.", try: "agent" },
-  { id: "merge", title: "Review, then merge", text: "See every change side by side, keep what works and say why. The reason goes in the decision log." },
-  { id: "recipes", title: "Save how your team works", text: "Recipes are shared instructions for recurring work that anyone, or any agent, can run again." },
+  { id: "intro", title: "Welcome to Atelier", text: "Prototype in HTML with your team and AI agents on one canvas. Learn the basics in two minutes." },
+  { id: "import", title: "Import a prototype", text: "Bring in an HTML file or a whole folder. Each screen becomes a frame on the canvas." },
+  { id: "branch", title: "Try an idea on a branch", text: "Change anything on a branch while Main stays as it is. Nothing lands until you merge it." },
+  { id: "markup", title: "Mark up a screen", text: "Leave notes, highlights, arrows and drawings on any screen. Agents read them as feedback." },
+  { id: "agent", title: "Ask an agent", text: "Describe a change in plain words. Claude makes it on its own branch and tells you when it's ready.", try: "agent" },
+  { id: "merge", title: "Review and merge", text: "See every change side by side, keep what works and note why. The reason goes in the decision log." },
+  { id: "recipes", title: "Save a recipe", text: "Turn work you repeat into a recipe that anyone, or any agent, can run again." },
 ];
 
 // a picture, in a box of any size: the design box is scaled to fit and centred on the studio light
 export function artEl(id) {
-  const el = h(`<div class="pv" aria-hidden="true"><div class="pv-bloom"></div><div class="pv-box">${(ART[id] || ART.intro)()}</div></div>`);
+  const el = h(`<div class="pv" aria-hidden="true"><div class="pv-box">${(ART[id] || ART.intro)()}</div></div>`);
   const box = el.querySelector(".pv-box");
   const fit = () => {
     const w = el.clientWidth,

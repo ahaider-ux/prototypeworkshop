@@ -34,9 +34,8 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   from the Atelier tokens at the top of `ui/app.css` ("studio white": neutral greys with no warm tint,
   white surfaces lifted off a soft studio light (`--studio` behind the home, a plain neutral canvas),
   hairlines and soft layered shadows; fills, hovers and hairlines are translucent neutral tints;
-  controls are raised: white pills lit from above (`--raise`, `--sh-btn`) and the ink pill for the
-  one main action (`--raise-ink`, `--sh-ink`), and hover deepens a shadow rather than swapping a
-  gradient, so it eases; status lights glow; every control's surface, edge and shadow is set once,
+  controls are flat: white pills with a hairline (`--raise`, `--sh-btn`) and the flat ink pill for
+  the one main action (`--raise-ink`, `--sh-ink`); no gloss, no gradients on controls; status lights glow; every control's surface, edge and shadow is set once,
   in the Skins block at the end of `ui/app.css`; no texture or grain; fields are white with a hairline; meta tags are outlined; a tool-blue accent for selection and links only; empty states carry a
   hand-drawn mark; shapes: what you press is a pill and icon buttons are circles, list rows are
   rounded 8, fields 10, sheets 16 and panels 20; padding follows the control scale at the end
@@ -82,7 +81,8 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   The home is a sidebar that stays (sections, recent prototypes, the agent) and a main area that
   changes with the section (`#/`, `#/prototypes`, `#/learn`, `#/activity`): only the main area
   re-renders. Product pictures (the home hero, the Learn cards and the Learn dialog) live in
-  `ui/visuals.js`, built from Atelier's own classes; follow the `product-visuals` skill
+  `ui/visuals.js`, built from Atelier's own classes: each is a short plain headline and one real
+  piece of Atelier on a flat dotted canvas (no pastel blooms); follow the `product-visuals` skill
   (`.claude/skills/product-visuals/SKILL.md`) for any new one.
 - **The canvas shell scales below 1180px** (`fitShell`). Anything measured with
   `getBoundingClientRect` and written into a style inside `#frame` is divided by `frScale()`
