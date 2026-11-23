@@ -110,11 +110,7 @@ test("ui: workspace loads are order-safe", () => {
 // icon-only Import (Connect a folder is in the space menu).
 // Opening a prototype fades the bar out on #home; a fresh canvas must clear that, or the bar stays
 // invisible when you come back.
-test("ui: the home bar fits a phone, and coming back shows it again", () => {
-  const css = read("app.css");
-  const phone = css.match(/@media \(max-width:700px\)\{\.hbar[^\n]*/)?.[0] || "";
-  assert.match(phone, /\.hcount,\.hbr \.dbtn\{display:none\}/);
-  assert.match(phone, /\.hbr \.createbtn\{[^}]*font-size:0/);
+test("ui: coming back to the home canvas shows it again, and Connect stays reachable", () => {
   assert.match(read("app.js"), /label: "Connect a folder…"/, "Connect stays reachable from the space menu");
   const home = read("home.js");
   const mount = home.slice(home.indexOf("export function mountHomeCanvas"));
@@ -232,7 +228,9 @@ test("ui: the home's sidebar stays while its sections swap", () => {
   const app = read("app.js");
   assert.match(app, /const SECTIONS = \["home", "prototypes", "learn", "activity"\]/);
   assert.match(app, /function homeShell\(\) \{[\s\S]*?if \(side\) return home;/, "built once");
-  for (const f of ["renderLanding", "renderLearnPage", "renderActivityPage"]) {
+  const canvas = app.slice(app.indexOf("function renderHomeCanvas"), app.indexOf("\n}\n", app.indexOf("function renderHomeCanvas")));
+  assert.ok(canvas.includes("homeMain()") && !/\$\("home"\)\.replaceChildren/.test(canvas), "the home canvas fills only the main area");
+  for (const f of ["renderLearnPage", "renderActivityPage"]) {
     const body = app.slice(app.indexOf(`function ${f}`), app.indexOf("\n}\n", app.indexOf(`function ${f}`)));
     assert.ok(body.includes("main.replaceChildren"), `${f} replaces only the main area`);
     assert.ok(!/\$\("home"\)\.replaceChildren/.test(body), `${f} leaves the sidebar alone`);
@@ -351,4 +349,33 @@ test("ui: the header has no solid background or bottom border", () => {
     assert.doesNotMatch(m[2], /border-bottom/, ".top draws no rule");
   }
   assert.match(css, /\.app\{[^}]*background:var\(--bg-canvas\)/, "the canvas surface runs up behind the header");
+});
+
+// No handwriting in the app: notes and hints are set in the interface face like everything else.
+test("ui: no handwritten font anywhere in the app", () => {
+  const css = read("app.css");
+  assert.ok(!/--hand|Shantell|Atelier Hand|cursive/.test(css), "no hand font token, face or fallback");
+  assert.ok(!/class="hand"/.test(read("app.js")));
+});
+
+// Connecting an AI tool is the header's one call to action (the ink pill) until a tool is connected;
+// then it's a quiet status pill.
+test("ui: the header asks you to connect your AI tool with a real button", () => {
+  assert.match(read("index.html"), /class="createbtn sm agst cta" id="agentBtn"/);
+  assert.match(read("app.js"), /\$\("agentBtn"\)\.className = on \? "dbtn sm agst" : "createbtn sm agst cta"/);
+});
+
+// Home is one endless field of real things: your prototypes, placeholders that do what they say, and
+// the guides; over each the pointer says what a click does.
+test("ui: the home canvas holds prototypes, placeholders and guides, and names each click", () => {
+  const app = read("app.js");
+  assert.match(app, /if \(S\.homeSection === "home"\) return renderHomeCanvas\(rs\);/);
+  const canvas = app.slice(app.indexOf("function renderHomeCanvas"), app.indexOf("\n}\n", app.indexOf("function renderHomeCanvas")));
+  assert.match(canvas, /nextActions\(\)/);
+  assert.match(canvas, /cue: "Learn", art: \(\) => artEl/);
+  for (const cue of ['cue: "Start"', 'cue: "Connect"']) assert.ok(app.includes(cue), cue);
+  const home = read("home.js");
+  assert.match(home, /const cueOf = \(idx\) => \(idx >= 0 \? "Open"/);
+  assert.match(home, /el\.className = "htile hguide"/);
+  assert.match(read("app.css"), /\.hcur\.on \.hcl\{[^}]*background:var\(--glass-bg\)/, "the label is glass");
 });

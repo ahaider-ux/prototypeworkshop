@@ -40,11 +40,10 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   hand-drawn mark; shapes: what you press is a pill and icon buttons are circles, list rows are
   rounded 8, fields 10, sheets 16 and panels 20; padding follows the control scale at the end
   of `ui/app.css` (32-tall pills 14 a side, 28-tall 12, 24-tall 8, a leading icon takes 2 off the left); type in
-  three tokens: `--display` Inter Bold for the wordmark only (header logo and intro lockup; never
+  two tokens: `--display` Inter Bold for the wordmark only (header logo and intro lockup; never
   titles or other app text), `--fakt` Inter for the interface (Regular for controls and values,
   SemiBold for headings, tightening as it grows: no letter-spacing at 12–14px, about -.02em on
-  titles), `--hand` Shantell Sans for notes and handwritten marks, never on buttons; mono only for
-  code). Font files are never committed here: `src/fonts.js` serves them from a craft-fonts
+  titles), notes included: no handwriting fonts anywhere; mono only for code). Font files are never committed here: `src/fonts.js` serves them from a craft-fonts
   checkout, and every token falls back to system fonts. Libra's tokens belong to the prototypes: they appear only inside boards
   and in the inspector's swatches. Compose new surfaces from the existing classes (`.dbtn`,
   `.createbtn`, `.ghbtn`, `.segds`, `.cnmenu`, `.ddtrig`, `.afld-in`, `.tagro`, `.tct`, `.md`,
@@ -77,10 +76,16 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   wait while someone drags (`setBusy`). What the pointer is over comes from the cell maths, not
   hit-testing, so it stays right while the field coasts. Its pure maths lives in `ui/motion.js`,
   tested in Node. Nothing made up stands in for a prototype, on the home or in the intro: a slot
-  without a real one is an empty state (`.pempty`, or the home's action cards) that does something real.
-  The home is a sidebar that stays (sections, recent prototypes, the agent) and a main area that
-  changes with the section (`#/`, `#/prototypes`, `#/learn`, `#/activity`): only the main area
-  re-renders. Product pictures (the home hero, the Learn cards and the Learn dialog) live in
+  without a real one is an empty state (`.pempty`, or the home's placeholder cards) that does something real.
+  The home is a sidebar that stays (sections, recent prototypes) and a main area that changes with
+  the section (`#/`, `#/prototypes`, `#/learn`, `#/activity`): only the main area re-renders. Home
+  (`#/`) is the endless canvas: your prototypes (most recent in the middle), placeholder cards that
+  do what they say (add a prototype, connect a folder, connect your AI tool) and the guides, running
+  full-bleed under the glass sidebar and centred beside it. Cards are lifted off the canvas
+  (`--sh-card`, `--sh-card-hi`); over one, the pointer's dot opens into a glass label saying what a
+  click does ("Open", "Start", "Connect", "Learn") and trails the pointer by a hair. Prototypes
+  (`#/prototypes`) lists them as cards. The header's one call to action is "Connect your AI tool"
+  until a tool is connected. Product pictures (the home's guide cards, the Learn cards and the Learn dialog) live in
   `ui/visuals.js`, built from Atelier's own classes: each is a short plain headline and one real
   piece of Atelier on a flat dotted canvas (no pastel blooms); follow the `product-visuals` skill
   (`.claude/skills/product-visuals/SKILL.md`) for any new one.

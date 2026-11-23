@@ -7,7 +7,7 @@ import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDi
 import { rulesFor, loadOverrides } from "./styles.js";
 import { loadRecipes } from "./recipes.js";
 import { playIntro } from "./intro.js";
-import { mountHomeCanvas, cardGrid } from "./home.js";
+import { mountHomeCanvas } from "./home.js";
 import { FEATURES, featureCard, artEl, openLearn } from "./visuals.js";
 
 const store = {
@@ -119,7 +119,7 @@ function renderWho() {
     const name = hs[0]?.client || S.ws.agent.name;
     w.append(h(`<span class="av agent" title="${esc(name)}${hs.length ? " is connected" : " runs requests"}">${esc(name[0])}<span class="on"></span></span>`));
   } else {
-    const c = h(`<button type="button" class="av" style="margin-left:-6px;cursor:pointer" aria-label="Connect an agent" data-tip="Connect an agent">${IC.plus}</button>`);
+    const c = h(`<button type="button" class="av" style="margin-left:-6px;cursor:pointer" aria-label="Connect your AI tool" data-tip="Connect your AI tool">${IC.plus}</button>`);
     c.onclick = openConnect;
     w.append(c);
   }
@@ -127,8 +127,11 @@ function renderWho() {
 function renderAgent() {
   const ws = S.ws;
   const hs = ws?.harnesses || [];
-  $("agentDot").classList.toggle("on", !!(hs.length || ws?.agent));
-  $("agentTxt").innerHTML = hs.length ? `<b>${esc(hs[0].client)}</b> connected` : ws?.agent ? `Requests run with <b>${esc(ws.agent.name)}</b>` : "Connect an agent";
+  const on = !!(hs.length || ws?.agent);
+  // not connected: the one visible call to action in the header; connected: a quiet status pill
+  $("agentBtn").className = on ? "dbtn sm agst" : "createbtn sm agst cta";
+  $("agentDot").classList.toggle("on", on);
+  $("agentTxt").innerHTML = hs.length ? `<b>${esc(hs[0].client)}</b> connected` : ws?.agent ? `Requests run with <b>${esc(ws.agent.name)}</b>` : "Connect your AI tool";
 }
 
 // ---------- where you are: Home, or a page of a prototype ----------
@@ -265,24 +268,9 @@ function lastEdit(rootId) {
   for (const tk of S.tasks) if (fam.has(tk.env)) see(tk.updatedAt);
   return t ? new Date(t).toISOString() : null;
 }
-// Home shows the space as a canvas of prototypes (home.js) or as a list of cards; the choice is
-// remembered in this browser.
+// Home is a canvas of everything (home.js): your prototypes, what to do next, and the guides. The
+// Prototypes section lists them as cards.
 let homeCv = null;
-const homeView = () => {
-  try {
-    return localStorage.getItem("ws-home-view") === "list" ? "list" : "canvas";
-  } catch {
-    return "canvas";
-  }
-};
-function setHomeView(v) {
-  try {
-    localStorage.setItem("ws-home-view", v);
-  } catch {}
-  homeKey = "";
-  renderHome();
-}
-const viewSwitch = () => segmented([{ label: "Canvas", value: "canvas" }, { label: "List", value: "list" }], homeView(), setHomeView, { label: "Show prototypes as" });
 function homeItems(rs) {
   return rs
     .map((e) => {
@@ -293,36 +281,27 @@ function homeItems(rs) {
     })
     .sort((a, b) => String(b.edited || "").localeCompare(String(a.edited || "")));
 }
+// the guides that sit on the home canvas, by their step in the Learn dialog
+const HOME_GUIDES = [0, 2, 3, 4, 5];
 function renderHomeCanvas(rs) {
   const el = homeMain();
   const items = homeItems(rs);
   const openItem = (it) => go(S.envs.has(lastPage.get(it.id)) ? lastPage.get(it.id) : it.id);
-  // one place to add another; the bar above and the sidebar hold the rest (a folder, an agent)
-  const actions = nextActions().slice(0, 1);
+  const actions = [...nextActions(), ...HOME_GUIDES.map((i) => ({ title: FEATURES[i].title, desc: FEATURES[i].text, cue: "Learn", art: () => artEl(FEATURES[i].id), run: () => learn(i) }))];
   if (!homeCv || !el.querySelector(".hcanvas")) {
     homeCv?.destroy();
     el.replaceChildren();
     el.classList.add("hc");
-    homeCv = mountHomeCanvas(el, items, { open: openItem, actions, key: S.ws.home || S.ws.name });
-  } else homeCv.update(items, actions);
-  // the bar over it: only how to show them (the sidebar names the space and lists the recent ones)
-  el.querySelector(".hbar")?.remove();
-  const bar = h(`<div class="hbar"><span></span><div class="hb hbr"></div></div>`);
-  const r = bar.querySelector(".hbr");
-  r.append(viewSwitch());
-  if (S.ws.spaces) {
-    const sp = h(`<button type="button" class="dbtn sm">${IC.folder}Connect a folder</button>`);
-    sp.onclick = () => openSpaces();
-    r.append(sp);
-  }
-  const im = h(`<button type="button" class="createbtn sm">${IC.upload}Import HTML</button>`);
-  im.onclick = openImport;
-  r.append(im);
-  el.append(bar);
+    // the sidebar floats over the canvas's left edge: the field is centred in the space beside it
+    const cover = () => {
+      const sd = homeShell().querySelector(".hside");
+      return sd && sd.offsetParent ? sd.getBoundingClientRect().right - el.getBoundingClientRect().left : 0;
+    };
+    homeCv = mountHomeCanvas(el, items, { open: openItem, actions, key: S.ws.home || S.ws.name, cover });
+  } else homeCv.update(items, actions); // nothing floats over it: adding things is cards on the field
 }
 // The home: a sidebar that stays put (sections, recent prototypes, the agent) and a main area that
 // changes with the section. Picking a section swaps only the main area, with a short fade.
-let homeGrid = null;
 function homeShell() {
   const home = $("home");
   let side = home.querySelector(".hside");
@@ -390,42 +369,25 @@ function renderSide(rs, items) {
 function renderHome(moved = false) {
   if (S.view !== "home") return;
   const rs = roots();
-  const key = JSON.stringify([S.homeSection, homeView(), S.ws.name, S.ws.home, S.ws.spaces, S.ws.harnesses?.length || 0, rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen, lastEdit(e.id)])]);
+  const key = JSON.stringify([S.homeSection, S.ws.name, S.ws.home, S.ws.spaces, S.ws.harnesses?.length || 0, rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen, lastEdit(e.id)])]);
   if (key === homeKey) return;
   homeKey = key;
   const items = homeItems(rs);
   renderSide(rs, items);
   const main = homeMain();
   if (moved && !matchMedia("(prefers-reduced-motion: reduce)").matches) main.animate([{ opacity: 0, filter: "blur(2px)" }, { opacity: 1, filter: "blur(0)" }], { duration: 180, easing: "ease-out" });
-  if (S.homeSection !== "prototypes" || !(homeView() === "canvas" && rs.length)) (homeCv?.destroy(), (homeCv = null), main.classList.remove("hc"));
-  if (S.homeSection !== "home") (homeGrid?.destroy(), (homeGrid = null));
-  if (S.homeSection === "home") return renderLanding(main, rs, items);
+  if (S.homeSection !== "home") (homeCv?.destroy(), (homeCv = null), main.classList.remove("hc"));
+  if (S.homeSection === "home") return renderHomeCanvas(rs);
   if (S.homeSection === "learn") return renderLearnPage(main);
   if (S.homeSection === "activity") return renderActivityPage(main);
-  if (homeView() === "canvas" && rs.length) return renderHomeCanvas(rs);
   renderHomeList(rs);
 }
 // what this space can do next, as empty-state cards (never made-up prototypes)
 const nextActions = () => [
-  { title: "Import HTML", desc: "A file or a whole folder", icon: IC.upload, run: openImport },
-  ...(S.ws.spaces ? [{ title: "Connect a folder", desc: "Edit prototypes where they live", icon: IC.folder, run: () => openSpaces() }] : []),
-  ...(S.ws.harnesses?.length ? [] : [{ title: "Connect an agent", desc: "It works on branches; you review", icon: IC.agent, run: openConnect }]),
+  { title: "Add a prototype", desc: "Import an HTML file or a whole folder", icon: IC.upload, cue: "Start", run: openImport },
+  ...(S.ws.spaces ? [{ title: "Connect a folder", desc: "Edit prototypes where they live", icon: IC.folder, cue: "Connect", run: () => openSpaces() }] : []),
+  ...(S.ws.harnesses?.length ? [] : [{ title: "Connect your AI tool", desc: "It works on branches; you review", icon: IC.agent, cue: "Connect", run: openConnect }]),
 ];
-// Home, after the way Paper and Flora open: the page's name, a welcome banner that says what Atelier
-// is and offers the tour, the prototypes you worked on last, and short guides to get started
-function renderLanding(main, rs, items) {
-  homeGrid?.destroy();
-  const page = h(`<div class="hl hl-top"><section class="hl-hero"><div class="hl-hc"><h2>Welcome to Atelier</h2><p>Prototype in HTML with your team and AI agents on one canvas. Try ideas on branches, mark them up, and merge what works.</p><div class="hl-acts"><button type="button" class="createbtn" data-a="tour">Take the tour</button><button type="button" class="dbtn" data-a="im">${IC.upload}Import HTML</button></div></div><div class="hl-art"></div></section><section class="hl-sec"><div class="hl-sh"><h2>Recent prototypes</h2>${rs.length ? `<button type="button" class="hl-more" data-s="prototypes">View all${IC.chevr}</button>` : ""}</div><div class="hl-recent"></div></section><section class="hl-sec"><div class="hl-sh"><div><h2>Get started</h2><p>Short guides to what you can do here.</p></div><button type="button" class="hl-more" data-s="learn">All guides${IC.chevr}</button></div><div class="hl-learn"></div></section></div>`);
-  page.querySelector(".hl-art").replaceWith(Object.assign(artEl("hero"), { className: "pv hl-art" }));
-  page.querySelector('[data-a="tour"]').onclick = () => learn(0);
-  page.querySelector('[data-a="im"]').onclick = openImport;
-  for (const b of page.querySelectorAll("[data-s]")) b.onclick = () => goSection(b.dataset.s);
-  homeGrid = cardGrid(items.slice(0, 4), { open: openItemOf, actions: items.length >= 4 ? [] : nextActions().slice(0, 1) });
-  page.querySelector(".hl-recent").append(homeGrid.el);
-  const lc = page.querySelector(".hl-learn");
-  for (const i of [1, 2, 3, 4]) lc.append(featureCard(i, learn));
-  main.replaceChildren(page);
-}
 function renderLearnPage(main) {
   const page = h(`<div class="hl"><header class="hl-h"><h1>Learn</h1><p>Short guides to everything you can do in Atelier.</p></header><div class="hl-learn all"></div></div>`);
   const lc = page.querySelector(".hl-learn");
@@ -470,7 +432,6 @@ function renderHomeList(rs) {
   const inner = h(`<div class="in"></div>`);
   const linked = rs.some((e) => e.linked);
   const hh = h(`<div class="hh"><div class="tt"><h1>Prototypes</h1><p>${S.ws.home ? `<span class="hpath" title="${esc(S.ws.home)}">${IC.folder}${esc(S.ws.home)}</span>` : ""}${linked ? "Edited in place, in their own folders." : "Every prototype in this space."}</p></div><div class="hacts">${S.ws.spaces ? `<button type="button" class="dbtn" data-a="sp">${IC.folder}Connect a folder</button>` : ""}<button type="button" class="createbtn" data-a="im">${IC.upload}Import HTML</button></div></div>`);
-  if (rs.length) hh.querySelector(".hacts").prepend(viewSwitch());
   hh.querySelector('[data-a="im"]').onclick = openImport;
   const spb = hh.querySelector('[data-a="sp"]');
   if (spb) spb.onclick = () => openSpaces();
@@ -523,7 +484,7 @@ function renderHomeList(rs) {
     inner.append(
       h(`<div class="hempty"><b>No prototypes in this space yet</b><span>Add a folder with an index.html (or any .html page) to ${esc(S.ws.home || "this folder")} and look again, connect another project folder, or import an HTML file.</span></div>`),
     );
-  const nw = h(`<div class="card new" role="button" tabindex="0">${IC.plus}<b>Import a prototype</b><span class="hand">an HTML file, or a whole document you paste</span></div>`);
+  const nw = h(`<div class="card new" role="button" tabindex="0">${IC.plus}<b>Import a prototype</b><span>An HTML file, or a whole document you paste</span></div>`);
   nw.onclick = openImport;
   nw.onkeydown = (ev) => ev.key === "Enter" && openImport();
   cards.append(nw);
@@ -1046,7 +1007,7 @@ function paintPal() {
     ...(env && isBranch(env) && !env.archived ? [{ label: "Review and merge", k: "Action", fn: () => openReview(env.id) }, { label: S.compare ? "Hide compare" : `Compare with ${pageName(S.envs.get(env.parent))}`, k: "Action", fn: () => fire("compare") }] : []),
     { label: "Ask an agent", k: "Action", fn: () => env && fire("ask-agent", {}) },
     { label: "Import HTML", k: "Action", fn: openImport },
-    { label: "Connect an agent", k: "Action", fn: openConnect },
+    { label: "Connect your AI tool", k: "Action", fn: openConnect },
     { label: "Go home", k: "Action", fn: () => go("home") },
     ...(env ? [{ label: "Zoom to fit", k: "Canvas", fn: () => fit() }, { label: "Show or hide panels", k: "Canvas", fn: toggleUi }] : []),
   ];
@@ -1131,7 +1092,7 @@ function wsMenu() {
     ...(S.ws.spaces ? [{ label: "Connect a folder…", icon: IC.folder, onClick: openSpaces }, { label: "Look for new prototypes", icon: IC.restore, onClick: findPrototypes }] : []),
     "-",
     { label: "Import HTML", icon: IC.upload, onClick: openImport },
-    { label: "Connect an agent", icon: IC.agent, onClick: openConnect },
+    { label: "Connect your AI tool", icon: IC.agent, onClick: openConnect },
     { label: "Copy folder path", icon: IC.copy, onClick: () => copyText(S.ws.home || S.ws.root) },
     { label: "Rename space", icon: IC.board, onClick: renameWorkspace },
     { label: "Hide panels", kbd: "⌘\\", onClick: toggleUi },

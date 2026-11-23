@@ -1638,7 +1638,7 @@ function turnView(t, agentName) {
   if (t.changed?.length) b.append(h(`<div style="display:flex;flex-wrap:wrap;gap:4px">${t.changed.slice(0, 6).map((f) => `<span class="tagro">${esc(f)}</span>`).join("")}</div>`));
   const acts = h(`<div style="display:flex;gap:8px;flex-wrap:wrap"></div>`);
   if (waiting) {
-    const c = h(`<button type="button" class="dbtn sm">Connect an agent</button>`);
+    const c = h(`<button type="button" class="dbtn sm">Connect your AI tool</button>`);
     c.onclick = () => fire("connect");
     acts.append(c);
   }

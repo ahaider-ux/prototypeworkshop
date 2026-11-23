@@ -4,9 +4,8 @@
    lives in the prototype and in the inspector's swatches, never in the editor's chrome.
    Spacing 2/4/6/8/12/16/24/32 · radii 4/6/8/12/16/99 · 28 and 32 px controls. */
 
-/* Type: a slab for big moments (Zilla Slab), a grotesque for the interface (Schibsted Grotesk) and
-   a hand for notes (Shantell Sans), all OFL-1.1. The files come from a craft-fonts checkout through
-   /fonts/ (src/fonts.js) or from fonts installed on the computer; without either, each falls back
+/* Type: Inter for everything, OFL-1.1 (no handwriting: notes are set like the rest of the app).
+   The files come from a craft-fonts checkout through /fonts/ (src/fonts.js) or from fonts installed on the computer; without either, each falls back
    to the system faces in its token below. */
 @font-face{font-family:"Atelier Display";font-weight:600;font-display:swap;src:local("Inter SemiBold"),local("Inter-SemiBold"),url(/fonts/inter-semibold.ttf) format("truetype")}
 @font-face{font-family:"Atelier Display";font-weight:700;font-display:swap;src:local("Inter Bold"),local("Inter-Bold"),url(/fonts/inter-bold.ttf) format("truetype")}
@@ -15,14 +14,13 @@
 @font-face{font-family:"Atelier Sans";font-weight:400 500;font-display:swap;src:local("Inter"),local("Inter Regular"),local("Inter-Regular"),url(/fonts/inter-regular.ttf) format("truetype")}
 @font-face{font-family:"Atelier Sans";font-weight:600;font-display:swap;src:local("Inter SemiBold"),local("Inter-SemiBold"),url(/fonts/inter-semibold.ttf) format("truetype")}
 @font-face{font-family:"Atelier Sans";font-weight:700;font-display:swap;src:local("Inter Bold"),local("Inter-Bold"),url(/fonts/inter-bold.ttf) format("truetype")}
-@font-face{font-family:"Atelier Hand";font-weight:300 800;font-display:swap;src:local("Shantell Sans"),url(/fonts/shantell-sans.ttf) format("truetype")}
 
 /* Shapes: what you press is a pill (icon buttons are circles), what you list is a rounded row (8),
    what you type in is a soft field (10), what holds things is a sheet (16; panels 20). */
 /* ═══ Tokens ═══ */
 /* Studio white: neutral (no warm tint), white surfaces lifted off a soft studio light, hairlines
    and soft layered shadows rather than tone; one blue for selection and links; colour otherwise only
-   where it means something (status lights, errors, the hand's ink). After the clean product films
+   where it means something (status lights, errors, the pens' ink). After the clean product films
    and storefronts the owner pointed to; nothing copied. */
 :root{
   color-scheme:light;
@@ -37,7 +35,7 @@
   --on-primary:#ffffff;--on-accent:#fff;--tip-bg:#121212;--tip-ink:#ffffff;--knob:#fff;
   --note-bg:#fff6d6;--note-edge:#f1e2a6;--guide:#f2482a;
   --i-paper:#fafafa;--i-ink:#121212;--i-red:#e03131;--i-orange:#f76707;--i-yellow:#ffd43b;--i-lime:#dcefb4;--i-green:#2f9e44;--i-greenl:#b9dbb0;--i-violet:#7048e8;--i-peri:#c3cffb;--i-perid:#2c3e9e;--i-lav:#e4e1fb;--i-peach:#ffd9bd;--i-sky:#d7e6f7;--i-grey:#d6d6da;--i-greyl:#ececee;--i-white:#fff;--skel:#efefef;--skel-hi:#f8f8f8;
-  --sh-sm:0 1px 2px rgba(0,0,0,.05);--sh-md:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.07),0 0 0 .5px rgba(0,0,0,.07);--sh-field:0 0 0 1px rgba(0,0,0,.1);
+  --sh-sm:0 1px 2px rgba(0,0,0,.05);--sh-card:0 0 0 .5px rgba(0,0,0,.08),0 1px 1px rgba(0,0,0,.04),0 4px 8px -2px rgba(0,0,0,.05),0 18px 36px -12px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.9);--sh-card-hi:0 0 0 .5px rgba(0,0,0,.1),0 2px 3px rgba(0,0,0,.05),0 10px 20px -6px rgba(0,0,0,.08),0 32px 64px -16px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.9);--sh-md:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.07),0 0 0 .5px rgba(0,0,0,.07);--sh-field:0 0 0 1px rgba(0,0,0,.1);
   --sh-btn:0 0 0 1px rgba(0,0,0,.09),0 1px 1px rgba(0,0,0,.03);
   --sh-chat:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.07),0 0 0 .5px rgba(0,0,0,.08);--sh-modal:0 2px 6px rgba(0,0,0,.04),0 24px 64px rgba(0,0,0,.14),0 0 0 .5px rgba(0,0,0,.08);
   /* controls: flat white with a hairline, and the flat ink pill for the one main action (no gloss) */
@@ -50,7 +48,7 @@
   /* product pictures: a flat canvas with a faint dot grid */
   --pv-base:#f4f4f3;--pv-dot:rgba(0,0,0,.09);--i-page-ink:#666666;--i-page-fill:rgba(0,0,0,.05);--i-page-line:rgba(0,0,0,.12);--i-lit:linear-gradient(180deg,rgba(255,255,255,.24) 0%,rgba(255,255,255,0) 46%,rgba(0,0,0,.07) 100%);--i-lit-rim:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(0,0,0,.14);
   --grain:none;
-  --display:'Atelier Display','Inter',ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;--hand:'Atelier Hand','Shantell Sans','Comic Neue','Segoe Print','Bradley Hand',cursive;
+  --display:'Atelier Display','Inter',ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --fakt:'Atelier Sans','Inter',ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;--ivar:var(--fakt);
   --mono:ui-monospace,'SF Mono','JetBrains Mono',Menlo,Consolas,monospace;
   /* motion: four curves, nothing else */
@@ -69,7 +67,7 @@
   --on-primary:#121212;--on-accent:#fff;--tip-bg:#f2f2f2;--tip-ink:#121212;--knob:#fff;
   --note-bg:#3a3420;--note-edge:#4d4428;--guide:#ff6b4a;
   --i-paper:#fafafa;--i-ink:#121212;--i-red:#e03131;--i-orange:#f76707;--i-yellow:#ffd43b;--i-lime:#dcefb4;--i-green:#2f9e44;--i-greenl:#b9dbb0;--i-violet:#7048e8;--i-peri:#c3cffb;--i-perid:#2c3e9e;--i-lav:#e4e1fb;--i-peach:#ffd9bd;--i-sky:#d7e6f7;--i-grey:#d6d6da;--i-greyl:#ececee;--i-white:#fff;--skel:#232323;--skel-hi:#2c2c2c;
-  --sh-sm:0 1px 2px rgba(0,0,0,.5);--sh-md:0 12px 32px rgba(0,0,0,.5),0 0 0 .5px rgba(255,255,255,.08);
+  --sh-sm:0 1px 2px rgba(0,0,0,.5);--sh-card:0 0 0 .5px rgba(255,255,255,.09),0 1px 2px rgba(0,0,0,.4),0 18px 36px -12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06);--sh-card-hi:0 0 0 .5px rgba(255,255,255,.14),0 2px 4px rgba(0,0,0,.4),0 32px 64px -16px rgba(0,0,0,.75),inset 0 1px 0 rgba(255,255,255,.08);--sh-md:0 12px 32px rgba(0,0,0,.5),0 0 0 .5px rgba(255,255,255,.08);
   --sh-field:0 0 0 1px rgba(255,255,255,.1);--sh-btn:0 0 0 1px rgba(255,255,255,.09);
   --sh-chat:0 10px 30px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.07);--sh-modal:0 16px 48px rgba(0,0,0,.55),0 0 0 .5px rgba(255,255,255,.08);
   --raise:#222222;
@@ -344,9 +342,12 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .tab:hover .ib24,.tab.on .ib24,.tab .ib24:focus-visible{opacity:1}
 .tab .ib24 .ic{width:12px;height:12px}
 .tab.tab-home{flex-shrink:0}
-.agst{height:28px;display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary);flex-shrink:0;transition:background-color 120ms ease}
-.agst:hover{background:var(--bg-hover);color:var(--text-primary)}
-.agst b{font-weight:500;color:var(--text-primary)}
+/* the agent in the header: a visible call to action until a tool is connected, then a status pill */
+.agst{flex-shrink:0;gap:6px;font-size:12px;margin-right:2px}
+.agst b{font-weight:500}
+.agst.cta .hdot{display:none}
+.agst:not(.cta) .agic{display:none}
+.agst .agic{width:14px;height:14px;margin-left:-2px}
 
 /* the work area */
 .work{flex:1;min-height:0;display:flex}
@@ -525,7 +526,7 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .note{position:absolute;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--note-bg);box-shadow:var(--sh-md),0 0 0 .5px var(--note-edge);transform-origin:0 0;cursor:default}
 .note.info{background:var(--accent-subtle);box-shadow:var(--sh-md),0 0 0 .5px var(--tag-info-bg)}
 .note.plain{background:var(--bg-layer)}
-.note .tx{font-family:var(--hand);font-size:16px;line-height:1.45;white-space:pre-wrap;word-break:break-word;outline:none;min-height:22px}
+.note .tx{font:400 14px/1.45 var(--fakt);white-space:pre-wrap;word-break:break-word;outline:none;min-height:22px}
 .note .tx[contenteditable]{user-select:text;-webkit-user-select:text;cursor:text}
 .note .tx:empty::before{content:"Write a note";color:var(--text-placeholder)}
 .note .by{font:500 12px/1 var(--fakt);color:var(--text-secondary)}
@@ -633,8 +634,6 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .card.new{align-items:center;justify-content:center;gap:8px;min-height:240px;padding:24px 32px;text-align:center;background:transparent;box-shadow:none;border:1.5px dashed var(--border-default);color:var(--text-secondary)}
 .card.new:hover{background:var(--bg-layer)}
 .card.new b{color:var(--text-primary);font:500 14px/1.25 var(--fakt)}
-/* the human voice: handwritten hints and annotations, never on buttons or labels */
-.hand{font-family:var(--hand);font-size:15px;line-height:1.3;color:var(--text-secondary)}
 .app.home-on .work{display:none}
 /* opening a prototype from home: the editor fades in where the chosen picture landed */
 .app:not(.home-on) .work{animation:workin 180ms ease-out}
@@ -1218,7 +1217,7 @@ html[data-intro] .app{visibility:hidden}
 .ttabs button{padding:0 10px}
 .tab .ib24{border-radius:99px}
 .tlogo{border-radius:99px;padding:0 10px 0 8px}
-.agst{border-radius:99px;padding:0 10px}
+.agst{border-radius:99px;padding:0 12px}
 .zm{padding:0 10px}
 .cnmenu button{padding:0 8px}
 .srow{border-radius:8px}
@@ -1232,15 +1231,19 @@ html[data-intro] .app{visibility:hidden}
 .tagro:not(.info):not(.ok):not(.err){background:transparent;box-shadow:inset 0 0 0 1px var(--border-default);color:var(--text-secondary)}
 
 /* ---------- home canvas (ui/home.js): prototypes on paper you can throw around ---------- */
-.hmain.hc{overflow:hidden;position:relative}
+/* the home canvas is one endless field under the glass sidebar (home.js centres it in the space
+   beside the sidebar); it fades out under the header and as it reaches the sidebar, never cut */
+.home{position:relative}
+.hside{z-index:2}
+.hmain.hc{--side:calc(var(--gutter) + 264px);position:absolute;inset:0;overflow:hidden;-webkit-mask:linear-gradient(to bottom,transparent,black 28px),linear-gradient(to right,transparent var(--side),black calc(var(--side) + 56px));-webkit-mask-composite:source-in;mask:linear-gradient(to bottom,transparent,black 28px),linear-gradient(to right,transparent var(--side),black calc(var(--side) + 56px));mask-composite:intersect}
 .hcanvas{position:absolute;inset:0;overflow:clip;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
 .hcanvas.grabbing{cursor:grabbing}
 .hcanvas.grabbing .htile{pointer-events:none}
 .hworld{position:absolute;left:0;top:0;will-change:transform}
 /* project cards: the picture, the name, when it was edited (size set by home.js); a card under the
    pointer swells a little (after design.cash.app), slower in than out */
-.htile{position:absolute;left:0;top:0;display:flex;flex-direction:column;gap:10px;padding:8px;border-radius:16px;background:var(--bg-layer);box-shadow:0 0 0 1px var(--border-subtle),var(--sh-sm);text-align:left;cursor:inherit;transition:scale 180ms var(--ease-smooth),box-shadow 180ms var(--ease-smooth)}
-.htile.hot{z-index:2;scale:1.05;box-shadow:0 0 0 1px var(--border-default),var(--sh-md);transition-duration:240ms}
+.htile{position:absolute;left:0;top:0;display:flex;flex-direction:column;gap:10px;padding:8px;border-radius:18px;background:var(--bg-layer);box-shadow:var(--sh-card);text-align:left;cursor:inherit;transition:scale 180ms var(--ease-smooth),box-shadow 180ms var(--ease-smooth),translate 180ms var(--ease-smooth)}
+.htile.hot{z-index:2;scale:1.05;translate:0 -2px;box-shadow:var(--sh-card-hi);transition-duration:240ms}
 .hcanvas:not(.grabbing) .htile.hot:active{scale:1.03;transition-duration:120ms}
 .htt{position:relative;display:block;width:304px;height:190px;flex-shrink:0;border-radius:10px;overflow:hidden;background:var(--bg-secondary)}
 .htt canvas{display:block;width:100%;height:100%}
@@ -1257,24 +1260,34 @@ html[data-intro] .app{visibility:hidden}
 .hcap b{font:500 14px/1.3 var(--fakt);color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hcap .m{font-size:12px;line-height:1.4;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* an empty-state card: dashed, the action's icon in a soft circle, its name and what it does */
-.htile.hnew{background:transparent;box-shadow:none;outline:1.5px dashed var(--border-default);outline-offset:-1.5px}
-.htile.hnew .htt{display:grid;place-items:center;background:transparent;color:var(--text-secondary)}
-.htile.hnew .htt::before{display:none}
-.htile.hnew.hot{background:var(--bg-layer);box-shadow:var(--sh-md)}
-.hplus{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--bg-secondary)}
+/* a placeholder: frosted glass over the canvas, a dashed slot where the picture will be, and the
+   action's icon on a raised white disc */
+.htile.hnew{background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass)}
+.htile.hnew.hot{box-shadow:var(--glass-rim),var(--glass-spec),var(--sh-card-hi)}
+.htile.hnew .htt{display:grid;place-items:center;background:none;color:var(--text-primary)}
+.htile.hnew .htt::before{box-shadow:none;outline:1.5px dashed var(--border-default);outline-offset:-1.5px}
+.hplus{display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--raise);box-shadow:var(--sh-card);transition:scale 240ms var(--ease-spring)}
+.htile.hot .hplus{scale:1.08}
 .hplus .ic{width:20px;height:20px}
+/* a guide: its picture on the studio canvas, its title and one line */
+.htile.hguide .htt{background:var(--bg-canvas)}
+.htile.hguide .pv{position:absolute;inset:0}
+.htile.hguide .hcap .m{white-space:normal;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical}
 .hcanvas.fits .hhint{display:none} /* nothing to look around for when it all fits */
-/* the pointer: a dot that grows over a card (mouse and pen only) */
+/* the pointer (mouse and pen only): an ink dot that, over a card, opens into a glass label saying
+   what a click does ("Open", "Start", "Learn"); it trails the pointer by a hair (home.js) */
 .hcur{position:absolute;left:0;top:0;z-index:4;pointer-events:none;opacity:0;transition:opacity 150ms ease}
-.hcur i{position:absolute;left:-5px;top:-5px;width:10px;height:10px;border-radius:50%;background:var(--tip-bg);box-shadow:0 0 0 1.5px var(--tip-ink);transition:transform 180ms var(--ease-smooth)}
-.hcur.on i{transform:scale(1.5)}
-.hcanvas.down .hcur i{transform:scale(.7);transition-duration:100ms}
+.hcl{position:absolute;left:0;top:0;translate:-50% -50%;display:flex;align-items:center;justify-content:center;width:10px;height:10px;border-radius:99px;overflow:hidden;background:var(--tip-bg);box-shadow:0 0 0 1.5px var(--tip-ink),var(--sh-sm);transition:width 280ms var(--ease-smooth),height 280ms var(--ease-smooth),background-color 200ms var(--ease-smooth),box-shadow 200ms var(--ease-smooth),scale 120ms var(--ease-out)}
+.hcl b{font:500 13px/1 var(--fakt);color:var(--text-primary);white-space:nowrap;opacity:0;filter:blur(2px);transition:opacity 120ms ease-out,filter 120ms ease-out}
+.hcur.on .hcl{width:var(--w,64px);height:34px;background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass-rim),var(--glass-spec),var(--sh-md)}
+.hcur.on .hcl b{opacity:1;filter:none;transition:opacity 180ms ease-out 80ms,filter 180ms ease-out 80ms}
+.hcanvas.down .hcl{scale:.92}
 @media (hover:hover) and (pointer:fine){.hcanvas.pointing,.hcanvas.pointing .htile{cursor:none}.hcanvas.pointing .hcur{opacity:1}}
 /* opening one: the field clears, it glides to the middle and swells, then the editor takes over */
 .hcanvas.leaving .htile:not(.chosen){opacity:0;transition:opacity 200ms ease-out}
 .htile.chosen{z-index:3}
 .htile.chosen{scale:1.12;box-shadow:0 0 0 1px var(--border-default),var(--sh-md);transition:scale 340ms var(--ease-io)}
-.hcanvas.leaving .hcur,.hcanvas.leaving .hhint,.hleaving .hbar{opacity:0;transition:opacity 150ms ease-out}
+.hcanvas.leaving .hcur,.hcanvas.leaving .hhint{opacity:0;transition:opacity 150ms ease-out}
 /* coming back: the one you opened settles and the field gathers round it */
 .hcanvas.return .htile:not(.hback){animation:hreturn 320ms ease-out var(--d,0ms) both}
 .hcanvas.return .htile.hback{animation:hsettle 420ms var(--ease-smooth) both}
@@ -1287,22 +1300,10 @@ html[data-intro] .app{visibility:hidden}
 .hcanvas.held .htile{opacity:0}
 .hcanvas.arrive .htile{animation:harrive 460ms var(--ease-smooth) var(--d,0ms) both}
 @keyframes harrive{from{opacity:0;scale:.94}to{opacity:1;scale:1}}
-.hhint{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);height:28px;display:inline-flex;align-items:center;padding:0 12px;border-radius:99px;background:var(--raise);box-shadow:var(--sh-btn);font:400 12px/1 var(--fakt);color:var(--text-secondary);pointer-events:none;transition:opacity 400ms ease}
+.hhint{position:absolute;left:calc(50% + var(--side,0px) / 2);bottom:24px;transform:translateX(-50%);height:28px;display:inline-flex;align-items:center;padding:0 12px;border-radius:99px;background:var(--raise);box-shadow:var(--sh-btn);font:400 12px/1 var(--fakt);color:var(--text-secondary);pointer-events:none;transition:opacity 400ms ease}
 .hcanvas.used .hhint{opacity:0}
-/* the bar over it */
-.hbar{position:absolute;left:16px;right:16px;top:16px;z-index:5;display:flex;justify-content:space-between;gap:12px;pointer-events:none}
-.hb{pointer-events:auto;display:flex;align-items:center;gap:8px;height:48px;min-width:0;padding:0 8px 0 20px;border-radius:99px;background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass)}
-.hbr{flex-shrink:0;padding:0 8px}
-.hname{font:600 14px/1 var(--fakt);letter-spacing:-.01em;white-space:nowrap}
-.hcount,.hrl{font-size:12px;color:var(--text-secondary);white-space:nowrap}
-.hchips{display:flex;gap:4px;min-width:0;overflow:hidden}
-.hchip{flex-shrink:0;height:28px;max-width:180px;padding:0 12px;border-radius:99px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background-color 120ms ease}
 
-.hchip:active{transform:scale(.97)}
-@media (max-width:1100px){.hbl .vsep,.hrl,.hchips{display:none}}
-/* a phone: the space's name, the view switch and Import as an icon; Connect lives in the space menu */
-@media (max-width:700px){.hbar{left:8px;right:8px;top:8px;gap:8px}.hb{height:44px;padding-left:16px}.hbl{flex:1 1 auto}.hname{overflow:hidden;text-overflow:ellipsis}.hcount,.hbr .dbtn{display:none}.hbr .createbtn{width:32px;padding:0;gap:0;font-size:0}}
-@media (prefers-reduced-motion:reduce){.hcanvas.arrive .htile,.hcanvas.return .htile,.htile.ping,.htile.waiting .htt::after,.htile.fresh canvas{animation:none}.htile.hot,.htile.chosen,.hcanvas:not(.grabbing) .htile.hot:active{scale:none}.hcur i{transform:none}}
+@media (prefers-reduced-motion:reduce){.hcanvas.arrive .htile,.hcanvas.return .htile,.htile.ping,.htile.waiting .htt::after,.htile.fresh canvas{animation:none}.htile.hot,.htile.chosen,.hcanvas:not(.grabbing) .htile.hot:active{scale:none}.htile.hot{translate:none}.hcl{transition:background-color 150ms ease,box-shadow 150ms ease}.hcanvas.down .hcl,.htile.hot .hplus{scale:none}}
 
 /* ═══ Skins — studio white. The one place a control's surface, edge and shadow are set ═══
    Raised white pills lit from above, the ink pill for the one main action, inset segmented
@@ -1322,13 +1323,11 @@ html[data-intro] .app{visibility:hidden}
 .cnmenu button{border-radius:10px}
 .toast{border-radius:16px}
 .md{border-radius:20px}
-.hchip{background:var(--raise);box-shadow:var(--sh-btn);transition:box-shadow 150ms var(--ease-smooth),transform 150ms var(--ease-out)}
-.hchip:hover{box-shadow:var(--sh-btn-hover)}
 /* a status light: off is a quiet grey dot, on glows in its colour */
 .hdot{width:7px;height:7px}
 .hdot.on{box-shadow:0 0 0 2px color-mix(in srgb,var(--text-success) 18%,transparent),0 0 8px color-mix(in srgb,var(--text-success) 70%,transparent)}
 /* headings: Inter tightens as it grows */
-.md-h h2,.home h1,.hname,.lhd .ttl b{letter-spacing:-.02em}
+.md-h h2,.home h1,.lhd .ttl b{letter-spacing:-.02em}
 .home h1{letter-spacing:-.02em}
 
 /* ═══ Home shell: a sidebar that stays, and the section it shows ═══ */
@@ -1339,28 +1338,9 @@ html[data-intro] .app{visibility:hidden}
 .hmain{flex:1;min-width:0;position:relative;overflow:auto;scrollbar-width:thin}
 /* the sections: a two-tone title (a grey lead-in, then the point), and generous air */
 .hl{max-width:1120px;margin:0 auto;padding:32px 40px 64px;display:flex;flex-direction:column;gap:32px}
-.hl.hl-top{padding-top:var(--gutter)} /* the first sheet lines up with the sidebar's top, as the editor's panels do */
 .hl-h{display:flex;flex-direction:column;gap:4px}
 .hl-h h1{font:600 20px/1.2 var(--fakt);letter-spacing:-.02em;color:var(--text-primary)}
 .hl-h p{font-size:14px;color:var(--text-secondary)}
-.hl-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);min-height:280px;border-radius:16px;overflow:hidden;background:var(--bg-layer);box-shadow:0 0 0 1px var(--border-subtle),var(--sh-sm)}
-.hl-hc{padding:40px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:12px}
-.hl-hc h2{font:600 28px/1.15 var(--fakt);letter-spacing:-.03em}
-.hl-hc p{font-size:14px;line-height:1.5;color:var(--text-secondary);max-width:340px}
-.hl-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-.pv.hl-art{min-height:280px;border-left:1px solid var(--border-subtle)}
-.hl-sec{display:flex;flex-direction:column;gap:16px}
-.hl-sh{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
-.hl-sh h2{font:600 16px/1.3 var(--fakt);letter-spacing:-.015em}
-.hl-sh p{font-size:12px;color:var(--text-secondary);margin-top:2px}
-.hl-more{display:inline-flex;align-items:center;gap:2px;height:28px;padding:0 6px 0 12px;border-radius:99px;font-size:12px;color:var(--text-secondary);flex-shrink:0;transition:background-color 120ms ease,color 120ms ease}
-.hl-more:hover{background:var(--bg-hover);color:var(--text-primary)}
-/* recent prototypes: the canvas's project cards, in a grid */
-.hgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:16px}
-.htile.hcard{position:relative;left:auto;top:auto;width:auto;height:auto}
-.htile.hcard .htt{width:100%;height:auto;aspect-ratio:304/190}
-.htile.hcard:hover{box-shadow:0 0 0 1px var(--border-default),var(--sh-md)}
-.htile.hcard:active{scale:.98}
 .hl-learn{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
 .hl-learn.all{grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:24px 16px}
 .lcard{display:flex;flex-direction:column;gap:10px;padding:8px 8px 12px;text-align:left;border-radius:16px;background:var(--bg-layer);box-shadow:0 0 0 1px var(--border-subtle),var(--sh-sm);transition:box-shadow 180ms var(--ease-smooth),transform 150ms var(--ease-out)}
@@ -1380,7 +1360,7 @@ html[data-intro] .app{visibility:hidden}
 .hact-t .m{font-size:12px;color:var(--text-secondary)}
 .hact-w{font-size:12px;color:var(--text-placeholder);flex-shrink:0;font-variant-numeric:tabular-nums}
 @media (max-width:1100px){.hl-learn{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:860px){.hside{display:none}.hl{padding:32px 20px 48px}.hl-hero{grid-template-columns:1fr}.hl-hc{padding:28px}}
+@media (max-width:860px){.hside{display:none}.hl{padding:32px 20px 48px}.hmain.hc{--side:0px}}
 
 /* ═══ Product pictures (ui/visuals.js): real pieces of Atelier, in depth, on the studio light ═══ */
 .pv{position:relative;display:block;overflow:hidden;background:radial-gradient(circle at 1px 1px,var(--pv-dot) 1px,transparent 1.4px) 0 0/16px 16px,var(--pv-base);isolation:isolate} /* the canvas Atelier works on: flat, with a faint dot grid */
@@ -1458,7 +1438,6 @@ html[data-intro] .app{visibility:hidden}
 .pv .tagro{background:transparent;box-shadow:inset 0 0 0 1px var(--border-default);color:var(--text-secondary)}
 .pv .pg .t{overflow:visible;text-overflow:clip} /* a picture never truncates */
 /* cards in a grid have the room for a second line, so nothing is cut off with an ellipsis */
-.htile.hcard .hcap .m{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 
 /* the Connect dialog: the tool's own step, its code, and what to ask once it's connected */
 .cn-how{font-size:12px;line-height:1.5;color:var(--text-secondary)}

@@ -35,11 +35,14 @@ const CARD = { w: 320, h: 264 }, // every prototype is a card: its picture, its 
 const memory = new Map();
 
 // items: [{ id, name, meta, board, edited }] most recent first. open(item) opens one. actions:
-// [{ title, desc, icon, run }], what a space can do next (import, connect a folder, connect an
-// agent): with only a few prototypes the spare places hold these as empty-state cards, so the canvas
-// never needs made-up content to look full. key names the space, for coming back.
-export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
-  const root = h(`<div class="hcanvas" role="region" aria-label="Prototypes. Drag to look around."><div class="hworld"></div><div class="hcur" aria-hidden="true"><i></i></div><div class="hhint" aria-hidden="true">Drag to look around</div></div>`);
+// [{ title, desc, icon, run, cue, art }], everything else on the field: what a space can do next
+// (import, connect a folder, connect an AI tool) as placeholder cards, and the guides (art(): their
+// picture) — all real, so the field never needs made-up content to look full. cue is what the
+// pointer says over it ("Start", "Learn"; a prototype says "Open"). key names the space.
+// cover(): how much of the canvas's left edge something floats over (the sidebar); the field is
+// centred in the space beside it.
+export function mountHomeCanvas(host, items, { open, actions = [], key = "", cover = () => 0 }) {
+  const root = h(`<div class="hcanvas" role="region" aria-label="Prototypes. Drag to look around."><div class="hworld"></div><div class="hcur" aria-hidden="true"><span class="hcl"><b></b></span></div><div class="hhint" aria-hidden="true">Drag to look around</div></div>`);
   const world = root.querySelector(".hworld");
   const cur = root.querySelector(".hcur");
   host.classList.remove("hleaving");
@@ -51,15 +54,19 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
     bounds = null;
   const cam = { x: 0, y: 0 }; // a cell's centre is its thumbnail's centre: (0,0) is the middle tile
   let vw = root.clientWidth || innerWidth,
-    vh = root.clientHeight || innerHeight;
+    vh = root.clientHeight || innerHeight,
+    ox = 0; // half of what covers the left edge: the field's middle moves right by this much
 
   function layout() {
-    wrap = list.length >= WRAP_MIN;
+    // one sequence: the prototypes (most recent in the middle), then the placeholders and guides
+    const total = list.length + actions.length;
+    const idxOf = (i) => (i < list.length ? i : -(i - list.length + 1));
+    wrap = total >= WRAP_MIN;
     slotOf = new Map();
     if (wrap) {
-      k = Math.ceil(Math.sqrt(list.length));
+      k = Math.ceil(Math.sqrt(total));
       if (k % 2 === 0) k++;
-      spiral(k * k).forEach(([x, y], i) => slotOf.set(`${x},${y}`, i % list.length));
+      spiral(k * k).forEach(([x, y], i) => slotOf.set(`${x},${y}`, idxOf(i % total)));
     } else {
       // a few: a small block in reading order, most recent first, centred in the view
       const cells = block(list.length + actions.length);
@@ -71,7 +78,7 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
   }
   const middle = () => (bounds && !wrap ? { x: -(bounds.x0 + bounds.x1) / 2, y: -(bounds.y0 + bounds.y1) / 2 } : { x: 0, y: 0 });
   // everything is on screen at once: there's nowhere to go, so the group stays centred
-  const fitsView = () => !wrap && !!bounds && bounds.x1 - bounds.x0 <= vw && bounds.y1 - bounds.y0 <= vh;
+  const fitsView = () => !wrap && !!bounds && bounds.x1 - bounds.x0 <= vw - ox * 2 && bounds.y1 - bounds.y0 <= vh;
   const sizeOf = () => CARD;
   // which item a cell shows
   function at(cx, cy) {
@@ -91,21 +98,41 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
   // ---------- tiles: only those in view exist, reused as you pan ----------
   const tiles = new Map(); // "x,y" → element
   const spare = [];
+  // a guide's picture is built once and handed between tiles as they come and go
+  const arts = new Map(); // action index → [free pictures]
+  const freeArt = (el) => {
+    if (!el._art) return;
+    const [i, node] = el._art;
+    el._art = null;
+    node.remove();
+    if (!arts.has(i)) arts.set(i, []);
+    arts.get(i).push(node);
+  };
   function tileFor(idx) {
     const el = spare.pop() || h(`<button type="button" class="htile"><span class="htt"></span><span class="hcap"><b></b><span class="m"></span></span></button>`);
+    freeArt(el);
     el.dataset.idx = String(idx);
     const s = sizeOf(idx);
     el.style.width = `${s.w}px`;
     el.style.height = `${s.h}px`;
     const tt = el.querySelector(".htt");
     if (idx < 0) {
-      // an empty-state card: what this space can do next, and it does it
-      const a = actions[-idx - 1] || {};
-      el.className = "htile hnew";
+      const i = -idx - 1,
+        a = actions[i] || {};
       el.querySelector("b").textContent = a.title || "";
       el.querySelector(".m").textContent = a.desc || "";
       el.setAttribute("aria-label", a.title || "");
-      tt.replaceChildren(h(`<span class="hplus">${a.icon || IC.plus}</span>`));
+      if (a.art) {
+        // a guide: its picture, its title and one line; it opens the guide
+        el.className = "htile hguide";
+        const node = arts.get(i)?.pop() || a.art();
+        el._art = [i, node];
+        tt.replaceChildren(node);
+      } else {
+        // a placeholder: what this space can do next, and it does it
+        el.className = "htile hnew";
+        tt.replaceChildren(h(`<span class="hplus">${a.icon || IC.plus}</span>`));
+      }
     } else {
       const it = list[idx];
       el.className = "htile";
@@ -118,8 +145,8 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
     return el;
   }
   function sync() {
-    const x0 = -cam.x - vw / 2,
-      x1 = -cam.x + vw / 2,
+    const x0 = -cam.x - vw / 2 - ox,
+      x1 = -cam.x + vw / 2 - ox,
       y0 = -cam.y - vh / 2,
       y1 = -cam.y + vh / 2;
     const c0 = Math.floor(x0 / CW) - 1,
@@ -146,6 +173,7 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
       if (!want.has(cell)) {
         tiles.delete(cell);
         if (el === document.activeElement) el.blur();
+        freeArt(el);
         el.remove();
         if (spare.length < 24) spare.push(el);
       }
@@ -198,7 +226,7 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
     hot = null, // "x,y" of the tile under the pointer
     leaving = false;
   function hitAt(x, y) {
-    const wx = x - vw / 2 - cam.x,
+    const wx = x - vw / 2 - ox - cam.x,
       wy = y - vh / 2 - cam.y;
     const cx = Math.round(wx / CW),
       cy = Math.round(wy / CH);
@@ -209,13 +237,39 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
     const g = cell === hot ? SWELL : 1; // once swelled, its swelled edge counts: no flicker at the rim
     return Math.abs(wx - cx * CW) <= (s.w * g) / 2 && Math.abs(wy - cy * CH) <= (s.h * g) / 2 ? cell : null;
   }
+  // over a card the dot opens into a glass label saying what a click does
+  const label = cur.querySelector("b");
+  const cueOf = (idx) => (idx >= 0 ? "Open" : actions[-idx - 1]?.cue || "Start");
   function setHot(next) {
     if (next === hot) return;
     tiles.get(hot)?.classList.remove("hot");
     hot = next;
     const el = tiles.get(hot);
     el?.classList.add("hot");
+    if (el) {
+      const t = cueOf(+el.dataset.idx);
+      if (label.textContent !== t) label.textContent = t;
+      cur.style.setProperty("--w", `${Math.ceil(label.scrollWidth) + 28}px`);
+    }
     cur.classList.toggle("on", !!el);
+  }
+  // the label trails the pointer by a hair (a 40 ms time constant): it glides, it never lags
+  let cx = -1,
+    cy = -1,
+    fraf = 0,
+    ft = 0;
+  function follow(t) {
+    fraf = 0;
+    const dt = ft ? Math.min(48, t - ft) : 16;
+    ft = t;
+    if (cx < 0 || rmo()) (cx = px), (cy = py);
+    const a = 1 - Math.exp(-dt / 40);
+    cx += (px - cx) * a;
+    cy += (py - cy) * a;
+    if (Math.abs(px - cx) < 0.2 && Math.abs(py - cy) < 0.2) (cx = px), (cy = py);
+    cur.style.transform = `translate3d(${cx.toFixed(1)}px, ${cy.toFixed(1)}px, 0)`;
+    if (cx !== px || cy !== py) fraf = requestAnimationFrame(follow);
+    else ft = 0;
   }
   const point = () => setHot(inside && !leaving ? hitAt(px, py) : null);
   root.addEventListener("pointermove", (e) => {
@@ -223,8 +277,8 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
     const r = root.getBoundingClientRect();
     px = e.clientX - r.left;
     py = e.clientY - r.top;
-    if (!inside) (inside = true), root.classList.add("pointing");
-    cur.style.transform = `translate3d(${px}px, ${py}px, 0)`;
+    if (!inside) (inside = true), (cx = cy = -1), root.classList.add("pointing");
+    fraf || (fraf = requestAnimationFrame(follow));
     if (!drag) point();
   });
   root.addEventListener("pointerleave", () => {
@@ -241,7 +295,7 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
     spring = false;
   const apply = () => {
     root.classList.toggle("fits", fitsView());
-    world.style.transform = `translate3d(${Math.round((cam.x + vw / 2) * 2) / 2}px, ${Math.round((cam.y + vh / 2) * 2) / 2}px, 0)`;
+    world.style.transform = `translate3d(${Math.round((cam.x + vw / 2 + ox) * 2) / 2}px, ${Math.round((cam.y + vh / 2) * 2) / 2}px, 0)`;
     sync();
     if (inside) point();
   };
@@ -433,19 +487,20 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
     const el = e.target.closest?.(".htile");
     if (!el || drag) return;
     const [cx, cy] = el.dataset.cell.split(",").map(Number);
-    const sx = cx * CW + cam.x,
+    const sx = cx * CW + cam.x + ox,
       sy = cy * CH + cam.y;
     if (Math.abs(sx) > vw / 2 - CW / 2 || Math.abs(sy) > vh / 2 - CH / 2) focusCell(cx, cy);
   });
+  const measure = () => ((vw = root.clientWidth), (vh = root.clientHeight), (ox = Math.max(0, Math.min(vw / 3, cover() || 0)) / 2));
   const ro = new ResizeObserver(() => {
-    vw = root.clientWidth;
-    vh = root.clientHeight;
+    measure();
     // the real size arrives after mount (it starts as the window's): a canvas that fits stays centred
     if (fitsView() && !drag && !glide && !leaving) Object.assign(cam, middle());
     apply();
   });
   ro.observe(root);
 
+  measure();
   layout();
   Object.assign(cam, middle());
   // coming back: the prototype you opened is in the middle again, wherever it now sits
@@ -494,6 +549,7 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
       list = next;
       if (next.map((x) => x.id).join() !== was || (nextActions && nextActions.map((a) => a.title).join() !== actions.map((a) => a.title).join())) {
         if (nextActions) actions = nextActions;
+        arts.clear();
         layout();
         if (fitsView()) Object.assign(cam, middle()); // otherwise the camera stays where you were
         setHot(null);
@@ -526,6 +582,7 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
     },
     destroy() {
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(fraf);
       off();
       ro.disconnect();
       G.setBusy(false);
@@ -533,54 +590,4 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
       root.remove();
     },
   };
-}
-
-// The Home section's recent prototypes: the same project cards, in a plain grid (no camera), with
-// their pictures from the same pipeline. Returns { el, destroy }.
-export function cardGrid(items, { open, actions = [] }) {
-  const el = h(`<div class="hgrid"></div>`);
-  const res = Math.min(2.4, window.devicePixelRatio || 1);
-  const cards = [];
-  const draw = (card, it) => {
-    const cv = card.querySelector("canvas");
-    card.classList.toggle("noboard", !it.board);
-    const got = it.board ? G.bitmapFor(it.board) : null;
-    const was = card.classList.contains("waiting");
-    card.classList.toggle("waiting", !!it.board && !got);
-    if (!got || !cv) return;
-    const W = Math.round(PIC.w * res),
-      H = Math.round(PIC.h * res);
-    if (cv.width !== W || cv.height !== H) (cv.width = W), (cv.height = H);
-    const c = cv.getContext("2d");
-    const r = fitIn(got.bmp.width, got.bmp.height, W, H);
-    c.clearRect(0, 0, W, H);
-    c.fillStyle = "#fff"; // a page is a white browser tab underneath, in either theme
-    if (r.cover) c.fillRect(0, 0, W, H);
-    else c.fillRect(r.x, r.y, r.w, r.h);
-    c.drawImage(got.bmp, r.x, r.y, r.w, r.h);
-    if (was && !rmo()) (card.classList.add("fresh"), setTimeout(() => card.classList.remove("fresh"), 320));
-  };
-  for (const it of items) {
-    const card = h(`<button type="button" class="htile hcard"><span class="htt"><canvas aria-hidden="true"></canvas></span><span class="hcap"><b></b><span class="m"></span></span></button>`);
-    card.querySelector("b").textContent = it.name;
-    card.querySelector(".m").textContent = it.meta;
-    card.setAttribute("aria-label", `Open ${it.name}`);
-    card.onclick = () => open(it);
-    draw(card, it);
-    cards.push([card, it]);
-    el.append(card);
-  }
-  for (const a of actions) {
-    const card = h(`<button type="button" class="htile hcard hnew"><span class="htt"><span class="hplus">${a.icon || IC.plus}</span></span><span class="hcap"><b></b><span class="m"></span></span></button>`);
-    card.querySelector("b").textContent = a.title;
-    card.querySelector(".m").textContent = a.desc || "";
-    card.onclick = () => a.run?.();
-    el.append(card);
-  }
-  const jobs = items.filter((it) => it.board && !G.hasFresh(it.board)).map((it) => thumbJob(it.board));
-  if (jobs.length) G.want(jobs);
-  const off = G.onBitmap((k) => {
-    for (const [card, it] of cards) if (it.board && G.keyOf(it.board) === k) draw(card, it);
-  });
-  return { el, destroy: off };
 }
