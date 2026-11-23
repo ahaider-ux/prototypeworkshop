@@ -530,6 +530,12 @@ function captureCatalog(win, it) {
 const catalogSent = new Set();
 function onBoardLoad(b) {
   b.ready = true;
+  // the pointer is resting on this frame: outline the layer under it now, not on the next move
+  requestAnimationFrame(() => {
+    if (hoverBoard !== b.id || !lastPtr || drag || S.mode !== "design" || S.tool !== "move" || spaceDown) return;
+    if (boardAtPoint(lastPtr)?.id !== b.id) return;
+    setHover(b.id, layerAt(b.id, elAt(b.id, lastPtr)));
+  });
   // the bitmap stays in front until the page has settled on its screen, so going live never flashes
   clearTimeout(b.showT);
   const fr0 = b.frame;
@@ -2157,6 +2163,7 @@ async function removeQuiet(ids) {
 let CLIP = null;
 let pasteN = 0;
 let lastWorld = null; // where the pointer last was on the canvas, for paste
+let lastPtr = null; // the same, on screen: a frame that finishes loading under a still pointer outlines its layer
 function collect(ids) {
   const set = new Set(ids);
   const list = ids.map((id) => S.items.get(id)).filter(Boolean);
@@ -2476,6 +2483,7 @@ function onDown(e) {
 function onMove(e) {
   const p = local(e);
   lastWorld = toWorld(p);
+  lastPtr = p;
   if (!drag) {
     // a frame's title row counts as the frame: reaching for Run doesn't lose it
     const over = e.target.closest?.(".bd:not(.ghost)")?.dataset.item || e.target.closest?.(".blabel:not(.ghost)")?.dataset.item || null;

@@ -406,3 +406,12 @@ test("ui: frames are editable by default, and Run sits in the frame's title", ()
   assert.match(cv, /lb\.textContent = m === "prototype" \? "Stop" : "Run"/);
   assert.match(read("index.html"), /<span class="lb">Run<\/span>/);
 });
+
+// A frame that finishes loading under a pointer that isn't moving outlines the layer under it then,
+// not on the next move: the pointer's last place is kept, and the load handler picks from it.
+test("ui: a frame that goes live under a still pointer outlines its layer", () => {
+  const cv = read("canvas.js");
+  assert.match(cv, /function onMove\(e\) \{\s*const p = local\(e\);\s*lastWorld = toWorld\(p\);\s*lastPtr = p;/);
+  const load = cv.slice(cv.indexOf("function onBoardLoad(b)"), cv.indexOf("function onBoardLoad(b)") + 600);
+  assert.match(load, /setHover\(b\.id, layerAt\(b\.id, elAt\(b\.id, lastPtr\)\)\)/);
+});
