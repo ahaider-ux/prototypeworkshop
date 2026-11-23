@@ -190,3 +190,25 @@ test("ui: nothing made up stands in for a prototype", () => {
   assert.match(page, /class="pempty/, "the intro's screen is the empty state");
   assert.ok(!/class="ipg|class="pc"/.test(page), "no made-up page or project cards");
 });
+
+// The app opens in light. A browser that had saved Dark or System under the old look kept opening
+// dark; the studio-white look starts everyone on light again under a new key, read the same way
+// before first paint and by the menu.
+test("ui: the app opens in light unless this browser picks otherwise", () => {
+  const html = read("index.html");
+  assert.match(html, /localStorage\.getItem\("atelier-theme"\)\|\|"light"/);
+  const app = read("app.js");
+  assert.match(app, /const THEME_KEY = "atelier-theme"/);
+  assert.ok(!/"ws-theme"/.test(html + app), "nothing reads the old key");
+});
+
+// The pin lands on the ı's stem in whatever font is showing: it's placed from layout (a 1ex
+// marker on the letter's baseline), not from a canvas measurement that may use another font.
+test("ui: the intro pin is placed from the live font's layout", () => {
+  const js = read("intro.js");
+  assert.match(js, /export function stemOf\(word, li\)/);
+  assert.match(js, /height:1ex;vertical-align:baseline/);
+  const place = js.slice(js.indexOf("function placeDot"), js.indexOf("return finished;", js.indexOf("function placeDot")));
+  assert.match(place, /stemOf\(word, li\)/);
+  assert.ok(!/measureText|getContext/.test(js), "no canvas measurement");
+});

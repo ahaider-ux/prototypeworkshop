@@ -921,9 +921,12 @@ function toggleUi() {
   $("frame").classList.toggle("ui-off");
   markDirty();
 }
+// Light unless this browser picks otherwise in the menu. The key changed with the studio-white look so
+// a dark or "system" choice saved under the old look starts over on light (index.html reads it too).
+const THEME_KEY = "atelier-theme";
 function setTheme(t) {
   try {
-    localStorage.setItem("ws-theme", t);
+    localStorage.setItem(THEME_KEY, t);
   } catch {}
   const d = t === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : t;
   document.documentElement.setAttribute("data-ltheme", d);
@@ -938,7 +941,7 @@ function setGlass(v) {
 function wsMenu() {
   let pref = "light";
   try {
-    pref = localStorage.getItem("ws-theme") || "light";
+    pref = localStorage.getItem(THEME_KEY) || "light";
   } catch {}
   const others = (spaceList || []).filter((x) => !x.current && !x.missing).slice(0, 6);
   menu($("wsBtn"), [

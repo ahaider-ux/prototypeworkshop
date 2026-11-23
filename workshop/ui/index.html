@@ -6,7 +6,7 @@
 <title>Atelier</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="/ui/app.css">
-<script>/* theme before first paint: Light unless this browser chose otherwise */(function(){var t="light";try{t=localStorage.getItem("ws-theme")||"light"}catch(e){}var d=t==="system"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t;document.documentElement.setAttribute("data-ltheme",d);document.documentElement.setAttribute("data-ltheme-pref",t);})();</script>
+<script>/* theme before first paint: Light unless this browser chose otherwise */(function(){var t="light";try{t=localStorage.getItem("atelier-theme")||"light"}catch(e){}var d=t==="system"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t;document.documentElement.setAttribute("data-ltheme",d);document.documentElement.setAttribute("data-ltheme-pref",t);})();</script>
 <script>/* the first-run intro covers the app from the first frame (ui/intro.js lifts this; the timeout is a safety net if it never runs) */(function(){var due=/[?&]intro(=|&|$)/.test(location.search);try{due=due||localStorage.getItem("atelier-intro-v2")!=="1"}catch(e){}if(due){document.documentElement.setAttribute("data-intro","");setTimeout(function(){document.documentElement.removeAttribute("data-intro")},8000)}})();</script>
 </head>
 <body>

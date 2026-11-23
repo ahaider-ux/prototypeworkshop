@@ -1182,7 +1182,7 @@ html[data-intro] .app{visibility:hidden}
 .intro.still .imk{display:block}
 .intro.still .imk>i{display:none}
 /* the header lockup: the pin, and the name in lowercase, heavy and tight */
-.tlogo .amark.pinmark{width:20px;height:20px}
+.tlogo .amark.pinmark{width:20px;height:20px;translate:0 -1px} /* optically centred on the word: ascenders to baseline, not its line box */
 .tlogo b.wm{font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:-.03em}
 .tlogo:hover .pinmark .eye{animation:i-blink 180ms ease-in-out}
 

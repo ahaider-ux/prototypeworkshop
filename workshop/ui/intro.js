@@ -124,24 +124,25 @@ function copyOf(id) {
   return c;
 }
 
-// The dotless i's ink, in the font it is drawn in: how far its stem's top is from the top of its
-// line box, and the middle of its ink from the left of its box (both in stage px). Falls back to
-// Inter's own proportions if the browser can't measure.
-export function glyphOf(el, em) {
-  const cs = getComputedStyle(el);
-  const pad = parseFloat(cs.paddingLeft) || 0;
-  try {
-    const c = (glyphOf.c ||= document.createElement("canvas").getContext("2d"));
-    c.font = `${cs.fontWeight} ${em}px ${cs.fontFamily}`;
-    const m = c.measureText("ı");
-    const asc = m.fontBoundingBoxAscent,
-      desc = m.fontBoundingBoxDescent;
-    if ([asc, desc, m.actualBoundingBoxAscent, m.actualBoundingBoxLeft, m.actualBoundingBoxRight].every(Number.isFinite) && asc > 0) {
-      const baseline = (em - (asc + desc)) / 2 + asc; // the line box is 1em tall, its content centred in it
-      return { stemTop: baseline - m.actualBoundingBoxAscent, mid: pad + (m.actualBoundingBoxRight - m.actualBoundingBoxLeft) / 2 };
-    }
-  } catch {}
-  return { stemTop: em * 0.318, mid: pad + em * 0.14 };
+// Where the dotless i's stem is, from layout in the font actually showing (Inter, or whatever this
+// computer falls back to), in stage px from the top-left of the word. A dotless i rises exactly
+// to the x-height, so a 1ex marker standing on the letter's baseline ends where the stem does. Layout
+// offsets, not screen boxes, so the letters' little typing bounce can't throw it off.
+export function stemOf(word, li) {
+  const probe = document.createElement("i");
+  probe.style.cssText = "display:inline-block;width:0;height:1ex;vertical-align:baseline;padding:0;margin:0";
+  li.append(probe);
+  // offsets up to the word, whatever sits between: while the letter is still finishing its typing
+  // bounce it has a transform, and Chrome measures the marker from the letter instead of the word
+  let top = probe.offsetTop;
+  for (let el = probe.offsetParent; el && el !== word; el = el.offsetParent) top += el.offsetTop;
+  probe.remove();
+  let left = li.offsetLeft;
+  for (let el = li.offsetParent; el && el !== word; el = el.offsetParent) left += el.offsetLeft;
+  // letter-spacing is added after a glyph, so the ink's middle sits half of it to the right of the
+  // box's middle (tight spacing is negative: it pulls the box in from the right)
+  const ls = parseFloat(getComputedStyle(li).letterSpacing) || 0;
+  return { x: left + (li.offsetWidth - ls) / 2, top };
 }
 
 // the app is uncovered: the home canvas brings its pictures in now, once the logo has settled
@@ -297,17 +298,17 @@ export function playIntro({ force = false } = {}) {
 
   // the pin, from wherever it is, onto the dot of the i
   function placeDot(now) {
-    const li = root.querySelector(".ilock .li");
-    const i = li.getBoundingClientRect();
+    const word = root.querySelector(".ilock");
+    const li = word.querySelector(".li");
+    const W0 = word.getBoundingClientRect(); // the word itself doesn't move while the pin drops
     const s = stage.getBoundingClientRect();
     const kk = k();
-    const em = i.height / kk; // the line is 1em tall
+    const em = li.offsetHeight; // the line is 1em tall
     const size = em * 0.34;
-    // Where the pin sits comes from the ı itself, measured in the font actually showing (Inter, or
-    // whatever the computer falls back to): just on top of its stem, centred on its ink
-    const g = glyphOf(li, em);
-    const cx = (i.left - s.left) / kk + g.mid;
-    const cy = (i.top - s.top) / kk + g.stemTop - size * 0.42;
+    const st = stemOf(word, li);
+    // the pin sits on top of the ı's stem, centred over it, overlapping it a hair so it reads as its dot
+    const cx = (W0.left - s.left) / kk + st.x;
+    const cy = (W0.top - s.top) / kk + st.top - size * 0.42;
     const target = `translate(${cx - W / 2}px, ${cy - H / 2}px) scale(${size / 72})`;
     mk.classList.remove("hop");
     if (now) return void (mk.style.transform = target);
