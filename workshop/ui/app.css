@@ -326,11 +326,11 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 
 
 /* ═══ App — Figma-style: file tabs, a rail, docked panels, one page of canvas at a time ═══ */
-.app{position:relative;width:100%;height:100%;display:flex;flex-direction:column;overflow:hidden;background:var(--bg-shell)}
+.app{position:relative;width:100%;height:100%;display:flex;flex-direction:column;overflow:hidden;background:var(--bg-canvas)} /* the canvas surface runs up behind the header */
 .sp{flex:1}
 
 /* top bar: the workspace menu, Home, and a tab per open prototype */
-.top{height:40px;flex-shrink:0;display:flex;align-items:center;gap:4px;padding:0 8px;border-bottom:1px solid var(--border-subtle)}
+.top{height:40px;flex-shrink:0;display:flex;align-items:center;gap:4px;padding:0 8px}
 .tlogo{height:32px;display:inline-flex;align-items:center;gap:8px;color:var(--text-secondary);flex-shrink:0;transition:background-color 120ms ease}
 .tlogo b{font-size:14px;font-weight:600;color:var(--text-primary)}
 .amark{width:20px;height:20px;color:var(--text-primary);flex-shrink:0}
@@ -769,7 +769,7 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .banner{left:calc(var(--lw) + (100% - var(--lw) - var(--rw)) / 2);border-radius:99px;height:44px;padding:0 4px 0 16px;top:32px}
 .tb{left:calc(var(--lw) + (100% - var(--lw) - var(--rw)) / 2);border-radius:99px;padding:6px;bottom:20px}
 .toasts{right:calc(var(--rw) + 8px);top:16px}
-.top{background:color-mix(in srgb,var(--bg-shell) 92%,transparent);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur)}
+.top{background:none} /* no bar: the header sits on the canvas, like the floating panels */
 
 /* capsules: the toolbar, the banner's actions, tabs */
 .tb .ib32,.tb .tbtx{border-radius:99px}

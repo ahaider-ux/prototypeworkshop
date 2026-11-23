@@ -342,3 +342,13 @@ test("ui: every Learn step after the intro ends in a real action", () => {
   assert.match(v, /tryB\.textContent = t \? t\.label/, "the button says what it does");
   assert.doesNotMatch(app, /Nothing here yet<\/b>[^`]*<\/div>`\)\);/, "the empty Activity page offers an action");
 });
+
+// The header is not a bar: it sits on the same surface as the canvas and the home, with no fill or rule.
+test("ui: the header has no solid background or bottom border", () => {
+  const css = read("app.css");
+  for (const m of css.matchAll(/(^|\n)\.top\{([^}]*)\}/g)) {
+    assert.doesNotMatch(m[2], /background:(?!none)/, ".top paints no background");
+    assert.doesNotMatch(m[2], /border-bottom/, ".top draws no rule");
+  }
+  assert.match(css, /\.app\{[^}]*background:var\(--bg-canvas\)/, "the canvas surface runs up behind the header");
+});
