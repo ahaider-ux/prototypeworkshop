@@ -29,7 +29,7 @@ const W = 1600,
   H = 1000;
 // the mark: a comment pin with an eye, with depth: its light, shade and top rim come from shared
 // gradients in index.html (white and black at low opacity), so they suit any colour the pin takes
-export const PIN_MARK = `<svg class="pinmark" viewBox="0 0 24 24" aria-hidden="true"><path class="pb" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><path class="pl" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><path class="ps" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><path class="pr" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><path class="pe" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><g class="eye"><circle class="ew" cx="13.4" cy="10.6" r="3.6"/><circle class="ei" cx="13.4" cy="10.6" r="3.6"/><circle class="eg" cx="12.2" cy="9.3" r="1.05"/></g></svg>`;
+export const PIN_MARK = `<svg class="pinmark" viewBox="0 0 24 24" aria-hidden="true"><path class="pb" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><path class="pl" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><path class="ps" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><path class="pr" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><g class="eye"><circle class="ew" cx="13.4" cy="10.6" r="3.6"/><circle class="ei" cx="13.4" cy="10.6" r="3.6"/></g></svg>`;
 const CORNERS = `<i class="ic1"></i><i class="ic2"></i><i class="ic3"></i><i class="ic4"></i>`;
 // a real marker stroke, from Atelier's own pen engine
 const inkPath = (pts, pen = "marker", size = 7) => outline(pts, pen, size, 1);
@@ -61,7 +61,7 @@ const FRAME_MS = 125;
 const INKS = {
   circle: { w: 290, h: 150, color: "red", strokes: [circlePts(145, 75, 130, 62)], pen: "marker", size: 6 },
   under: {
-    w: 400, h: 36, color: "blue", pen: "marker", size: 9,
+    w: 400, h: 36, color: "ink", pen: "marker", size: 9,
     strokes: [Array.from({ length: 30 }, (_, i) => { const t = i / 29; return [12 + 374 * t, 24 - 3 * Math.sin(Math.PI * t) - 10 * t * t]; })],
   },
 };
@@ -88,7 +88,7 @@ function inkFrames(spec) {
 }
 const inkSvg = (name) => `<svg viewBox="0 0 ${INKS[name].w} ${INKS[name].h}" aria-hidden="true"><path class="ik ${INKS[name].color}" data-ink="${name}" d=""/></svg>`;
 
-// what the opening tile cuts through: the app's own tools, in black and white, blue only once
+// what the opening tile cuts through: the app's own tools, in black and white
 const OPENERS = [
   `<span class="ot ink">${IC.frame}</span>`,
   `<span class="ot white">${IC.cmt}</span>`,
@@ -304,7 +304,7 @@ export function playIntro({ force = false } = {}) {
   at(END, () => end(true));
 
   // the pin, from wherever it is, onto the dot of the i
-  // where the pin sits as the i's dot: on top of the ı's stem, centred over it, overlapping a hair
+  // where the pin sits as the i's dot: above the ı's stem, centred over it
   function dotAt() {
     const word = root.querySelector(".ilock");
     const li = word.querySelector(".li");
@@ -313,7 +313,10 @@ export function playIntro({ force = false } = {}) {
     const kk = k();
     const size = li.offsetHeight * 0.34; // the line is 1em tall
     const st = stemOf(word, li);
-    return { cx: (W0.left - s.left) / kk + st.x, cy: (W0.top - s.top) / kk + st.top - size * 0.42, size };
+    // the pin's drawn shape ends 0.396 of its box below the centre (21.5 of 24); it sits a clear gap
+    // above the stem, as a dot does (about .05em, like Inter's own i), so black never runs into black
+    const gap = li.offsetHeight * 0.05;
+    return { cx: (W0.left - s.left) / kk + st.x, cy: (W0.top - s.top) / kk + st.top - gap - size * 0.396, size };
   }
   function placeDot(now) {
     const { cx, cy, size } = dotAt();

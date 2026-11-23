@@ -344,6 +344,6 @@ What worked:
 
 | Date | Direction | Look + devices | Why |
 |---|---|---|---|
-| 2026-11-23 | Chrome on obsidian | The pin in polished chrome (a bright sky, a dark horizon, a light ground), its eye a glass lens with a glint, a fine steel edge on paper; the tile obsidian; the intro's flashes workshop materials (bone, graphite, white) | Blue tiles read as generic SaaS; an atelier is a workshop for bespoke work, so the mark is a tool (a jeweller's loupe); after the metallic icons in 60fps.design's app gallery (Ben Journal, Bevel, Alfread) |
+| 2026-11-23 | The mark in black | The lit, dimensional mark kept; its colour black instead of blue: a glossy black tile with a white pin, a black pin on paper, the lockup's caret and underline in ink | Blue read as generic SaaS; black is the luxury register (a house's mark); a chrome version was tried and set aside by the owner in favour of this style |
 | 2026-11-23 | The mark in depth | Lit tile (a top-light gradient, a bright top rim, a dark lower edge, a soft shadow in the tile's own colour); the pin with light, shade, a rim and a set-in eye, from shared gradients | Flat fills read as clip art next to dimensional app icons (60fps.design's app gallery, the owner's examples); kept one colour and one shape, so it stays the same mark |
 | 2026-11-23 | Studio light, in depth | Studio light; hero at scale, popover on a cropped surface, lift, macro DOF, focus pull, pointer on the control | Matches the studio-white app; product-led like the references (Shopify admin, Paper, Flora); every piece real |

@@ -57,7 +57,7 @@ interface, large and calm. An empty frame (Atelier's own empty state: the intro 
 selected, a hand rings it, Claude says it's on it and its cursor goes there, and a toast says the
 branch is ready to review. Hand-drawn ink moves like
 stop-motion, eight frames a second, drawn on and then gently "boiling". Everything cuts away, the
-obsidian tile flashes through workshop materials (bone, graphite, white), the name types on, the mark (a polished chrome comment pin whose eye is a glass lens, like a jeweller's loupe: an atelier is a workshop where people, and here agents, make bespoke pieces) drops
+tile flashes through the palette, the name types on, the mark (a black comment pin with an eye) drops
 onto the "i" with a squash, and a hand underlines it. Then the pin fades as the word flies into the
 header, and the header's own pin appears once the word is in place. Flat colour, no gradients. Click or
 press Esc to go straight in; replay it from the Atelier menu (**Play the intro**) or by opening
