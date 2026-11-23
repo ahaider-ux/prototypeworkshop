@@ -222,18 +222,19 @@ test("ui: tab labels are measured once the row is on screen", () => {
   assert.match(move, /if \(!labelsMeasured\(\)\) measureLabels\(\);/);
 });
 
-// The home is a sidebar that stays and a main area that changes: picking a section re-renders only
-// the main area (the sidebar is built once and updated in place), and every section has a route.
-test("ui: the home's sidebar stays while its sections swap", () => {
+// The home is a floating utility that stays and a main area that changes: picking a section
+// re-renders only the main area (the utility is built once and updated in place), and every section
+// has a route.
+test("ui: the home's floating utility stays while its sections swap", () => {
   const app = read("app.js");
   assert.match(app, /const SECTIONS = \["home", "prototypes", "learn", "activity"\]/);
-  assert.match(app, /function homeShell\(\) \{[\s\S]*?if \(side\) return home;/, "built once");
+  assert.match(app, /function homeShell\(\) \{[\s\S]*?if \(home\.querySelector\("\.hdock"\)\) return home;/, "built once");
   const canvas = app.slice(app.indexOf("function renderHomeCanvas"), app.indexOf("\n}\n", app.indexOf("function renderHomeCanvas")));
   assert.ok(canvas.includes("homeMain()") && !/\$\("home"\)\.replaceChildren/.test(canvas), "the home canvas fills only the main area");
   for (const f of ["renderLearnPage", "renderActivityPage"]) {
     const body = app.slice(app.indexOf(`function ${f}`), app.indexOf("\n}\n", app.indexOf(`function ${f}`)));
     assert.ok(body.includes("main.replaceChildren"), `${f} replaces only the main area`);
-    assert.ok(!/\$\("home"\)\.replaceChildren/.test(body), `${f} leaves the sidebar alone`);
+    assert.ok(!/\$\("home"\)\.replaceChildren/.test(body), `${f} leaves the utility alone`);
   }
 });
 
@@ -293,17 +294,20 @@ test("ui: a canvas that fits stays centred; a bigger one returns to what you ope
   assert.match(home, /if \(fitsView\(\)\) Object\.assign\(cam, middle\(\)\);/, "on update");
 });
 
-// The home is built from the editor's own pieces, so the two read as one app: the sidebar is the
-// editor's floating panel with its rows and section headers, on the same canvas colour; no loose
-// links, no second agent status (the top bar has it), and Import shown once per place.
-test("ui: the home uses the editor's components", () => {
+// The home's navigation floats over the work like everything else that floats in Atelier (after
+// Libra's floating utility bars): the editor's glass tool bar, its tab thumb, its ink action; no
+// docked sidebar beside the canvas, no second agent status (the header has it).
+test("ui: the home's navigation is a floating utility, not a docked sidebar", () => {
   const app = read("app.js");
   const shell = app.slice(app.indexOf("function homeShell()"), app.indexOf("const homeMain"));
-  for (const cls of ['class="lhd"', 'class="pgs hnav"', 'class="pg"', 'class="shd"']) assert.ok(shell.includes(cls), cls);
-  assert.ok(!/hside-foot|hagent|What's new/.test(shell), "no footer links or agent card");
+  assert.ok(shell.includes('class="hdock"') && shell.includes('role="tablist"') && shell.includes('class="vsep"'));
+  assert.ok(!/hside|hagent|What's new/.test(shell), "no sidebar, footer links or agent card");
   const css = read("app.css");
+  assert.ok(!/\.hside/.test(css), "no sidebar styles left");
   assert.match(css, /\.home\{[^}]*background:var\(--bg-canvas\)/);
-  assert.match(css, /\.hside\{[^}]*border-radius:var\(--r-panel\);background:var\(--glass-bg\)/);
+  assert.match(css, /\.hdock\{[^}]*border-radius:99px;background:var\(--glass-bg\)/, "glass capsule, like the tool bar");
+  assert.match(css, /\.hdpill\{[^}]*background:var\(--raise\)/, "a raised thumb on the selected section");
+  assert.match(css, /\.hmain\.hc\{position:absolute;inset:0;/, "the canvas runs edge to edge under it");
   assert.ok(!/\.pv-tag\.agent\{[^}]*--i-orange/.test(css), "agents are ink, as in the app");
 });
 

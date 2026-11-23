@@ -292,28 +292,33 @@ function renderHomeCanvas(rs) {
     homeCv?.destroy();
     el.replaceChildren();
     el.classList.add("hc");
-    // the sidebar floats over the canvas's left edge: the field is centred in the space beside it
-    const cover = () => {
-      const sd = homeShell().querySelector(".hside");
-      return sd && sd.offsetParent ? sd.getBoundingClientRect().right - el.getBoundingClientRect().left : 0;
-    };
-    homeCv = mountHomeCanvas(el, items, { open: openItem, actions, key: S.ws.home || S.ws.name, cover });
+    homeCv = mountHomeCanvas(el, items, { open: openItem, actions, key: S.ws.home || S.ws.name });
   } else homeCv.update(items, actions); // nothing floats over it: adding things is cards on the field
 }
-// The home: a sidebar that stays put (sections, recent prototypes, the agent) and a main area that
-// changes with the section. Picking a section swaps only the main area, with a short fade.
+// The home: one floating utility over the work (after Libra's floating utility bars, in Atelier's
+// glass: the editor's tool bar), holding the sections and Import, and a main area under it that
+// changes with the section. The utility is built once; picking a section swaps only the main area.
 function homeShell() {
   const home = $("home");
-  let side = home.querySelector(".hside");
-  if (side) return home;
-  const row = (sec, icon, label) => `<button type="button" class="pg" data-s="${sec}">${icon}<span class="t">${label}</span><span class="m"></span></button>`;
+  if (home.querySelector(".hdock")) return home;
+  const tab = (sec, icon, label) => `<button type="button" role="tab" data-s="${sec}" aria-selected="false"><i>${icon}</i><span class="lb">${label}</span></button>`;
   home.replaceChildren(
-    h(`<aside class="hside" aria-label="Home"><div class="lhd"><div class="ttl"><b class="hs-name"></b><span class="hs-sub"></span></div><button type="button" class="ib32" data-a="im" aria-label="Import HTML" data-tip="Import HTML">${IC.plus}</button></div><nav class="pgs hnav" aria-label="Sections">${row("home", IC.home, "Home")}${row("prototypes", IC.board, "Prototypes")}${row("learn", IC.spark, "Learn")}${row("activity", IC.version, "Activity")}</nav><div class="hs-sec"><div class="shd"><span>Recent</span></div><div class="pgs hrecent"></div></div></aside>`),
     h(`<div class="hmain" id="homeMain"></div>`),
+    h(`<nav class="hdock" aria-label="Home"><div class="hdtabs" role="tablist" aria-label="Sections"><span class="hdpill" aria-hidden="true"></span>${tab("home", IC.home, "Home")}${tab("prototypes", IC.board, "Prototypes")}${tab("learn", IC.spark, "Learn")}${tab("activity", IC.version, "Activity")}</div><span class="vsep"></span><button type="button" class="hdadd" data-a="im" aria-label="Import HTML" data-tip="Import HTML" data-tip-up>${IC.plus}</button></nav>`),
   );
-  side = home.querySelector(".hside");
-  side.querySelector('[data-a="im"]').onclick = openImport;
-  for (const b of side.querySelectorAll("[data-s]")) b.onclick = () => goSection(b.dataset.s);
+  const dock = home.querySelector(".hdock");
+  dock.querySelector('[data-a="im"]').onclick = openImport;
+  for (const b of dock.querySelectorAll("[data-s]")) b.onclick = () => goSection(b.dataset.s);
+  // arrows move between the sections, as in any tab list
+  dock.querySelector(".hdtabs").addEventListener("keydown", (e) => {
+    const d = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+    if (!d) return;
+    const i = SECTIONS.indexOf(S.homeSection);
+    const next = SECTIONS[(i + d + SECTIONS.length) % SECTIONS.length];
+    e.preventDefault();
+    goSection(next);
+    dock.querySelector(`[data-s="${next}"]`)?.focus();
+  });
   return home;
 }
 const homeMain = () => homeShell().querySelector(".hmain");
@@ -345,26 +350,27 @@ function learnActions() {
   };
 }
 const learn = (i) => openLearn(i, learnActions());
-const openItemOf = (it) => go(S.envs.has(lastPage.get(it.id)) ? lastPage.get(it.id) : it.id);
-function renderSide(rs, items) {
-  const side = homeShell().querySelector(".hside");
-  side.querySelector(".hs-name").textContent = S.ws.name;
-  side.querySelector(".hs-sub").textContent = plural(rs.length, "prototype");
-  for (const b of side.querySelectorAll("[data-s]")) {
+// the selected section, with the thumb sliding to it (placed at once the first time it's seen)
+let dockAt = "";
+function renderDock() {
+  const dock = homeShell().querySelector(".hdock");
+  let sel = null;
+  for (const b of dock.querySelectorAll("[data-s]")) {
     const on = b.dataset.s === S.homeSection;
-    b.classList.toggle("on", on);
-    on ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current");
+    b.setAttribute("aria-selected", String(on));
+    b.tabIndex = on ? 0 : -1;
+    if (on) sel = b;
   }
-  side.querySelector('[data-s="prototypes"] .m').textContent = rs.length || "";
-  const rec = side.querySelector(".hrecent");
-  rec.replaceChildren(...items.slice(0, 5).map((it) => {
-    const r = h(`<button type="button" class="pg">${IC.board}<span class="t"></span></button>`);
-    r.querySelector(".t").textContent = it.name;
-    r.title = it.meta;
-    r.onclick = () => openItemOf(it);
-    return r;
-  }));
-  side.querySelector(".hs-sec").hidden = !items.length;
+  const pill = dock.querySelector(".hdpill");
+  if (!sel || !sel.offsetWidth) return requestAnimationFrame(() => S.view === "home" && renderDock());
+  const at = `${sel.offsetLeft}|${sel.offsetWidth}`;
+  if (at === dockAt) return;
+  const first = !dockAt;
+  dockAt = at;
+  if (first) pill.style.transition = "none";
+  pill.style.transform = `translateX(${sel.offsetLeft}px)`;
+  pill.style.width = `${sel.offsetWidth}px`;
+  if (first) void pill.offsetWidth, (pill.style.transition = "");
 }
 function renderHome(moved = false) {
   if (S.view !== "home") return;
@@ -372,8 +378,7 @@ function renderHome(moved = false) {
   const key = JSON.stringify([S.homeSection, S.ws.name, S.ws.home, S.ws.spaces, S.ws.harnesses?.length || 0, rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen, lastEdit(e.id)])]);
   if (key === homeKey) return;
   homeKey = key;
-  const items = homeItems(rs);
-  renderSide(rs, items);
+  renderDock();
   const main = homeMain();
   if (moved && !matchMedia("(prefers-reduced-motion: reduce)").matches) main.animate([{ opacity: 0, filter: "blur(2px)" }, { opacity: 1, filter: "blur(0)" }], { duration: 180, easing: "ease-out" });
   if (S.homeSection !== "home") (homeCv?.destroy(), (homeCv = null), main.classList.remove("hc"));

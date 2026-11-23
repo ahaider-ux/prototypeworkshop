@@ -77,11 +77,13 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   hit-testing, so it stays right while the field coasts. Its pure maths lives in `ui/motion.js`,
   tested in Node. Nothing made up stands in for a prototype, on the home or in the intro: a slot
   without a real one is an empty state (`.pempty`, or the home's placeholder cards) that does something real.
-  The home is a sidebar that stays (sections, recent prototypes) and a main area that changes with
-  the section (`#/`, `#/prototypes`, `#/learn`, `#/activity`): only the main area re-renders. Home
-  (`#/`) is the endless canvas: your prototypes (most recent in the middle), placeholder cards that
-  do what they say (add a prototype, connect a folder, connect your AI tool) and the guides, running
-  full-bleed under the glass sidebar and centred beside it. Cards are lifted off the canvas
+  The home's navigation is a floating utility, not a docked sidebar (after Libra's floating utility
+  bars, in Atelier's glass: the editor's tool bar): a capsule at the bottom holding the sections as
+  tabs with a raised thumb on the selected one, and Import as the one ink button. It is built once;
+  the main area under it changes with the section (`#/`, `#/prototypes`, `#/learn`, `#/activity`)
+  and only the main area re-renders. Home (`#/`) is the endless canvas, edge to edge: your
+  prototypes (most recent in the middle), placeholder cards that do what they say (add a prototype,
+  connect a folder, connect your AI tool) and the guides. Cards are lifted off the canvas
   (`--sh-card`, `--sh-card-hi`); over one, the pointer's dot opens into a glass label saying what a
   click does ("Open", "Start", "Connect", "Learn") and trails the pointer by a hair. Prototypes
   (`#/prototypes`) lists them as cards. The header's one call to action is "Connect your AI tool"

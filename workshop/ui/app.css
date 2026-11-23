@@ -612,7 +612,7 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 
 /* ═══ Home: your prototypes ═══ */
 .home{flex:1;min-height:0;display:flex;overflow:hidden;background:var(--bg-canvas)} /* the editor's canvas: one surface for the whole app */
-.home .in{max-width:1120px;margin:0 auto;padding:40px 32px 64px;display:flex;flex-direction:column;gap:32px}
+.home .in{max-width:1120px;margin:0 auto;padding:40px 32px 112px;display:flex;flex-direction:column;gap:32px}
 .home .hh{display:flex;align-items:flex-end;gap:16px}
 .home .hh .tt{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
 .home h1{font:600 20px/1.2 var(--fakt)}
@@ -1231,11 +1231,27 @@ html[data-intro] .app{visibility:hidden}
 .tagro:not(.info):not(.ok):not(.err){background:transparent;box-shadow:inset 0 0 0 1px var(--border-default);color:var(--text-secondary)}
 
 /* ---------- home canvas (ui/home.js): prototypes on paper you can throw around ---------- */
-/* the home canvas is one endless field under the glass sidebar (home.js centres it in the space
-   beside the sidebar); it fades out under the header and as it reaches the sidebar, never cut */
+/* the home canvas is one endless field, edge to edge; it fades out under the header, never cut */
 .home{position:relative}
-.hside{z-index:2}
-.hmain.hc{--side:calc(var(--gutter) + 264px);position:absolute;inset:0;overflow:hidden;-webkit-mask:linear-gradient(to bottom,transparent,black 28px),linear-gradient(to right,transparent var(--side),black calc(var(--side) + 56px));-webkit-mask-composite:source-in;mask:linear-gradient(to bottom,transparent,black 28px),linear-gradient(to right,transparent var(--side),black calc(var(--side) + 56px));mask-composite:intersect}
+.hmain.hc{position:absolute;inset:0;overflow:hidden;-webkit-mask:linear-gradient(to bottom,transparent,black 28px);mask:linear-gradient(to bottom,transparent,black 28px)}
+/* the home's floating utility (after Libra's floating utility bars, in Atelier's glass): the editor's
+   tool bar, holding the sections and Import; a raised white thumb slides to the selected section */
+.hdock{position:absolute;left:50%;bottom:20px;z-index:6;transform:translateX(-50%);display:flex;align-items:center;gap:2px;padding:6px;border-radius:99px;background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass-rim),var(--glass-spec),var(--sh-md)}
+.hdock .vsep{width:1px;height:20px;background:var(--border-subtle);margin:0 4px}
+.hdtabs{position:relative;display:flex;align-items:center;gap:2px}
+.hdtabs [data-s]{position:relative;z-index:1;height:36px;display:inline-flex;align-items:center;gap:6px;padding:0 14px 0 10px;border-radius:99px;color:var(--text-secondary);font:500 14px/1 var(--fakt);white-space:nowrap;transition:color 250ms var(--ease-smooth),background-color 120ms ease}
+.hdtabs [data-s] i{width:16px;height:16px;display:grid;place-items:center}
+.hdtabs [data-s][aria-selected="true"]{color:var(--text-primary)}
+.hdtabs [data-s][aria-selected="true"] i .ic{color:var(--text-accent)}
+.hdtabs [data-s]:not([aria-selected="true"]):hover{color:var(--text-primary);background:color-mix(in srgb,var(--bg-hover) 60%,transparent)}
+.hdtabs [data-s]:active,.hdadd:active{transform:scale(.97)}
+.hdtabs [data-s]:focus-visible,.hdadd:focus-visible{outline:2px solid var(--ring-default);outline-offset:1px}
+.hdpill{position:absolute;z-index:0;left:0;top:0;height:36px;width:0;border-radius:99px;background:var(--raise);box-shadow:var(--sh-btn);pointer-events:none;transition:transform 280ms var(--ease-io),width 280ms var(--ease-io)}
+.hdadd{width:36px;height:36px;display:grid;place-items:center;border-radius:50%;background:var(--raise-ink);color:var(--on-primary);box-shadow:var(--sh-ink)}
+.hdadd .ic{width:18px;height:18px}
+.hleaving~.hdock{opacity:0;transition:opacity 150ms ease-out}
+@media (max-width:640px){.hdtabs [data-s]:not([aria-selected="true"]) .lb{display:none}.hdtabs [data-s]:not([aria-selected="true"]){padding:0 10px}}
+@media (prefers-reduced-motion:reduce){.hdpill{transition:none}.hdtabs [data-s]:active,.hdadd:active{transform:none}}
 .hcanvas{position:absolute;inset:0;overflow:clip;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
 .hcanvas.grabbing{cursor:grabbing}
 .hcanvas.grabbing .htile{pointer-events:none}
@@ -1300,7 +1316,7 @@ html[data-intro] .app{visibility:hidden}
 .hcanvas.held .htile{opacity:0}
 .hcanvas.arrive .htile{animation:harrive 460ms var(--ease-smooth) var(--d,0ms) both}
 @keyframes harrive{from{opacity:0;scale:.94}to{opacity:1;scale:1}}
-.hhint{position:absolute;left:calc(50% + var(--side,0px) / 2);bottom:24px;transform:translateX(-50%);height:28px;display:inline-flex;align-items:center;padding:0 12px;border-radius:99px;background:var(--raise);box-shadow:var(--sh-btn);font:400 12px/1 var(--fakt);color:var(--text-secondary);pointer-events:none;transition:opacity 400ms ease}
+.hhint{position:absolute;left:50%;bottom:84px;transform:translateX(-50%);height:28px;display:inline-flex;align-items:center;padding:0 12px;border-radius:99px;background:var(--raise);box-shadow:var(--sh-btn);font:400 12px/1 var(--fakt);color:var(--text-secondary);pointer-events:none;transition:opacity 400ms ease}
 .hcanvas.used .hhint{opacity:0}
 
 @media (prefers-reduced-motion:reduce){.hcanvas.arrive .htile,.hcanvas.return .htile,.htile.ping,.htile.waiting .htt::after,.htile.fresh canvas{animation:none}.htile.hot,.htile.chosen,.hcanvas:not(.grabbing) .htile.hot:active{scale:none}.htile.hot{translate:none}.hcl{transition:background-color 150ms ease,box-shadow 150ms ease}.hcanvas.down .hcl,.htile.hot .hplus{scale:none}}
@@ -1331,13 +1347,9 @@ html[data-intro] .app{visibility:hidden}
 .home h1{letter-spacing:-.02em}
 
 /* ═══ Home shell: a sidebar that stays, and the section it shows ═══ */
-.hside{position:relative;width:264px;flex-shrink:0;display:flex;flex-direction:column;margin:var(--gutter);border-radius:var(--r-panel);background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass);overflow:auto;scrollbar-width:thin} /* the editor's left panel, as the home's sidebar */
-.hside .pgs{padding:4px 0}
-.hside .pg{width:calc(100% - 16px);text-align:left;color:var(--text-primary)}
-.hside .hs-sec{border-top:1px solid var(--border-subtle);padding-top:4px}
 .hmain{flex:1;min-width:0;position:relative;overflow:auto;scrollbar-width:thin}
 /* the sections: a two-tone title (a grey lead-in, then the point), and generous air */
-.hl{max-width:1120px;margin:0 auto;padding:32px 40px 64px;display:flex;flex-direction:column;gap:32px}
+.hl{max-width:1120px;margin:0 auto;padding:32px 40px 112px;display:flex;flex-direction:column;gap:32px}
 .hl-h{display:flex;flex-direction:column;gap:4px}
 .hl-h h1{font:600 20px/1.2 var(--fakt);letter-spacing:-.02em;color:var(--text-primary)}
 .hl-h p{font-size:14px;color:var(--text-secondary)}
@@ -1360,7 +1372,7 @@ html[data-intro] .app{visibility:hidden}
 .hact-t .m{font-size:12px;color:var(--text-secondary)}
 .hact-w{font-size:12px;color:var(--text-placeholder);flex-shrink:0;font-variant-numeric:tabular-nums}
 @media (max-width:1100px){.hl-learn{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:860px){.hside{display:none}.hl{padding:32px 20px 48px}.hmain.hc{--side:0px}}
+@media (max-width:860px){.hl{padding:32px 20px 112px}}
 
 /* ═══ Product pictures (ui/visuals.js): real pieces of Atelier, in depth, on the studio light ═══ */
 .pv{position:relative;display:block;overflow:hidden;background:radial-gradient(circle at 1px 1px,var(--pv-dot) 1px,transparent 1.4px) 0 0/16px 16px,var(--pv-base);isolation:isolate} /* the canvas Atelier works on: flat, with a faint dot grid */
@@ -1421,7 +1433,7 @@ html[data-intro] .app{visibility:hidden}
 @keyframes lrn-in{from{opacity:0;filter:blur(4px)}}
 .lrn-x{position:absolute;top:12px;right:12px;z-index:5;background:var(--raise);box-shadow:var(--sh-btn)}
 @media (max-width:760px){.lrn{grid-template-columns:1fr}.lrn-a{display:none}.md.lrn-md{height:auto}}
-@media (prefers-reduced-motion:reduce){.lrn-pic.in{animation:none}.lcard:active,.hnav button:active{transform:none}}
+@media (prefers-reduced-motion:reduce){.lrn-pic.in{animation:none}.lcard:active{transform:none}}
 
 /* a picture's headline: a short plain phrase, the guide's point, set like a title card */
 .pv-hl{position:absolute;left:0;right:0;top:44px;text-align:center;font:500 25px/1.12 var(--fakt);letter-spacing:-.03em;color:var(--text-primary)}

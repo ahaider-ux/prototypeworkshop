@@ -39,9 +39,7 @@ const memory = new Map();
 // (import, connect a folder, connect an AI tool) as placeholder cards, and the guides (art(): their
 // picture) — all real, so the field never needs made-up content to look full. cue is what the
 // pointer says over it ("Start", "Learn"; a prototype says "Open"). key names the space.
-// cover(): how much of the canvas's left edge something floats over (the sidebar); the field is
-// centred in the space beside it.
-export function mountHomeCanvas(host, items, { open, actions = [], key = "", cover = () => 0 }) {
+export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
   const root = h(`<div class="hcanvas" role="region" aria-label="Prototypes. Drag to look around."><div class="hworld"></div><div class="hcur" aria-hidden="true"><span class="hcl"><b></b></span></div><div class="hhint" aria-hidden="true">Drag to look around</div></div>`);
   const world = root.querySelector(".hworld");
   const cur = root.querySelector(".hcur");
@@ -54,8 +52,7 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "", cov
     bounds = null;
   const cam = { x: 0, y: 0 }; // a cell's centre is its thumbnail's centre: (0,0) is the middle tile
   let vw = root.clientWidth || innerWidth,
-    vh = root.clientHeight || innerHeight,
-    ox = 0; // half of what covers the left edge: the field's middle moves right by this much
+    vh = root.clientHeight || innerHeight;
 
   function layout() {
     // one sequence: the prototypes (most recent in the middle), then the placeholders and guides
@@ -78,7 +75,7 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "", cov
   }
   const middle = () => (bounds && !wrap ? { x: -(bounds.x0 + bounds.x1) / 2, y: -(bounds.y0 + bounds.y1) / 2 } : { x: 0, y: 0 });
   // everything is on screen at once: there's nowhere to go, so the group stays centred
-  const fitsView = () => !wrap && !!bounds && bounds.x1 - bounds.x0 <= vw - ox * 2 && bounds.y1 - bounds.y0 <= vh;
+  const fitsView = () => !wrap && !!bounds && bounds.x1 - bounds.x0 <= vw && bounds.y1 - bounds.y0 <= vh;
   const sizeOf = () => CARD;
   // which item a cell shows
   function at(cx, cy) {
@@ -145,8 +142,8 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "", cov
     return el;
   }
   function sync() {
-    const x0 = -cam.x - vw / 2 - ox,
-      x1 = -cam.x + vw / 2 - ox,
+    const x0 = -cam.x - vw / 2,
+      x1 = -cam.x + vw / 2,
       y0 = -cam.y - vh / 2,
       y1 = -cam.y + vh / 2;
     const c0 = Math.floor(x0 / CW) - 1,
@@ -226,7 +223,7 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "", cov
     hot = null, // "x,y" of the tile under the pointer
     leaving = false;
   function hitAt(x, y) {
-    const wx = x - vw / 2 - ox - cam.x,
+    const wx = x - vw / 2 - cam.x,
       wy = y - vh / 2 - cam.y;
     const cx = Math.round(wx / CW),
       cy = Math.round(wy / CH);
@@ -295,7 +292,7 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "", cov
     spring = false;
   const apply = () => {
     root.classList.toggle("fits", fitsView());
-    world.style.transform = `translate3d(${Math.round((cam.x + vw / 2 + ox) * 2) / 2}px, ${Math.round((cam.y + vh / 2) * 2) / 2}px, 0)`;
+    world.style.transform = `translate3d(${Math.round((cam.x + vw / 2) * 2) / 2}px, ${Math.round((cam.y + vh / 2) * 2) / 2}px, 0)`;
     sync();
     if (inside) point();
   };
@@ -487,11 +484,11 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "", cov
     const el = e.target.closest?.(".htile");
     if (!el || drag) return;
     const [cx, cy] = el.dataset.cell.split(",").map(Number);
-    const sx = cx * CW + cam.x + ox,
+    const sx = cx * CW + cam.x,
       sy = cy * CH + cam.y;
     if (Math.abs(sx) > vw / 2 - CW / 2 || Math.abs(sy) > vh / 2 - CH / 2) focusCell(cx, cy);
   });
-  const measure = () => ((vw = root.clientWidth), (vh = root.clientHeight), (ox = Math.max(0, Math.min(vw / 3, cover() || 0)) / 2));
+  const measure = () => ((vw = root.clientWidth), (vh = root.clientHeight));
   const ro = new ResizeObserver(() => {
     measure();
     // the real size arrives after mount (it starts as the window's): a canvas that fits stays centred
