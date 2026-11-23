@@ -212,3 +212,15 @@ test("ui: the intro pin is placed from the live font's layout", () => {
   assert.match(place, /stemOf\(word, li\)/);
   assert.ok(!/measureText|getContext/.test(js), "no canvas measurement");
 });
+
+// Atelier opens on the home screen, with the editor and its tab row out of the layout. Labels were
+// measured then, all at 0px: the selected tab lost its title and the pill kept a stray 6px gap.
+// A width is only recorded once the row is on screen, and the pill measures before it moves.
+test("ui: tab labels are measured once the row is on screen", () => {
+  const js = read("panels.js");
+  const measure = js.slice(js.indexOf("function measureLabels()"), js.indexOf("function movePill"));
+  assert.match(measure, /if \(!\$\("ltabs"\)\?\.offsetParent\) return false;/, "skips while hidden");
+  assert.match(measure, /if \(w > 0\) t\.style\.setProperty\("--lbw"/, "never records a 0");
+  const move = js.slice(js.indexOf("function movePill"), js.indexOf("function movePill") + 400);
+  assert.match(move, /if \(!labelsMeasured\(\)\) measureLabels\(\);/);
+});

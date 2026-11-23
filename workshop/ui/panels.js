@@ -255,16 +255,26 @@ function renderActivity(body, foot, env) {
 // runs), so the pill and the tabs travel the same path, at the same speed, and end exactly together.
 // The pill is only moved when where it should be changes: a panel re-render never snaps it.
 let pillAt = "";
+// Each label's own width, for the selected tab to open to. Only while the row is on screen: hidden
+// (Atelier opens on the home screen, with the editor out of the layout) everything measures 0, and a
+// 0 left the selected tab with no title and the pill with a stray gap where it should be.
 function measureLabels() {
+  if (!$("ltabs")?.offsetParent) return false;
+  let all = true;
   for (const t of document.querySelectorAll("#ltabs [data-t]")) {
     const lb = t.querySelector(".lb");
-    if (lb) t.style.setProperty("--lbw", `${Math.ceil(lb.scrollWidth)}px`);
+    const w = lb ? Math.ceil(lb.scrollWidth) : 0;
+    if (w > 0) t.style.setProperty("--lbw", `${w}px`);
+    else all = false;
   }
+  return all;
 }
+const labelsMeasured = () => [...document.querySelectorAll("#ltabs [data-t]")].every((t) => parseFloat(t.style.getPropertyValue("--lbw")) > 0);
 function movePill(animate) {
   const bar = $("ltabs");
   const pill = bar?.querySelector(".ltpill");
   if (!pill || !bar.offsetParent) return;
+  if (!labelsMeasured()) measureLabels(); // first time on screen
   const bs = getComputedStyle(bar);
   const gap = parseFloat(bs.columnGap) || 0;
   let x = parseFloat(bs.paddingLeft) || 0,
