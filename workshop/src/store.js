@@ -22,6 +22,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import zlib from "node:zlib";
 import { parseCss, mergeRule, rulesOf, normSel, checkSelector, OVERRIDES_HEAD } from "./css.js";
+import { drawKey } from "../ui/drawkey.js";
 
 export { parseCss, mergeRule, rulesOf } from "./css.js";
 
@@ -56,6 +57,33 @@ const skipEntry = (name) => name.startsWith(".") || name === "node_modules";
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const RECORD_RE = /^[a-z0-9][a-z0-9-]{0,80}$/;
 const THEMES = new Set(["light", "dark", "system"]);
+
+// A saved drawing (an SVG wrapping the page) as plain HTML an agent can read: the page out of its
+// wrapper, without the canvas's own helper styles, with embedded pictures replaced by a short
+// placeholder. Unless css is asked for, it's the markup alone: no style blocks, no comments, no empty
+// stand-ins for the parts of the page this screen doesn't show, and icons as their tag (class,
+// label, size) without their paths. Those are most of a big prototype's bytes and say nothing about
+// what's on the screen.
+export function readableDrawing(svg, { css = false } = {}) {
+  const a = svg.indexOf("<html"),
+    z = svg.lastIndexOf("</html>");
+  let page = (a >= 0 && z > a ? svg.slice(a, z + 7) : svg)
+    .replace(/<style>\*,\*::before,\*::after\{animation:none!important;transition:none!important\}<\/style>/g, "")
+    .replace(/<style data-workshop=""><\/style>/g, "")
+    .replace(/data:[a-z]+\/[a-z0-9.+-]+(;[a-z0-9=.-]+)*(;base64)?,[^"')\s]{120,}/gi, (m) => `data:,picture-${Math.round(m.length / 1024)}kb`);
+  if (css) return page;
+  page = page
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/g, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/(<svg\b[^>]*>)[\s\S]*?<\/svg>/g, "$1</svg>");
+  // the drawing empties what this screen hides and marks it (data-wsp, display:none): drop those
+  // husks, innermost first, until none are left
+  for (let i = 0, prev = ""; i < 12 && prev !== page; i++) {
+    prev = page;
+    page = page.replace(/<([a-z][a-z0-9-]*)\b[^>]*\bdata-wsp=""[^>]*>\s*<\/\1>/gi, "").replace(/<([a-z][a-z0-9-]*)\b[^>]*\bdata-wsp=""[^>]*\/>/gi, "");
+  }
+  return page.replace(/\n\s*\n+/g, "\n");
+}
 
 export class StoreError extends Error {
   constructor(code, message, status = 400) {
@@ -337,6 +365,25 @@ export class Store {
       for (const [n] of st.slice(0, names.length - LIMITS.snapshots)) await fsp.rm(path.join(this.snapDir, n), { force: true });
     }
     return { key, bytes: buf.length };
+  }
+
+  // ----- a frame as HTML, for agents -----
+
+  // What one frame on the canvas shows, as HTML an agent can read without working through the whole
+  // prototype. A drawn frame is its own file. A screen of a prototype is the visible part of its page
+  // as the canvas last drew it: the elements on that screen and the CSS they use, with no scripts
+  // and pictures stood in for by a placeholder. html is null when the canvas hasn't drawn it yet.
+  async frameHtml(boardId, { css = false } = {}) {
+    const b = (await this.items()).find((i) => i.id === boardId && i.type === "board");
+    if (!b) throw new StoreError("not_found", `No frame ${boardId} on the canvas. list_canvas lists them.`);
+    if (b.file) return { board: b.id, env: b.env, frame: b.name || "Frame", file: b.file, source: "file", html: (await this.readFile(b.env, b.file)).toString("utf8") };
+    const key = crypto.createHash("sha1").update(drawKey(await this.fingerprint(b.env), b)).digest("hex");
+    const gz = await this.readSnapshot(key);
+    const base = { board: b.id, env: b.env, screen: b.screen || "start screen", state: b.state || "Default", source: "drawing", edit: "index.html (structure) and overrides.css (visual tweaks)" };
+    if (!gz) return { ...base, html: null };
+    // Guard: a drawing is at most snapshotBytes before it's zipped; never unzip past that
+    const svg = zlib.gunzipSync(gz, { maxOutputLength: LIMITS.snapshotBytes }).toString("utf8");
+    return { ...base, css, html: readableDrawing(svg, { css }) };
   }
 
   // ----- linked prototypes: files in the space's own folder, edited in place -----

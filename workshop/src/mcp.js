@@ -21,7 +21,7 @@ const ENV = str("Environment id, as list_environments shows it");
 export const TOOLS = [
   { name: "list_environments", description: "Lists the prototypes (environments) in the workspace with their folder, lineage, device, theme, opening screen and how many versions and design overrides each has. Start here.", inputSchema: S({}) },
   { name: "get_environment", description: "Everything about one environment: settings, files, its overrides.css, versions and open comments.", inputSchema: S({ env: ENV }, ["env"]) },
-  { name: "get_selection", description: "What the designer has selected on the canvas right now: environment, CSS selector, element HTML, text and computed styles. Use it when they say 'this' or 'here'.", inputSchema: S({}) },
+  { name: "get_selection", description: "What the designer has selected on the canvas right now: environment, board, CSS selector, element HTML, text and computed styles. Use it when they say 'this' or 'here'; read_frame with its board shows the whole screen around it.", inputSchema: S({}) },
   { name: "read_file", description: "Reads a text file from an environment (default index.html). Large files come back in slices: pass offset and length (characters) to page through.", inputSchema: S({ env: ENV, path: str("Path inside the environment folder, e.g. index.html"), offset: num("Character offset, default 0"), length: num(`Characters to read, default ${READ_CAP}`) }, ["env"]) },
   { name: "write_file", description: "Writes a whole text file in an environment. The canvas reloads that board. Save a version first for big changes.", inputSchema: S({ env: ENV, path: str("Path inside the environment folder"), content: str("The complete new file contents") }, ["env", "path", "content"]) },
   { name: "create_environment", description: "Creates a new environment from a complete HTML document. Returns its id.", inputSchema: S({ name: str("Name shown on the canvas"), html: str("A complete HTML document"), description: str("One line about it") }, ["name", "html"]) },
@@ -34,6 +34,7 @@ export const TOOLS = [
   { name: "update_brief", description: "Replaces a prototype's brief: the context every agent reads first (what the prototype is, its design rules, what to keep). Only when the designer asks.", inputSchema: S({ env: ENV, brief: str("The whole brief") }, ["env", "brief"]) },
   { name: "fork_environment", description: "Makes an independent copy of an environment (optionally from a saved version) — no link back to merge. Prefer create_branch for trying changes.", inputSchema: S({ env: ENV, name: str("Name for the copy"), version: num("Version number to copy from (optional)") }, ["env"]) },
   { name: "list_canvas", description: "What is on the canvas: boards (an environment at a screen and state) and frames, work brought in from elsewhere (links to Figma files and running apps, and pictures — open a picture's file to look at it), and the designer's annotations — notes, boxes, arrows and hand-drawn marks — on each environment's page, with the boards each one sits over. Read the annotations as feedback.", inputSchema: S({ env: str("Only boards and annotations for this environment") }) },
+  { name: "read_frame", description: "Reads one frame on the canvas as HTML: what that screen actually shows, without working through the whole prototype. A drawn frame (add_frame) is its own file; a prototype's screen comes back as the elements on it, as the canvas last drew it (no scripts; pictures stood in for; icons as their tag). Markup only by default; pass css: true for the styles it uses too. Read it to see a screen's structure, then make changes in the files it names. Board ids come from list_canvas or get_selection.", inputSchema: S({ board: str("Board id, e.g. b-mwns83k5-f8afff"), css: { type: "boolean", description: "Include the CSS this screen uses (much longer)" }, offset: num("Character to start from, for long frames"), length: num("How many characters to return") }, ["board"]) },
   { name: "place_screen", description: "Puts a board for one of an environment's screens on the canvas (screens are listed by get_environment under catalog).", inputSchema: S({ env: ENV, screen: str("Screen name, e.g. Chat"), state: str("Screen state, e.g. Empty (optional)") }, ["env", "screen"]) },
   { name: "add_frame", description: "Draws a new frame on the canvas: an empty page of the environment (frames/<name>.html) at the size you give, shown as its own board. Design it by writing that file. Use it to propose a new screen, or the same screen at another size.", inputSchema: S({ env: ENV, name: str("What the frame is, e.g. 'Onboarding step 2'"), width: num("Width in px, e.g. 390 for a phone"), height: num("Height in px") }, ["env", "name"]) },
   { name: "get_activity", description: "What people and other agents have been doing in this workspace: requests, branches, merges, frames, notes, agents starting and finishing work, and messages. Read it before you start, so you don't redo or undo someone's work.", inputSchema: S({ env: str("Only this prototype and its branches"), since: str("Only events after this ISO time") }) },
@@ -154,7 +155,8 @@ export async function callTool(store, name, a = {}, ctx = {}) {
       // without a page go with whatever they overlap.
       const over = (r) => boards.filter((b) => (!r.env || b.env === r.env) && r.x < b.x + b.w && r.x + (r.w || 1) > b.x && r.y < b.y + b.h && r.y + (r.h || 1) > b.y).map((b) => ({ board: b.id, env: b.env, screen: b.screen }));
       const out = {
-        boards: boards.filter((b) => !a.env || b.env === a.env).map((b) => (b.file ? { id: b.id, env: b.env, frame: b.name || "Frame", file: b.file, x: b.x, y: b.y, w: b.w, h: b.h } : { id: b.id, env: b.env, screen: b.screen || "start screen", state: b.state || "Default", x: b.x, y: b.y, w: b.w, h: b.h })),
+        // every board reads as HTML: read_frame with its id (a drawn frame is also its own file)
+        boards: boards.filter((b) => !a.env || b.env === a.env).map((b) => (b.file ? { id: b.id, env: b.env, frame: b.name || "Frame", file: b.file, html: "read_frame", x: b.x, y: b.y, w: b.w, h: b.h } : { id: b.id, env: b.env, screen: b.screen || "start screen", state: b.state || "Default", html: "read_frame", x: b.x, y: b.y, w: b.w, h: b.h })),
         notes: items.filter((i) => i.type === "note").map((n) => ({ id: n.id, page: n.env || null, text: n.text, author: n.author, over: over({ ...n, h: 120 }) })),
         boxes: items.filter((i) => i.type === "box").map((x) => ({ id: x.id, page: x.env || null, label: x.label, author: x.author, over: over(x) })),
         arrows: items.filter((i) => i.type === "arrow").map((r) => ({ id: r.id, page: r.env || null, label: r.label, from: r.from, to: r.to })),
@@ -172,6 +174,15 @@ export async function callTool(store, name, a = {}, ctx = {}) {
         out.drawings = out.drawings.filter(mine);
       }
       return text(out);
+    }
+    case "read_frame": {
+      const f = await store.frameHtml(String(a.board || ""), { css: !!a.css });
+      const { html, ...about } = f;
+      if (html === null) return text({ ...about, html: null, next: "The canvas hasn't drawn this screen yet (it draws each screen once, when the prototype is open in Atelier). Use screenshot to see it, or read_file on index.html." });
+      const off = Math.max(0, Math.floor(Number(a.offset) || 0));
+      const len = Math.max(1, Math.min(READ_CAP, Math.floor(Number(a.length) || READ_CAP)));
+      const more = off + len < html.length ? `\n\n[… ${html.length - off - len} more characters. Call read_frame with offset ${off + len} to continue.]` : "";
+      return text(`${JSON.stringify(about)}\n\n${html.slice(off, off + len)}${more}`);
     }
     case "place_screen": {
       const b = await store.addBoard(a.env, { screen: String(a.screen), state: a.state ? String(a.state) : null, author: who });

@@ -129,3 +129,37 @@ test("MCP: recipes run on a branch, and the brief carries the prototype's brief 
   assert.equal(info.brief, "Never touch the header.");
   await c.close();
 });
+
+// An agent reads one frame as HTML instead of working through the whole prototype: a drawn frame is
+// its file, and a screen is what the canvas drew of it (found by the same key the canvas saves it
+// under), as markup without styles, icon paths, pictures or the husks of what the screen hides.
+test("MCP: read_frame gives an agent a frame as HTML", async () => {
+  const { callTool } = await import("../src/mcp.js");
+  const { drawKey } = await import("../ui/drawkey.js");
+  const crypto = await import("node:crypto");
+  const store = await Store.open(await fsp.mkdtemp(path.join(os.tmpdir(), "workshop-")));
+  const env = await store.createEnv({ html: HTML });
+  const read = async (args) => (await callTool(store, "read_frame", args)).content[0].text;
+  const canvas = JSON.parse((await callTool(store, "list_canvas", { env: env.id })).content[0].text);
+  const board = canvas.boards[0];
+  assert.equal(board.html, "read_frame", "list_canvas says how to read each board");
+  // not drawn yet: it says so, and what to do instead
+  assert.match(await read({ board: board.id }), /"html": null[\s\S]*hasn't drawn this screen/);
+  // the canvas draws it (the browser saves the drawing under this key)
+  const it = (await store.items()).find((i) => i.id === board.id);
+  const key = crypto.createHash("sha1").update(drawKey(await store.fingerprint(env.id), it)).digest("hex");
+  const pic = "data:image/png;base64," + "A".repeat(4000);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><foreignObject width="10" height="10"><html xmlns="http://www.w3.org/1999/xhtml"><head><style>p{color:red}</style></head><body><!-- note --><p class="t">Hi</p><img src="${pic}" /><svg class="ic" viewBox="0 0 16 16"><path d="M1 1L15 15"/></svg><div data-wsp="" style="display:none!important"><span data-wsp="" style="display:none!important"></span></div></body></html></foreignObject></svg>`;
+  await store.writeSnapshot(key, Buffer.from(svg));
+  const out = await read({ board: board.id });
+  assert.match(out, /<p class="t">Hi<\/p>/, "the screen's elements");
+  assert.match(out, /<svg class="ic" viewBox="0 0 16 16"><\/svg>/, "icons keep their tag, not their paths");
+  assert.match(out, /data:,picture-4kb/, "pictures are a short placeholder");
+  assert.ok(!/<style|<!--|data-wsp|A{200}/.test(out), "no styles, comments, hidden husks or picture bytes");
+  assert.match(await read({ board: board.id, css: true }), /<style>p\{color:red\}<\/style>/, "css on request");
+  // a drawn frame is its own file
+  const f = await store.addFrame(env.id, { name: "Step 2", w: 390, h: 844 });
+  await store.writeFile(env.id, f.file, "<!doctype html><main>Step two</main>");
+  assert.match(await read({ board: f.id }), /"source":"file"[\s\S]*<main>Step two<\/main>/);
+  await assert.rejects(callTool(store, "read_frame", { board: "b-nope" }), /No frame b-nope/);
+});

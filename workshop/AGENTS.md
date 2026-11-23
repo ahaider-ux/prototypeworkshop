@@ -11,7 +11,8 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
    in a connected space, in the project's own folders (`folder` in `list_environments`; edit those
    real files in place, and put visual tweaks in the overrides file the brief names). Use the
    `workshop` MCP server (`.mcp.json` in this folder registers it): `list_environments`,
-   `get_selection` (what the designer is pointing at), `list_canvas` (their notes, highlights, arrows
+   `get_selection` (what the designer is pointing at), `read_frame` (one frame as HTML: what that
+   screen shows, without reading the whole prototype; a drawn frame is its own file), `list_canvas` (their notes, highlights, arrows
    and hand-drawn marks — read them as feedback; screenshot the screen under a mark to see it), `take_task` / `update_task` (requests typed in Chat),
    `create_branch` / `review_branch` / `merge_branch`, `set_style`, `read_file` / `write_file`,
    `save_version`, `screenshot`, `list_recipes` / `run_recipe` (the team's shared instructions for
@@ -70,7 +71,7 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   under the pointer and the selected one (so a frame is editable as it stands, as in Figma), and the
   one that's running or presenting; at most `MAX_LIVE`, the rest are pictures. Every frame loads through `loadPage`/`pagesFree`, which hold while the intro plays. Saved
   drawings carry only what's shown: hidden parts emptied, CSS trimmed to what matches, each picture
-  once. They decode one at a time when idle. Bump `DRAWING` in `ui/gfx.js` when what goes into a
+  once. They decode one at a time when idle. Bump `DRAWING` in `ui/drawkey.js` when what goes into a
   drawing changes. `ui/snap.js` takes no imports: it runs inside any prototype.
   The home canvas (`ui/home.js`) follows the same rules: one transform on one layer for the camera,
   only tiles in view exist, thumbnails come from that pipeline (`thumbJob`, `onBitmap`), and decodes

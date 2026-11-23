@@ -10,8 +10,8 @@
 
 import { pagesFree, apartUrl } from "./lib.js";
 import { drawingOf, settle, sleep } from "./snap.js";
+import { LEVEL, drawKey } from "./drawkey.js";
 
-const LEVEL = 0.5; // bitmaps are kept at half size: sharp up to 50% zoom on a 1× screen
 const POOL = 3; // background pages loading at once
 const MAX_BITMAPS = 160; // Guard: bitmaps are ~2 MB each at half size; past this the oldest go
 const LOAD_TIMEOUT = 25000;
@@ -52,8 +52,8 @@ export function invalidate(env) {
   REV.set(env, rev(env) + 1);
 }
 // what a board shows; without a look from the server yet, only this session can match it
-const DRAWING = 7; // the snapshot format: bump it when what goes into a drawing changes, so old ones aren't reused
-export const keyOf = (it) => `${lookOf(it.env) || `${it.env}@${rev(it.env)}`}|${it.file || ""}|${it.screen || ""}|${it.state || ""}|${it.w}x${it.h}|${LEVEL}|d${DRAWING}`;
+// what names a board's drawing (ui/drawkey.js; DRAWING is bumped there when a drawing's contents change)
+export const keyOf = (it) => drawKey(lookOf(it.env) || `${it.env}@${rev(it.env)}`, it);
 
 // ---------- saved pictures ----------
 const HASHES = new Map();
