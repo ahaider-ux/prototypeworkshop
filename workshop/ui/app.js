@@ -2,7 +2,7 @@
 
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural, pageName, folderLabel } from "./state.js";
 import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented, skeleton, loadingToast, pendingButton, loadPage, apartUrl, initTips } from "./lib.js";
-import { addLink, addPicture, initCanvas, sync, fit, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
+import { setTool, addLink, addPicture, initCanvas, sync, fit, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
 import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff } from "./panels.js";
 import { rulesFor, loadOverrides } from "./styles.js";
 import { loadRecipes } from "./recipes.js";
@@ -224,7 +224,7 @@ function openPage(page) {
 function renderTabs() {
   const t = $("tabs");
   t.replaceChildren();
-  const home = h(`<div class="tab home${S.view === "home" ? " on" : ""}" role="tab" tabindex="0" aria-selected="${S.view === "home"}">${IC.home}<span class="t">Home</span></div>`);
+  const home = h(`<div class="tab tab-home${S.view === "home" ? " on" : ""}" role="tab" tabindex="0" aria-selected="${S.view === "home"}">${IC.home}<span class="t">Home</span></div>`);
   home.onclick = () => go("home");
   home.onkeydown = (e) => e.key === "Enter" && go("home");
   t.append(home);
@@ -338,7 +338,34 @@ function homeShell() {
   return home;
 }
 const homeMain = () => homeShell().querySelector(".hmain");
-const learn = (i) => openLearn(i, { learn: () => goSection("learn"), agent: S.ws.harnesses?.length ? null : openConnect });
+// Each Learn step offers the real thing it describes, on the person's own work: the prototype they
+// edited last, or the newest open branch for review. A step that can't be done here has no button.
+const latestRoot = () => roots().slice().sort((a, b) => (lastEdit(b.id) || "").localeCompare(lastEdit(a.id) || ""))[0] || null;
+const latestBranch = () =>
+  envList()
+    .filter((e) => isBranch(e) && !e.archived && !e.mergedAt)
+    .sort((a, b) => (b.branch?.at || b.created || "").localeCompare(a.branch?.at || a.created || ""))[0] || null;
+// open a prototype, then act once its canvas is showing (opening goes through the route)
+function openThen(id, fn) {
+  go(id);
+  const t0 = performance.now();
+  const wait = () => (S.view === "proto" && S.page === id ? fn() : performance.now() - t0 < 3000 && requestAnimationFrame(wait));
+  requestAnimationFrame(wait);
+}
+function learnActions() {
+  const p = latestRoot(),
+    b = latestBranch();
+  return {
+    learn: () => goSection("learn"),
+    import: { label: "Import HTML", run: openImport },
+    branch: p && { label: "Create a branch", run: () => openThen(p.id, () => createBranch(p.id)) },
+    markup: p && { label: "Add a note", run: () => openThen(p.id, () => setTool("note")) },
+    agent: { label: S.ws.harnesses?.length ? "See connected tools" : "Connect your AI tool", run: openConnect },
+    merge: b && { label: "Review a branch", run: () => openThen(b.id, () => openReview(b.id)) },
+    recipes: p && { label: "Open recipes", run: () => openThen(p.id, () => fire("left-tab", "recipes")) },
+  };
+}
+const learn = (i) => openLearn(i, learnActions());
 const openItemOf = (it) => go(S.envs.has(lastPage.get(it.id)) ? lastPage.get(it.id) : it.id);
 function renderSide(rs, items) {
   const side = homeShell().querySelector(".hside");
@@ -418,7 +445,14 @@ async function renderActivityPage(main) {
   if (S.homeSection !== "activity" || !page.isConnected) return;
   rows = (Array.isArray(rows) ? rows : rows?.items || []).slice().reverse();
   list.replaceChildren();
-  if (!rows.length) return list.append(h(`<div class="pempty"><b>Nothing here yet</b>Branches, merges, notes and agents' updates show up here as they happen.</div>`));
+  if (!rows.length) {
+    const p = latestRoot();
+    const em = h(`<div class="pempty"><b>Nothing here yet</b>Branches, merges, notes and agents' updates show up here as they happen.<button type="button" class="dbtn sm"></button></div>`);
+    const btn = em.querySelector("button");
+    if (p) (btn.innerHTML = `${IC.fork}Create a branch`), (btn.onclick = () => openThen(p.id, () => createBranch(p.id)));
+    else (btn.innerHTML = `${IC.upload}Import HTML`), (btn.onclick = openImport);
+    return list.append(em);
+  }
   for (const e of rows) {
     const env = e.env && S.envs.get(e.env);
     const r = h(`<button type="button" class="hact"><span class="hact-k">${e.by && /claude|agent|codex|cursor/i.test(e.by) ? IC.spark : IC.version}</span><span class="hact-t"><span class="x"></span><span class="m"></span></span><span class="hact-w"></span></button>`);
@@ -756,10 +790,16 @@ function present(bid) {
     hideT = setTimeout(() => !bar.matches(":hover") && ((bar.style.opacity = "0"), (bar.style.pointerEvents = "none")), 2200);
   };
   const near = (e) => presenting && e.clientY < 64 && show();
-  const doc = boardOf(bid)?.frame.contentDocument;
+  // the board turns live for presenting, so its page may not exist yet: listen on it once it loads
   document.addEventListener("pointermove", near);
-  doc?.addEventListener("pointermove", near);
-  presenting.cleanup = () => (clearTimeout(hideT), document.removeEventListener("pointermove", near), doc?.removeEventListener("pointermove", near), bar.remove());
+  let doc = null;
+  const watch = setInterval(() => {
+    try {
+      const d = boardOf(bid)?.frame?.contentDocument;
+      if (d && d !== doc) (doc?.removeEventListener("pointermove", near), (doc = d), d.addEventListener("pointermove", near));
+    } catch {} // a cross-origin page can't be listened to: the bar still shows from the editor's edge
+  }, 250);
+  presenting.cleanup = () => (clearTimeout(hideT), clearInterval(watch), document.removeEventListener("pointermove", near), doc?.removeEventListener("pointermove", near), bar.remove());
   show();
   requestAnimationFrame(() => requestAnimationFrame(() => fitRect({ x0: it.x, y0: it.y, x1: it.x + it.w, y1: it.y + it.h }, { ms: 0, maxZ: 1, pad: 0 })));
 }
@@ -858,26 +898,61 @@ const CLAUDE_AUTO = ["claude", "-p", "{prompt}", "--permission-mode", "acceptEdi
 function openConnect() {
   const ws = S.ws;
   const cli = ws.cli || {};
-  const mcpCmd = `claude mcp add workshop -- ${shq(cli.node || "node")} ${shq(cli.bin || "bin/workshop.js")} mcp --workspace ${shq(ws.root)}`;
-  const json = JSON.stringify({ mcpServers: { workshop: { command: cli.node || "node", args: [cli.bin || "bin/workshop.js", "mcp", "--workspace", ws.root] } } }, null, 2);
-  const hs = ws.harnesses || [];
+  const node = cli.node || "node",
+    bin = cli.bin || "bin/workshop.js",
+    root = ws.root;
+  const args = [bin, "mcp", "--workspace", root];
+  const toml = (v) => JSON.stringify(v); // TOML basic strings take JSON's escapes
+  // each AI tool's own way to add an MCP server, filled in for this computer (paths and all)
+  const TOOLS = [
+    { id: "claude", label: "Claude Code", how: "Run this once in a terminal, then start <b>claude</b>. In this workshop's own folder it connects by itself.", code: `claude mcp add workshop -- ${[node, ...args].map(shq).join(" ")}` },
+    { id: "cursor", label: "Cursor", how: "Add this to <b>~/.cursor/mcp.json</b> (or <b>.cursor/mcp.json</b> in your project), then reload Cursor.", code: JSON.stringify({ mcpServers: { workshop: { command: node, args } } }, null, 2) },
+    { id: "codex", label: "Codex", how: "Add this to <b>~/.codex/config.toml</b>, then start <b>codex</b>.", code: `[mcp_servers.workshop]\ncommand = ${toml(node)}\nargs = [${args.map(toml).join(", ")}]` },
+    { id: "vscode", label: "VS Code", how: "Add this to <b>.vscode/mcp.json</b> in your project, then start the server from the MCP view and use agent mode.", code: JSON.stringify({ servers: { workshop: { type: "stdio", command: node, args } } }, null, 2) },
+    { id: "desktop", label: "Claude app", how: "In Claude, open <b>Settings › Developer › Edit Config</b>, add this, then restart Claude.", code: JSON.stringify({ mcpServers: { workshop: { command: node, args } } }, null, 2) },
+    { id: "other", label: "Other", how: "Any tool that speaks MCP over stdio can connect with this.", code: JSON.stringify({ mcpServers: { workshop: { command: node, args } } }, null, 2) },
+  ];
+  let tool = (() => {
+    try {
+      return localStorage.getItem("atelier-connect-tool") || "claude";
+    } catch {
+      return "claude";
+    }
+  })();
   const isClaude = ws.agent && JSON.stringify(ws.agent.command) === JSON.stringify(CLAUDE_AUTO);
   let mode = !ws.agent ? "wait" : isClaude ? "claude" : "custom";
-  const md = modal(`<div class="md-h"><div class="tt"><h2>Connect an agent</h2><p>Agents work on the same files the canvas shows. They read your notes and highlights, work on branches, and the boards reload as they go.</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div>
+  const md = modal(`<div class="md-h"><div class="tt"><h2>Connect your AI tool</h2><p>Your agent sees the canvas, what you select and your notes, works on a branch, and the screens update as it goes.</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div>
   <div class="md-b">
-    <div class="ahar"><span class="hdot${hs.length ? " on" : ""}"></span><span>${hs.length ? hs.map((x) => `<b>${esc(x.client)}</b> connected ${esc(timeAgo(x.at))}`).join(" · ") : "No agent is connected over MCP right now"}</span></div>
-    <div class="fld"><span class="lr">Claude Code<span class="hint">MCP</span></span><span style="color:var(--text-secondary)">Run Claude Code in the workshop folder and it connects by itself. From anywhere else, run this once:</span><div class="code" id="cnMcp">${esc(mcpCmd)}<button type="button" class="ib24" aria-label="Copy command">${IC.copy}</button></div></div>
-    <div class="fld"><span class="lr">Any MCP client<span class="hint">stdio</span></span><div class="code" id="cnJson">${esc(json)}<button type="button" class="ib24" aria-label="Copy config">${IC.copy}</button></div></div>
-    <div class="fld"><span class="lr">When you ask in Chat</span><div id="cnSeg"></div><div id="cnMore"></div></div>
+    <div class="ahar cn-status"></div>
+    <div class="fld"><span class="lr">Your tool</span><div id="cnTool"></div><span class="cn-how" id="cnHow"></span><div class="code" id="cnCode"><span class="cn-c"></span><button type="button" class="ib24" aria-label="Copy" data-tip="Copy">${IC.copy}</button></div><span class="cn-try">Then ask it: <i>“Look at what I've selected in Atelier and make it bolder, on a branch.”</i></span></div>
+    <div class="fld"><span class="lr">When you ask from the canvas</span><div id="cnSeg"></div><div id="cnMore"></div></div>
   </div>
-  <div class="md-f"><span class="sp"></span><button type="button" class="ghbtn" data-a="x2">Cancel</button><button type="button" class="createbtn" data-a="save">Save</button></div>`, { wide: true });
-  md.querySelector("#cnMcp .ib24").onclick = () => copyText(mcpCmd);
-  md.querySelector("#cnJson .ib24").onclick = () => copyText(json);
+  <div class="md-f"><span class="sp"></span><button type="button" class="ghbtn" data-a="x2">Close</button><button type="button" class="createbtn" data-a="save">Save</button></div>`, { wide: true });
+  // the status follows the connection live, so you see the moment your tool connects
+  const status = md.querySelector(".cn-status");
+  let shown = "";
+  const paintStatus = () => {
+    const hs = S.ws.harnesses || [];
+    const key = hs.map((x) => x.client).join();
+    if (key === shown && status.childNodes.length) return;
+    shown = key;
+    status.innerHTML = hs.length ? `<span class="hdot on"></span><span>${hs.map((x) => `<b>${esc(x.client)}</b> is connected`).join(" · ")}</span>` : `<span class="hdot"></span><span class="shimmer">Waiting for your tool to connect…</span>`;
+  };
+  paintStatus();
+  const live = setInterval(() => (md.isConnected ? paintStatus() : clearInterval(live)), 800);
+  const paintTool = () => {
+    const t = TOOLS.find((x) => x.id === tool) || TOOLS[0];
+    $("cnTool").replaceChildren(segmented(TOOLS.map((x) => ({ label: x.label, value: x.id })), t.id, (v) => ((tool = v), (() => { try { localStorage.setItem("atelier-connect-tool", v); } catch {} })(), paintTool()), { full: true, label: "Your tool" }));
+    $("cnHow").innerHTML = t.how;
+    md.querySelector("#cnCode .cn-c").textContent = t.code;
+    md.querySelector("#cnCode .ib24").onclick = () => copyText(t.code);
+  };
+  paintTool();
   const paint = () => {
-    $("cnSeg").replaceChildren(segmented([{ label: "Wait for a connected agent", value: "wait" }, { label: "Run Claude Code", value: "claude" }, { label: "Run a command", value: "custom" }], mode, (v) => ((mode = v), paint()), { full: true, label: "When you ask in Chat" }));
+    $("cnSeg").replaceChildren(segmented([{ label: "Wait for my tool", value: "wait" }, { label: "Run Claude Code", value: "claude" }, { label: "Run a command", value: "custom" }], mode, (v) => ((mode = v), paint()), { full: true, label: "When you ask from the canvas" }));
     const more = $("cnMore");
-    if (mode === "wait") more.innerHTML = `<span style="color:var(--text-secondary)">Requests queue up until an agent takes them with <span class="mono" style="font-size:12px;font-weight:400">take_task</span>.</span>`;
-    if (mode === "claude") more.innerHTML = `<span style="color:var(--text-secondary)">Each request runs <span class="mono" style="font-size:12px;font-weight:400">claude -p</span> in its branch's folder with edits allowed, one at a time.</span>`;
+    if (mode === "wait") more.innerHTML = `<span class="cn-how">Requests wait for your connected tool, which picks them up with <span class="mono" style="font-size:12px;font-weight:400">take_task</span>.</span>`;
+    if (mode === "claude") more.innerHTML = `<span class="cn-how">Each request runs <span class="mono" style="font-size:12px;font-weight:400">claude -p</span> in its branch's folder with edits allowed, one at a time.</span>`;
     if (mode === "custom") more.innerHTML = `<div class="afld-in"><input id="cnCmd" placeholder="my-agent --task {prompt}" value="${esc(ws.agent && !isClaude ? ws.agent.command.map(shq).join(" ") : "")}" aria-label="Command"></div><span style="font-size:12px;color:var(--text-secondary)">{prompt} is the full brief, {request} the words typed, {dir} the folder, {file} its index.html. Without {prompt} the brief arrives on stdin.</span>`;
   };
   paint();
@@ -1001,7 +1076,7 @@ function openShortcuts() {
     ["Tools", [["Select", "V"], ["Hand", "H · Space"], ["Frame", "F"], ["Note", "N"], ["Highlight", "B"], ["Arrow", "A"], ["Comment", "C"], ["Draw", "D"], ["Play the selected frame · stop", "P"], ["Ask an agent", "Toolbar"]]],
     ["Draw", [["Marker · pen · pencil · highlighter", "1 · 2 · 3 · 4"], ["Eraser", "E"], ["Finer · bolder", "[ · ]"], ["Straight line", "hold ⇧"], ["Stop drawing", "Esc · V"]]],
     ["Edit", [["Undo", K("⌘Z")], ["Redo", K("⌘⇧Z")], ["Copy · cut · paste", K("⌘C · ⌘X · ⌘V")], ["Duplicate", K("⌘D")], ["Delete", "Delete"], ["Select all", K("⌘A")], ["Add to the selection", "⇧ click"], ["Select by dragging", "Drag on empty canvas"]]],
-    ["Elements", [["Parent · first child", "Esc · Enter"], ["Next · previous", "Tab · ⇧Tab"], ["Move or reorder", "Drag · arrows (⇧ 8 px)"], ["Bring forward · send backward", K("⌘] · ⌘[")], ["Bring to front · send to back", "] · ["], ["Edit text", "Double-click"]]],
+    ["Elements", [["Parent · first child", "Esc · Enter"], ["Next · previous", "Tab · ⇧Tab"], ["Move or reorder", "Drag · arrows (⇧ 8 px)"], ["Bring forward · send backward", K("⌘] · ⌘[")], ["Bring to front · send to back", "] · ["], ["Go into a layer · edit its text", "Double-click"], ["Select the deepest layer", K("⌘-click")]]],
     ["Arrange several", [["Align left · centre · right", K("⌥A · ⌥H · ⌥D")], ["Align top · middle · bottom", K("⌥W · ⌥V · ⌥S")], ["Distribute", K("⌥⇧H · ⌥⇧V")], ["Move without snapping", K("hold ⌥")]]],
     ["View", [["Zoom to fit · selection", "⇧1 · ⇧2"], ["Zoom in · out · 100%", K("+ · − · ⌘0")], ["Outlines", K("⌘Y")], ["Rulers", "⇧R"], ["Hide panels", K("⌘\\")], ["Search", K("⌘K")]]],
   ];
@@ -1418,7 +1493,7 @@ async function boot() {
   setInterval(() => api("workspace").then((ws) => {
     const before = JSON.stringify(S.ws?.harnesses?.map((x) => x.client));
     S.ws.harnesses = ws.harnesses;
-    if (JSON.stringify(ws.harnesses.map((x) => x.client)) !== before) (renderWho(), renderAgent(), S.view === "proto" && renderLeft());
+    if (JSON.stringify(ws.harnesses.map((x) => x.client)) !== before) (renderWho(), renderAgent(), S.view === "proto" ? renderLeft() : renderHome());
   }).catch(() => {}), 20000);
 }
 

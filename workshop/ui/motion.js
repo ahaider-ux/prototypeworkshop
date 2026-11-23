@@ -58,3 +58,11 @@ export function fitIn(w, h, W, H) {
   const s = Math.min(W / w, H / h) * 0.86;
   return { x: (W - w * s) / 2, y: (H - h * s) / 2, w: w * s, h: h * s, cover: false };
 }
+
+// Editing text you can't read is guessing: the zoom at which text drawn `shown` px tall on screen
+// (at zoom z) becomes comfortable to edit (14px), or null when it already is (11px or more). Never
+// past maxZ.
+export function readableZoom(z, shown, maxZ = 4) {
+  if (!(z > 0) || !(shown > 0) || shown >= 11) return null;
+  return Math.min(maxZ, z * (14 / shown));
+}

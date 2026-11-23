@@ -84,6 +84,14 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   `ui/visuals.js`, built from Atelier's own classes: each is a short plain headline and one real
   piece of Atelier on a flat dotted canvas (no pastel blooms); follow the `product-visuals` skill
   (`.claude/skills/product-visuals/SKILL.md`) for any new one.
+- **Editing a live screen picks layers the way Figma does** (`pickLayer` in `ui/pick.js`, tested in
+  Node): the first click selects the screen, a click selects at the current level, a double-click
+  goes one level in (and on a text leaf, edits its text, zooming in first when the text is too small
+  to read: `readableZoom` in `ui/motion.js`), Cmd/Ctrl-click selects the deepest layer, and
+  pass-through wrappers are skipped.
+- **No dead ends.** Every guide step, empty state and dialog ends in something real to do on the
+  person's own work (the Learn steps' `try` actions in `ui/app.js`). Connecting an AI tool shows the
+  setup for each tool and a live status that turns on as soon as it connects (`openConnect`).
 - **The canvas shell scales below 1180px** (`fitShell`). Anything measured with
   `getBoundingClientRect` and written into a style inside `#frame` is divided by `frScale()`
   (`inFrame()` in `ui/lib.js` does it for menus).

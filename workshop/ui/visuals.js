@@ -78,12 +78,12 @@ const ART = {
 // what each guide says, in plain words: what you do, and what you get
 export const FEATURES = [
   { id: "intro", title: "Welcome to Atelier", text: "Prototype in HTML with your team and AI agents on one canvas. Learn the basics in two minutes." },
-  { id: "import", title: "Import a prototype", text: "Bring in an HTML file or a whole folder. Each screen becomes a frame on the canvas." },
-  { id: "branch", title: "Try an idea on a branch", text: "Change anything on a branch while Main stays as it is. Nothing lands until you merge it." },
-  { id: "markup", title: "Mark up a screen", text: "Leave notes, highlights, arrows and drawings on any screen. Agents read them as feedback." },
+  { id: "import", title: "Import a prototype", text: "Bring in an HTML file or a whole folder. Each screen becomes a frame on the canvas.", try: "import" },
+  { id: "branch", title: "Try an idea on a branch", text: "Change anything on a branch while Main stays as it is. Nothing lands until you merge it.", try: "branch" },
+  { id: "markup", title: "Mark up a screen", text: "Leave notes, highlights, arrows and drawings on any screen. Agents read them as feedback.", try: "markup" },
   { id: "agent", title: "Ask an agent", text: "Describe a change in plain words. Claude makes it on its own branch and tells you when it's ready.", try: "agent" },
-  { id: "merge", title: "Review and merge", text: "See every change side by side, keep what works and note why. The reason goes in the decision log." },
-  { id: "recipes", title: "Save a recipe", text: "Turn work you repeat into a recipe that anyone, or any agent, can run again." },
+  { id: "merge", title: "Review and merge", text: "See every change side by side, keep what works and note why. The reason goes in the decision log.", try: "merge" },
+  { id: "recipes", title: "Save a recipe", text: "Turn work you repeat into a recipe that anyone, or any agent, can run again.", try: "recipes" },
 ];
 
 // a picture, in a box of any size: the design box is scaled to fit and centred on the studio light
@@ -121,7 +121,8 @@ export function featureCard(i, onOpen) {
 
 // The Learn dialog: copy on the left, the picture on the right, one step at a time. The intro step
 // offers "Learn more" (the Learn page) and "See what's new" (the next step); the last step's main
-// button is Done. actions: { learn(), agent() } for the real things a step can do.
+// button is Done. actions: { learn() } plus, for each step's `try`, { label, run() }: the real thing
+// the step describes, done on the person's own prototypes (missing when it can't be done here).
 export function openLearn(start = 0, actions = {}) {
   let i = Math.max(0, Math.min(FEATURES.length - 1, start));
   const md = modal(`<div class="lrn"><div class="lrn-c"><div class="lrn-bars" aria-hidden="true">${FEATURES.map(() => "<i></i>").join("")}</div><div class="lrn-t"><h2></h2><p></p></div><div class="lrn-f"><button type="button" class="ghbtn" data-a="try" hidden></button><span class="sp"></span><button type="button" class="dbtn" data-a="back"></button><button type="button" class="createbtn" data-a="next"></button></div></div><div class="lrn-a"></div></div><button type="button" class="ib32 lrn-x" data-a="x" aria-label="Close">${IC.x}</button>`);
@@ -138,9 +139,9 @@ export function openLearn(start = 0, actions = {}) {
       tryB = md.querySelector('[data-a="try"]');
     back.textContent = i === 0 ? "Learn more" : "Back";
     next.textContent = i === 0 ? "See what's new" : i === FEATURES.length - 1 ? "Done" : "Next";
-    const t = f.try && actions[f.try] ? f.try : null;
+    const t = f.try ? actions[f.try] : null;
     tryB.hidden = !t;
-    tryB.textContent = t === "agent" ? "Connect an agent" : "";
+    tryB.textContent = t ? t.label : "";
     const pic = artEl(f.id);
     pic.classList.add("lrn-pic");
     if (animate) pic.classList.add("in");
@@ -152,7 +153,7 @@ export function openLearn(start = 0, actions = {}) {
     if (a === "x") closeModal();
     else if (a === "next") i < FEATURES.length - 1 ? (i++, show(true)) : closeModal();
     else if (a === "back") i === 0 ? (closeModal(), actions.learn?.()) : (i--, show(true));
-    else if (a === "try") (closeModal(), actions[FEATURES[i].try]?.());
+    else if (a === "try") (closeModal(), actions[FEATURES[i].try]?.run());
   });
   md.addEventListener("keydown", (e) => {
     if (e.key === "ArrowRight" && i < FEATURES.length - 1) (i++, show(false));

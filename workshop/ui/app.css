@@ -335,7 +335,7 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .tlogo b{font-size:14px;font-weight:600;color:var(--text-primary)}
 .amark{width:20px;height:20px;color:var(--text-primary);flex-shrink:0}
 .tlogo:hover,.tlogo[aria-expanded="true"]{background:var(--bg-hover)}
-.tabs{display:flex;align-items:center;gap:2px;min-width:0;overflow:hidden}
+.tabs{display:flex;align-items:center;gap:4px;min-width:0;overflow:hidden}
 .tab{height:32px;display:inline-flex;align-items:center;gap:8px;border-radius:8px;font-weight:500;color:var(--text-secondary);min-width:0;max-width:240px;flex-shrink:1;cursor:pointer;transition:background-color 120ms ease,color 120ms ease}
 .tab:hover{background:var(--bg-hover);color:var(--text-primary)}
 .tab.on{color:var(--text-primary)}
@@ -343,7 +343,7 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .tab .ib24{width:20px;height:20px;opacity:0}
 .tab:hover .ib24,.tab.on .ib24,.tab .ib24:focus-visible{opacity:1}
 .tab .ib24 .ic{width:12px;height:12px}
-.tab.home{flex-shrink:0}
+.tab.tab-home{flex-shrink:0}
 .agst{height:28px;display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary);flex-shrink:0;transition:background-color 120ms ease}
 .agst:hover{background:var(--bg-hover);color:var(--text-primary)}
 .agst b{font-weight:500;color:var(--text-primary)}
@@ -370,6 +370,7 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .pempty{padding:16px;color:var(--text-secondary);font-size:12px;line-height:1.5}
 .pempty::before{content:"";display:block;width:44px;height:24px;margin-bottom:8px;background:var(--text-placeholder);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 17c4-7 9-11 13-9s1 10-4 8 3-12 11-11 8 8 12 5 4-6 6-5'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 17c4-7 9-11 13-9s1 10-4 8 3-12 11-11 8 8 12 5 4-6 6-5'/%3E%3C/svg%3E") center/contain no-repeat}
 .pempty b{display:block;color:var(--text-primary);font:500 14px/1.3 var(--fakt);margin-bottom:4px}
+.pempty>.dbtn{display:flex;width:max-content;margin-top:12px}
 .toasts{position:absolute;z-index:300;display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .ui-off .toasts,.home-on .toasts{right:16px}
 
@@ -776,8 +777,8 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .tb .tbtx{height:36px;padding:0 14px 0 10px}
 .banner .dbtn.sm,.banner .createbtn.sm,.banner .ghbtn.sm{height:32px;border-radius:99px;padding:0 12px}
 .ttabs button,.tab{border-radius:99px}
-.tab{padding:0 6px 0 14px}
-.tab.home{padding:0 14px 0 10px}
+.tab{padding:0 6px 0 12px} /* the close button sits in the right padding: 12 to the text, 6 + 20 to the edge */
+.tab.tab-home{padding:0 12px 0 10px}
 
 .rail>button[data-t] i{border-radius:12px}
 .zm{border-radius:99px}
@@ -1458,3 +1459,10 @@ html[data-intro] .app{visibility:hidden}
 .pv .pg .t{overflow:visible;text-overflow:clip} /* a picture never truncates */
 /* cards in a grid have the room for a second line, so nothing is cut off with an ellipsis */
 .htile.hcard .hcap .m{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+
+/* the Connect dialog: the tool's own step, its code, and what to ask once it's connected */
+.cn-how{font-size:12px;line-height:1.5;color:var(--text-secondary)}
+.cn-how b{font-weight:500;color:var(--text-primary)}
+.cn-try{font-size:12px;line-height:1.5;color:var(--text-secondary)}
+.cn-try i{font-style:normal;color:var(--text-primary)}
+#cnCode .cn-c{white-space:pre-wrap;word-break:break-all}

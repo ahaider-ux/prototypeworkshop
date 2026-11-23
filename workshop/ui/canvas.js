@@ -10,6 +10,8 @@ import { commitRules, preview, endPreview, undoStyle, idle as stylesIdle } from 
 import * as G from "./gfx.js";
 import { record, rid, remap, undo as histUndo, redo as histRedo } from "./history.js";
 import { PENS, INKS, SIZES, outline, touches } from "./ink.js";
+import { pickLayer } from "./pick.js";
+import { readableZoom } from "./motion.js";
 
 const B = new Map(); // board item id → {id, el, hit, frame, live, ready} — frame only while mounted live
 const NEL = new Map(); // note/box item id → element
@@ -111,6 +113,24 @@ function elAt(id, p) {
     return el;
   }
   return null;
+}
+
+// The layer a click selects, at the current level (ui/pick.js): Figma's rules. deeper: a
+// double-click; deep (Cmd/Ctrl): the deepest layer under the pointer.
+function layerAt(id, node, { deeper = false, deep = false } = {}) {
+  const d = docOf(id);
+  if (!d || !node) return node;
+  const current = S.sel?.kind === "el" && S.sel.item === id && S.sel.el?.isConnected ? S.sel.el : null;
+  const same = (a, b) => {
+    const r = a.getBoundingClientRect(),
+      q = b.getBoundingClientRect();
+    return Math.abs(r.left - q.left) < 1.5 && Math.abs(r.top - q.top) < 1.5 && Math.abs(r.width - q.width) < 1.5 && Math.abs(r.height - q.height) < 1.5;
+  };
+  try {
+    return pickLayer(node, { root: d.body, current, deeper, deep, same }) || node;
+  } catch {
+    return node;
+  }
 }
 
 // ---------- camera ----------
@@ -563,7 +583,7 @@ function onBoardLoad(b) {
     pendingPick = null;
     setTimeout(() => {
       if (S.mode !== "design" || S.sel?.item !== b.id) return;
-      const el = elAt(b.id, toScreen(pk.w));
+      const el = layerAt(b.id, elAt(b.id, toScreen(pk.w)), { deep: pk.deep });
       if (el) selectEl(b.id, el);
     }, 250);
   }
@@ -1894,6 +1914,18 @@ function editText(id, el) {
     it = item(id);
   const before = el.textContent;
   b.el.classList.add("editing");
+  // too small to read at this zoom: bring the text up to an editable size, centred on it
+  try {
+    const fs = parseFloat(docOf(id).defaultView.getComputedStyle(el).fontSize);
+    const nz = readableZoom(S.cam.z, fs * S.cam.z, MAXZ);
+    if (nz) {
+      const r = el.getBoundingClientRect(),
+        c = viewCenter(),
+        wx = it.x + r.left + r.width / 2,
+        wy = it.y + r.top + r.height / 2;
+      camTo({ z: nz, x: c.x - wx * nz, y: c.y - wy * nz }, 240);
+    }
+  } catch {}
   el.setAttribute("contenteditable", "plaintext-only");
   if (el.contentEditable !== "plaintext-only") el.setAttribute("contenteditable", "true");
   el.focus();
@@ -2435,15 +2467,19 @@ function onDown(e) {
   } else if (onBoard) {
     const id = onBoard.dataset.item;
     const boardSel = S.sel?.kind === "board" && S.sel.item === id;
-    const under = elAt(id, p);
-    // Design mode: a drag inside a board edits what's under the pointer — or the selected element
-    // when the drag starts on it. Drag a frame by its title, or once the frame itself is selected.
-    if (S.mode === "design" && S.tool === "move" && !boardSel && under) {
+    const under = layerAt(id, elAt(id, p), { deep: e.metaKey || e.ctrlKey });
+    // Design mode: a drag inside a board edits the layer a click picks there (one level at a time, as
+    // in Figma) — or the selected element when the drag starts on it. Drag a frame by its title, or
+    // once the frame itself is selected.
+    // a screen you haven't started on yet: the first click selects the screen itself; after that,
+    // clicks pick its layers (always the same answer, whether or not its live page has loaded)
+    const inside = S.sel?.item === id;
+    if (S.mode === "design" && S.tool === "move" && !boardSel && inside && under) {
       const cur = S.sel?.kind === "el" && S.sel.item === id && S.sel.el.isConnected ? S.sel.el : null;
       const r = cur && elScreenRect(id, cur);
       const onCur = r && p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
       drag = { kind: "el", id, el: onCur ? cur : under, click: under, p0: p, moved: false };
-    } else drag = { kind: "board", id, p0: p, group: withMarks([{ id, x: item(id).x, y: item(id).y }]), moved: false, el: under };
+    } else drag = { kind: "board", id, p0: p, group: withMarks([{ id, x: item(id).x, y: item(id).y }]), moved: false, el: under, deep: e.metaKey || e.ctrlKey, fresh: !inside && !(e.metaKey || e.ctrlKey) };
   } else {
     // an empty spot: drag a box to select what it touches (pan with Space, the hand, or scrolling)
     drag = { kind: "marquee", p0: p, w0: w, add: e.shiftKey ? selIds() : [], moved: false };
@@ -2463,7 +2499,7 @@ function onMove(e) {
       if (over) hoverT = setTimeout(() => ((hoverBoard = over), (dirty = true)), S.mode === "prototype" ? 60 : 160);
     }
     if (S.mode === "design" && S.tool === "move" && !spaceDown) {
-      if (over) setHover(over, elAt(over, p));
+      if (over) setHover(over, layerAt(over, elAt(over, p), { deep: e.metaKey || e.ctrlKey }));
       else setHover(null, null);
     }
     return;
@@ -2628,11 +2664,12 @@ async function onUp(e) {
   }
   if (d.kind === "elresize") return endElResize(d);
   if (d.kind === "board" && !d.moved) {
+    if (d.fresh) return selectBoard(d.id);
     if (S.mode === "design" && S.tool === "move") {
-      const el = d.el || elAt(d.id, p);
+      const el = d.el || layerAt(d.id, elAt(d.id, p), { deep: d.deep });
       if (el) selectEl(d.id, el);
       else {
-        if (!B.get(d.id)?.ready) pendingPick = { id: d.id, w: toWorld(p) };
+        if (!B.get(d.id)?.ready) pendingPick = { id: d.id, w: toWorld(p), deep: d.deep };
         selectBoard(d.id);
       }
     } else selectBoard(d.id);
@@ -2683,10 +2720,18 @@ function onDbl(e) {
   const label = e.target.closest(".blabel:not(.ghost)");
   if (label) return focusItem(label.dataset.item, { maxZ: 0.8 });
   if (S.mode !== "design" || S.tool !== "move") return;
+  // the screen under the pointer, even when the selection's outline is on top of it
   const onBoard = e.target.closest(".bd:not(.ghost)");
-  if (!onBoard) return;
-  const el = elAt(onBoard.dataset.item, local(e));
-  if (el && editText(onBoard.dataset.item, el)) e.preventDefault();
+  const hit = onBoard ? item(onBoard.dataset.item) : boardAtPoint(local(e));
+  if (!hit || hit.type !== "board" || hit.ghost) return;
+  const id = hit.id;
+  const cur = S.sel?.kind === "el" && S.sel.item === id && S.sel.el?.isConnected ? S.sel.el : null;
+  const next = layerAt(id, elAt(id, local(e)), { deeper: true });
+  if (!next) return;
+  e.preventDefault();
+  // one level deeper; already as deep as it goes: edit its text
+  if (next === cur) editText(id, cur);
+  else selectEl(id, next);
 }
 
 function onWheel(e) {

@@ -66,3 +66,12 @@ test("motion: a few prototypes sit in one row, then two, in reading order", () =
   assert.deepEqual(block(7).at(-1), [2, 1]);
   assert.equal(new Set(block(7).map((c) => c.join())).size, 7, "no cell twice");
 });
+
+test("readableZoom: zooms in only when text is too small to edit", async () => {
+  const { readableZoom } = await import("../ui/motion.js");
+  assert.equal(readableZoom(1, 14), null, "readable already");
+  assert.equal(readableZoom(0.14, 2.24), 0.875, "16px text at 14% zooms to show it at 14px");
+  assert.equal(readableZoom(0.5, 0.5, 4), 4, "never past the max");
+  assert.equal(readableZoom(0, 5), null);
+  assert.equal(readableZoom(1, NaN), null);
+});

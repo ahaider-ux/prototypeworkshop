@@ -308,3 +308,37 @@ test("ui: the home uses the editor's components", () => {
   assert.match(css, /\.hside\{[^}]*border-radius:var\(--r-panel\);background:var\(--glass-bg\)/);
   assert.ok(!/\.pv-tag\.agent\{[^}]*--i-orange/.test(css), "agents are ink, as in the app");
 });
+
+// The Home tab was class "tab home", and ".home" is the home page itself: the tab took the page's
+// background, so it looked selected when it wasn't. Its own name now.
+test("ui: the Home tab doesn't share the home page's class", () => {
+  assert.ok(!/class="tab home/.test(read("app.js")));
+  assert.match(read("app.js"), /class="tab tab-home/);
+  assert.ok(!/\.tab\.home\b/.test(read("app.css")));
+});
+
+// Present read the board's live page before it existed (boards are pictures until they're played),
+// so it threw. It now listens on the page once it loads.
+test("ui: Present waits for the board's live page", () => {
+  const app = read("app.js");
+  const fn = app.slice(app.indexOf("function present("), app.indexOf("function stopPresent"));
+  assert.ok(!/boardOf\(bid\)\?\.frame\.contentDocument/.test(fn), "no unguarded frame access");
+  assert.match(fn, /boardOf\(bid\)\?\.frame\?\.contentDocument/);
+});
+
+// A guide that explains something and offers nothing to do is a dead end: every step after the intro
+// names an action, and the app gives each one a label and something real to run.
+test("ui: every Learn step after the intro ends in a real action", () => {
+  const v = read("visuals.js");
+  const steps = [...v.matchAll(/\{ id: "(\w+)", title:[^\n]*?\}/g)];
+  assert.ok(steps.length >= 6);
+  const app = read("app.js");
+  for (const [line, id] of steps) {
+    if (id === "intro") continue;
+    const t = line.match(/try: "(\w+)"/)?.[1];
+    assert.ok(t, `the ${id} step offers something to try`);
+    assert.match(app, new RegExp(`\\b${t}: [^\\n]*\\{ label: [^\\n]*run: `), `the app runs the ${t} action`);
+  }
+  assert.match(v, /tryB\.textContent = t \? t\.label/, "the button says what it does");
+  assert.doesNotMatch(app, /Nothing here yet<\/b>[^`]*<\/div>`\)\);/, "the empty Activity page offers an action");
+});
