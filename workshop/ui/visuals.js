@@ -44,6 +44,12 @@ const ART = {
     piece(68, 204, `${pointer}<b class="pv-tag you">You</b>`, { z: 3, cls: "pv-who" }) +
     piece(246, 112, `${pointer}<b class="pv-tag agent">Claude</b>`, { z: 3, cls: "pv-who" }),
 
+  // the home banner's picture: the same scene without a headline (the banner's own title says it)
+  hero: () =>
+    piece(116, 76, `<div class="pv-frame pv-mini pv-hero"></div><span class="isel"><i class="ic1"></i><i class="ic2"></i><i class="ic3"></i><i class="ic4"></i></span>`, { w: 128, cls: "pv-sel" }) +
+    piece(64, 172, `${pointer}<b class="pv-tag you">You</b>`, { z: 3, cls: "pv-who" }) +
+    piece(250, 62, `${pointer}<b class="pv-tag agent">Claude</b>`, { z: 3, cls: "pv-who" }),
+
   import: () =>
     head("bring in any<br>HTML prototype") +
     piece(118, 150, `<button type="button" class="createbtn" tabindex="-1">${IC.upload}Import HTML</button>`, { z: 2 }),

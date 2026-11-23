@@ -289,7 +289,7 @@ function homeItems(rs) {
       const open = familyOf(e.id).filter((x) => isBranch(x.env) && !x.env.archived).length;
       const edited = lastEdit(e.id);
       const n = boardsOf(e.id).length;
-      return { id: e.id, name: e.name, edited, board: boardsOf(e.id)[0] || null, meta: [plural(n, "screen"), open ? plural(open, "open branch", "open branches") : "", edited ? `edited ${timeAgo(edited)}` : ""].filter(Boolean).join(" · ") };
+      return { id: e.id, name: e.name, edited, board: boardsOf(e.id)[0] || null, meta: [plural(n, "screen"), open ? plural(open, "open branch", "open branches") : "", edited ? `edited ${timeAgo(edited)}`.replace(/ /g, "\u00a0") : ""].filter(Boolean).join(" · ") }; // "edited 4 d ago" wraps as a whole
     })
     .sort((a, b) => String(b.edited || "").localeCompare(String(a.edited || "")));
 }
@@ -297,28 +297,17 @@ function renderHomeCanvas(rs) {
   const el = homeMain();
   const items = homeItems(rs);
   const openItem = (it) => go(S.envs.has(lastPage.get(it.id)) ? lastPage.get(it.id) : it.id);
-  // what this space can do next: shown as empty-state cards beside a few prototypes, never made-up ones
-  const actions = [
-    { title: "Import HTML", desc: "A file or a whole folder", icon: IC.upload, run: openImport },
-    ...(S.ws.spaces ? [{ title: "Connect a folder", desc: "Edit prototypes where they live", icon: IC.folder, run: () => openSpaces() }] : []),
-    ...(S.ws.harnesses?.length ? [] : [{ title: "Connect an agent", desc: "It works on branches; you review", icon: IC.agent, run: openConnect }]),
-  ];
+  // one place to add another; the bar above and the sidebar hold the rest (a folder, an agent)
+  const actions = nextActions().slice(0, 1);
   if (!homeCv || !el.querySelector(".hcanvas")) {
     homeCv?.destroy();
     el.replaceChildren();
     el.classList.add("hc");
     homeCv = mountHomeCanvas(el, items, { open: openItem, actions, key: S.ws.home || S.ws.name });
   } else homeCv.update(items, actions);
-  // the bar floating over it: the space, recent prototypes (each glides the canvas to its tile), the view
+  // the bar over it: only how to show them (the sidebar names the space and lists the recent ones)
   el.querySelector(".hbar")?.remove();
-  const bar = h(`<div class="hbar"><div class="hb hbl"><b class="hname">${esc(S.ws.name)}</b><span class="hcount">${plural(rs.length, "prototype")}</span><span class="vsep"></span><span class="hrl">Recent</span><span class="hchips"></span></div><div class="hb hbr"></div></div>`);
-  const chips = bar.querySelector(".hchips");
-  for (const it of items.slice(0, 4)) {
-    const c = h(`<button type="button" class="hchip" data-tip="Show it">${esc(it.name)}</button>`);
-    c.onclick = () => homeCv.show(it.id);
-    c.ondblclick = () => openItem(it);
-    chips.append(c);
-  }
+  const bar = h(`<div class="hbar"><span></span><div class="hb hbr"></div></div>`);
   const r = bar.querySelector(".hbr");
   r.append(viewSwitch());
   if (S.ws.spaces) {
@@ -338,15 +327,14 @@ function homeShell() {
   const home = $("home");
   let side = home.querySelector(".hside");
   if (side) return home;
+  const row = (sec, icon, label) => `<button type="button" class="pg" data-s="${sec}">${icon}<span class="t">${label}</span><span class="m"></span></button>`;
   home.replaceChildren(
-    h(`<aside class="hside" aria-label="Home"><button type="button" class="createbtn hside-new">${IC.upload}Import HTML</button><nav class="hnav" aria-label="Sections"><button type="button" data-s="home">${IC.home}<span>Home</span></button><button type="button" data-s="prototypes">${IC.board}<span>Prototypes</span><span class="n"></span></button><button type="button" data-s="learn">${IC.spark}<span>Learn</span></button><button type="button" data-s="activity">${IC.version}<span>Activity</span></button></nav><div class="hside-sec"><div class="hside-h">Recent</div><div class="hrecent"></div></div><div class="sp"></div><div class="hagent"></div><div class="hside-foot"><button type="button" data-a="new">What's new</button><span aria-hidden="true">·</span><button type="button" data-a="keys">Shortcuts</button></div></aside>`),
+    h(`<aside class="hside" aria-label="Home"><div class="lhd"><div class="ttl"><b class="hs-name"></b><span class="hs-sub"></span></div><button type="button" class="ib32" data-a="im" aria-label="Import HTML" data-tip="Import HTML">${IC.plus}</button></div><nav class="pgs hnav" aria-label="Sections">${row("home", IC.home, "Home")}${row("prototypes", IC.board, "Prototypes")}${row("learn", IC.spark, "Learn")}${row("activity", IC.version, "Activity")}</nav><div class="hs-sec"><div class="shd"><span>Recent</span></div><div class="pgs hrecent"></div></div></aside>`),
     h(`<div class="hmain" id="homeMain"></div>`),
   );
   side = home.querySelector(".hside");
-  side.querySelector(".hside-new").onclick = openImport;
+  side.querySelector('[data-a="im"]').onclick = openImport;
   for (const b of side.querySelectorAll("[data-s]")) b.onclick = () => goSection(b.dataset.s);
-  side.querySelector('[data-a="new"]').onclick = () => learn(0);
-  side.querySelector('[data-a="keys"]').onclick = openShortcuts;
   return home;
 }
 const homeMain = () => homeShell().querySelector(".hmain");
@@ -354,34 +342,23 @@ const learn = (i) => openLearn(i, { learn: () => goSection("learn"), agent: S.ws
 const openItemOf = (it) => go(S.envs.has(lastPage.get(it.id)) ? lastPage.get(it.id) : it.id);
 function renderSide(rs, items) {
   const side = homeShell().querySelector(".hside");
+  side.querySelector(".hs-name").textContent = S.ws.name;
+  side.querySelector(".hs-sub").textContent = plural(rs.length, "prototype");
   for (const b of side.querySelectorAll("[data-s]")) {
     const on = b.dataset.s === S.homeSection;
     b.classList.toggle("on", on);
     on ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current");
   }
-  side.querySelector('[data-s="prototypes"] .n').textContent = rs.length || "";
+  side.querySelector('[data-s="prototypes"] .m').textContent = rs.length || "";
   const rec = side.querySelector(".hrecent");
   rec.replaceChildren(...items.slice(0, 5).map((it) => {
-    const r = h(`<button type="button" class="hrec">${IC.board}<span class="t"></span></button>`);
+    const r = h(`<button type="button" class="pg">${IC.board}<span class="t"></span></button>`);
     r.querySelector(".t").textContent = it.name;
     r.title = it.meta;
     r.onclick = () => openItemOf(it);
     return r;
   }));
-  if (!items.length) rec.append(h(`<span class="hrec-none">Prototypes you open show here</span>`));
-  // the agent: a status light and what it means, and the way to connect one when there isn't one
-  const hs = S.ws.harnesses || [];
-  const ag = side.querySelector(".hagent");
-  ag.replaceChildren(
-    h(hs.length
-      ? `<div class="hagent-in"><span class="hdot on"></span><div><b>${esc(hs[0].client)} is connected</b><span>It works on branches; you review and merge.</span></div></div>`
-      : `<div class="hagent-in"><span class="hdot"></span><div><b>No agent yet</b><span>Connect Claude Code or another agent to hand it requests.</span></div></div>`),
-  );
-  if (!hs.length) {
-    const b = h(`<button type="button" class="dbtn sm">${IC.agent}Connect an agent</button>`);
-    b.onclick = openConnect;
-    ag.append(b);
-  }
+  side.querySelector(".hs-sec").hidden = !items.length;
 }
 function renderHome(moved = false) {
   if (S.view !== "home") return;
@@ -411,12 +388,12 @@ const nextActions = () => [
 // is and offers the tour, the prototypes you worked on last, and short guides to get started
 function renderLanding(main, rs, items) {
   homeGrid?.destroy();
-  const page = h(`<div class="hl"><header class="hl-h"><h1>Home</h1></header><section class="hl-hero"><div class="hl-hc"><h2>Welcome to Atelier</h2><p>Prototype in HTML with your team and AI agents on one canvas. Try ideas on branches, mark them up, and merge what works.</p><div class="hl-acts"><button type="button" class="createbtn" data-a="tour">Take the tour</button><button type="button" class="dbtn" data-a="im">${IC.upload}Import HTML</button></div></div><div class="hl-art"></div></section><section class="hl-sec"><div class="hl-sh"><h2>Recent prototypes</h2>${rs.length ? `<button type="button" class="hl-more" data-s="prototypes">View all${IC.chevr}</button>` : ""}</div><div class="hl-recent"></div></section><section class="hl-sec"><div class="hl-sh"><div><h2>Get started</h2><p>Short guides to what you can do here.</p></div><button type="button" class="hl-more" data-s="learn">All guides${IC.chevr}</button></div><div class="hl-learn"></div></section></div>`);
-  page.querySelector(".hl-art").replaceWith(Object.assign(artEl("intro"), { className: "pv hl-art" }));
+  const page = h(`<div class="hl hl-top"><section class="hl-hero"><div class="hl-hc"><h2>Welcome to Atelier</h2><p>Prototype in HTML with your team and AI agents on one canvas. Try ideas on branches, mark them up, and merge what works.</p><div class="hl-acts"><button type="button" class="createbtn" data-a="tour">Take the tour</button><button type="button" class="dbtn" data-a="im">${IC.upload}Import HTML</button></div></div><div class="hl-art"></div></section><section class="hl-sec"><div class="hl-sh"><h2>Recent prototypes</h2>${rs.length ? `<button type="button" class="hl-more" data-s="prototypes">View all${IC.chevr}</button>` : ""}</div><div class="hl-recent"></div></section><section class="hl-sec"><div class="hl-sh"><div><h2>Get started</h2><p>Short guides to what you can do here.</p></div><button type="button" class="hl-more" data-s="learn">All guides${IC.chevr}</button></div><div class="hl-learn"></div></section></div>`);
+  page.querySelector(".hl-art").replaceWith(Object.assign(artEl("hero"), { className: "pv hl-art" }));
   page.querySelector('[data-a="tour"]').onclick = () => learn(0);
   page.querySelector('[data-a="im"]').onclick = openImport;
   for (const b of page.querySelectorAll("[data-s]")) b.onclick = () => goSection(b.dataset.s);
-  homeGrid = cardGrid(items.slice(0, 4), { open: openItemOf, actions: items.length >= 4 ? [] : nextActions().slice(0, 4 - items.length) });
+  homeGrid = cardGrid(items.slice(0, 4), { open: openItemOf, actions: items.length >= 4 ? [] : nextActions().slice(0, 1) });
   page.querySelector(".hl-recent").append(homeGrid.el);
   const lc = page.querySelector(".hl-learn");
   for (const i of [1, 2, 3, 4]) lc.append(featureCard(i, learn));
@@ -458,7 +435,7 @@ function renderHomeList(rs) {
   el.classList.remove("hc");
   const inner = h(`<div class="in"></div>`);
   const linked = rs.some((e) => e.linked);
-  const hh = h(`<div class="hh"><div class="tt"><h1>${esc(S.ws.name)}</h1><p>${S.ws.home ? `<span class="hpath" title="${esc(S.ws.home)}">${IC.folder}${esc(S.ws.home)}</span>` : ""}${linked ? "Prototypes here are edited in place. " : ""}Try each idea on a branch, mark it up or ask an agent, then review and merge.</p></div><div class="hacts">${S.ws.spaces ? `<button type="button" class="dbtn" data-a="sp">${IC.folder}Connect a folder</button>` : ""}<button type="button" class="createbtn" data-a="im">${IC.upload}Import HTML</button></div></div>`);
+  const hh = h(`<div class="hh"><div class="tt"><h1>Prototypes</h1><p>${S.ws.home ? `<span class="hpath" title="${esc(S.ws.home)}">${IC.folder}${esc(S.ws.home)}</span>` : ""}${linked ? "Edited in place, in their own folders." : "Every prototype in this space."}</p></div><div class="hacts">${S.ws.spaces ? `<button type="button" class="dbtn" data-a="sp">${IC.folder}Connect a folder</button>` : ""}<button type="button" class="createbtn" data-a="im">${IC.upload}Import HTML</button></div></div>`);
   if (rs.length) hh.querySelector(".hacts").prepend(viewSwitch());
   hh.querySelector('[data-a="im"]').onclick = openImport;
   const spb = hh.querySelector('[data-a="sp"]');

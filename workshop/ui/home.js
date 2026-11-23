@@ -70,6 +70,8 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
     }
   }
   const middle = () => (bounds && !wrap ? { x: -(bounds.x0 + bounds.x1) / 2, y: -(bounds.y0 + bounds.y1) / 2 } : { x: 0, y: 0 });
+  // everything is on screen at once: there's nowhere to go, so the group stays centred
+  const fitsView = () => !wrap && !!bounds && bounds.x1 - bounds.x0 <= vw && bounds.y1 - bounds.y0 <= vh;
   const sizeOf = () => CARD;
   // which item a cell shows
   function at(cx, cy) {
@@ -238,7 +240,7 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
     glide = null,
     spring = false;
   const apply = () => {
-    root.classList.toggle("fits", !wrap && !!bounds && bounds.x1 - bounds.x0 <= vw && bounds.y1 - bounds.y0 <= vh);
+    root.classList.toggle("fits", fitsView());
     world.style.transform = `translate3d(${Math.round((cam.x + vw / 2) * 2) / 2}px, ${Math.round((cam.y + vh / 2) * 2) / 2}px, 0)`;
     sync();
     if (inside) point();
@@ -438,6 +440,8 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
   const ro = new ResizeObserver(() => {
     vw = root.clientWidth;
     vh = root.clientHeight;
+    // the real size arrives after mount (it starts as the window's): a canvas that fits stays centred
+    if (fitsView() && !drag && !glide && !leaving) Object.assign(cam, middle());
     apply();
   });
   ro.observe(root);
@@ -451,7 +455,8 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
     (cam.x = back.x), (cam.y = back.y);
     const idx = list.findIndex((x) => x.id === back.id);
     backCell = idx >= 0 ? cellOf(idx) : null;
-    if (backCell) (cam.x = -backCell.x * CW), (cam.y = -backCell.y * CH);
+    if (backCell && !fitsView()) (cam.x = -backCell.x * CW), (cam.y = -backCell.y * CH);
+    else Object.assign(cam, middle());
     root.classList.add("used"); // they know how it works by now: no hint
   }
   apply();
@@ -490,7 +495,7 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
       if (next.map((x) => x.id).join() !== was || (nextActions && nextActions.map((a) => a.title).join() !== actions.map((a) => a.title).join())) {
         if (nextActions) actions = nextActions;
         layout();
-        if (!wrap) Object.assign(cam, middle());
+        if (fitsView()) Object.assign(cam, middle()); // otherwise the camera stays where you were
         setHot(null);
         for (const el of tiles.values()) el.remove();
         tiles.clear();

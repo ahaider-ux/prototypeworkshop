@@ -282,3 +282,29 @@ test("ui: the mark has depth, and the tab has the app icon", () => {
   for (const src of [html, read("intro.js")]) assert.match(src, /class="pb"[^>]*\/><path class="pl"[^>]*\/><path class="ps"[^>]*\/><path class="pr"/);
   assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="data:image\/svg\+xml,/);
 });
+
+// With few prototypes everything is on screen at once, and the group stays centred; coming back
+// used to centre the opened card instead, but only sometimes (the canvas's real width arrives after
+// mount). Now: everything fits → the group is centred, on mount, on resize and on update; otherwise
+// coming back centres the prototype you opened.
+test("ui: a canvas that fits stays centred; a bigger one returns to what you opened", () => {
+  const home = read("home.js");
+  assert.match(home, /const fitsView = \(\) =>/);
+  assert.match(home, /if \(backCell && !fitsView\(\)\) \(cam\.x = -backCell\.x \* CW\)/);
+  assert.match(home, /if \(fitsView\(\) && !drag && !glide && !leaving\) Object\.assign\(cam, middle\(\)\);/, "on resize");
+  assert.match(home, /if \(fitsView\(\)\) Object\.assign\(cam, middle\(\)\);/, "on update");
+});
+
+// The home is built from the editor's own pieces, so the two read as one app: the sidebar is the
+// editor's floating panel with its rows and section headers, on the same canvas colour; no loose
+// links, no second agent status (the top bar has it), and Import shown once per place.
+test("ui: the home uses the editor's components", () => {
+  const app = read("app.js");
+  const shell = app.slice(app.indexOf("function homeShell()"), app.indexOf("const homeMain"));
+  for (const cls of ['class="lhd"', 'class="pgs hnav"', 'class="pg"', 'class="shd"']) assert.ok(shell.includes(cls), cls);
+  assert.ok(!/hside-foot|hagent|What's new/.test(shell), "no footer links or agent card");
+  const css = read("app.css");
+  assert.match(css, /\.home\{[^}]*background:var\(--bg-canvas\)/);
+  assert.match(css, /\.hside\{[^}]*border-radius:var\(--r-panel\);background:var\(--glass-bg\)/);
+  assert.ok(!/\.pv-tag\.agent\{[^}]*--i-orange/.test(css), "agents are ink, as in the app");
+});
