@@ -951,9 +951,9 @@ function renderProto(body) {
     }
     body.append(F);
   }
-  const I = sec("Play");
-  I.append(h(`<span class="lineage">Frames are pictures until you play one. Hover a frame and press Play, or select one and press P: its prototype runs on the canvas, starting on that screen.</span>`));
-  const pl = h(`<button type="button" class="${S.playing ? "dbtn" : "createbtn"} sm" style="align-self:flex-start">${S.playing ? `${IC.stop}Stop` : `${IC.play}Play the selected frame`}</button>`);
+  const I = sec("Run");
+  I.append(h(`<span class="lineage">Frames are editable as they stand: click a layer to select it, double-click to go in. Run a frame (in its title, or select it and press P) to click through its prototype on the canvas, starting on that screen.</span>`));
+  const pl = h(`<button type="button" class="${S.playing ? "dbtn" : "createbtn"} sm" style="align-self:flex-start">${S.playing ? `${IC.stop}Stop` : `${IC.play}Run the selected frame`}</button>`);
   pl.onclick = () => ($("interactBtn").click(), renderRight());
   I.append(pl);
   body.append(I);

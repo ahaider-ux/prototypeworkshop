@@ -40,7 +40,7 @@
   --sh-chat:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.07),0 0 0 .5px rgba(0,0,0,.08);--sh-modal:0 2px 6px rgba(0,0,0,.04),0 24px 64px rgba(0,0,0,.14),0 0 0 .5px rgba(0,0,0,.08);
   /* controls: flat white with a hairline, and the flat ink pill for the one main action (no gloss) */
   --raise:#ffffff;
-  --raise-ink:#121212;
+  --raise-ink:#121212;--sh-card-inv:0 1px 2px rgba(0,0,0,.08),0 6px 12px -4px rgba(0,0,0,.12),0 22px 44px -14px rgba(0,0,0,.28);--sh-card-inv-hi:0 2px 4px rgba(0,0,0,.1),0 12px 24px -8px rgba(0,0,0,.16),0 36px 72px -18px rgba(0,0,0,.36);
   --sh-ink:0 1px 2px rgba(0,0,0,.12);--sh-ink-hover:0 1px 2px rgba(0,0,0,.16);
   --sh-btn-hover:0 0 0 1px rgba(0,0,0,.15),0 1px 2px rgba(0,0,0,.05);
   /* the studio light behind the home: white from above, falling to a soft grey (light, not decoration) */
@@ -71,7 +71,7 @@
   --sh-field:0 0 0 1px rgba(255,255,255,.1);--sh-btn:0 0 0 1px rgba(255,255,255,.09);
   --sh-chat:0 10px 30px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.07);--sh-modal:0 16px 48px rgba(0,0,0,.55),0 0 0 .5px rgba(255,255,255,.08);
   --raise:#222222;
-  --raise-ink:#f2f2f2;
+  --raise-ink:#f2f2f2;--sh-card-inv:0 0 0 .5px rgba(255,255,255,.2),0 18px 40px -12px rgba(0,0,0,.7);--sh-card-inv-hi:0 0 0 .5px rgba(255,255,255,.3),0 32px 64px -16px rgba(0,0,0,.8);
   --sh-ink:0 1px 2px rgba(0,0,0,.4);--sh-ink-hover:0 1px 2px rgba(0,0,0,.45);
   --sh-btn-hover:0 0 0 1px rgba(255,255,255,.16);
   --studio:radial-gradient(140% 90% at 50% -12%,#202020 0%,#151515 45%,#0d0d0d 100%);
@@ -543,13 +543,27 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .wires path.draft{stroke-dasharray:6 4}
 .hud{position:absolute;inset:0;pointer-events:none;z-index:5;overflow:hidden}
 /* frame titles, as in a design tool: the screen's name above its top-left corner */
-.blabel{position:absolute;height:24px;display:flex;align-items:center;gap:6px;font-size:12px;line-height:1;color:var(--text-secondary);white-space:nowrap;pointer-events:auto;cursor:default;transform:translateY(-100%);padding-bottom:4px;overflow:hidden}
-.blabel .n{overflow:hidden;text-overflow:ellipsis}
+.blabel{position:absolute;height:28px;display:flex;align-items:center;gap:6px;font-size:12px;line-height:1;color:var(--text-secondary);white-space:nowrap;pointer-events:auto;cursor:default;transform:translateY(-100%);padding-bottom:4px;overflow:hidden}
+.blabel .n{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .blabel .g{font:500 12px/1 var(--fakt);color:var(--text-placeholder)}
 .blabel.on .n{color:var(--text-accent)}
 .blabel.ghost{cursor:default;color:var(--text-placeholder)}
 .blabel .flash{color:var(--text-accent);opacity:0;transition:opacity 300ms ease}
 .blabel .flash.on{opacity:1}
+/* Run, at the far end of a frame's title row: on the frame under the pointer or selected; Stop (the
+   accent pill) stays on the frame that's running */
+.brun{margin-left:auto;flex-shrink:0;height:22px;display:inline-flex;align-items:center;gap:4px;padding:0 8px 0 6px;border-radius:99px;font:500 12px/1 var(--fakt);color:var(--text-primary);background:var(--raise);box-shadow:var(--sh-btn);opacity:0;pointer-events:none;transition:opacity 150ms var(--ease-smooth),background-color 120ms ease}
+.brun.on{opacity:1;pointer-events:auto}
+.brun:hover{box-shadow:var(--sh-btn-hover)}
+.brun:active{transform:scale(.97)}
+.brun .ic{width:12px;height:12px}
+.brun .ic-stop,.brun.stop .ic-run{display:none}
+.brun.stop .ic-stop{display:inline-flex}
+.brun.stop{background:var(--text-accent);color:var(--on-accent);box-shadow:none}
+.brun.icon{padding:0;width:22px;justify-content:center}
+.brun.icon .rl{display:none}
+.brun:focus-visible{outline:2px solid var(--ring-default);outline-offset:1px}
+@media (prefers-reduced-motion:reduce){.brun:active{transform:none}}
 .sizetag{position:absolute;transform:translate(-50%,8px);height:20px;padding:0 6px;border-radius:4px;background:var(--text-accent);color:var(--on-accent);font:400 12px/20px var(--fakt);white-space:nowrap;font-variant-numeric:tabular-nums}
 .alabel{position:absolute;transform:translate(-50%,-50%);height:24px;padding:0 8px;border-radius:6px;background:var(--bg-layer);box-shadow:var(--sh-sm),0 0 0 .5px var(--border-subtle);font-size:12px;line-height:24px;color:var(--text-primary);white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis}
 .selbox{position:absolute;border:1px solid var(--text-accent);pointer-events:none}
@@ -1031,19 +1045,6 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 
 /* ---------- play a frame ---------- */
 /* motion: appear like a tooltip (fade + slight scale, 150ms out-ease), leave faster; after transitions.dev's tokens */
-.bplay{position:absolute;z-index:6;display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 18px 0 6px;border-radius:99px;transform:translate(-50%,-50%) scale(.96);opacity:0;pointer-events:none;background:var(--glass-bg,var(--bg-layer));-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass,var(--sh-md));font:500 14px/1 var(--fakt);color:var(--text-primary);transition:opacity 100ms ease-out,transform 100ms ease-out}
-.bplay.on{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1);transition:opacity 150ms var(--ease-smooth),transform 250ms var(--ease-smooth)}
-.bplay .pic{width:32px;height:32px;border-radius:99px;display:grid;place-items:center;background:var(--bg-primary);color:var(--on-primary)}
-.bplay .pic .ic{width:14px;height:14px;margin-left:2px}
-.bplay:hover .pic{background:var(--text-accent);color:var(--on-accent)}
-.bplay:active{transform:translate(-50%,-50%) scale(.97)}
-.bplay.small{padding:0 6px;height:40px}
-.bplay.small .plb{display:none}
-.bstop{position:absolute;z-index:6;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px 0 8px;border-radius:99px;transform:translate(-100%,calc(-100% - 8px));opacity:0;pointer-events:none;background:var(--text-accent);color:var(--on-accent);font:500 12px/1 var(--fakt);box-shadow:var(--sh-md);transition:opacity 100ms ease-out}
-.bstop.on{opacity:1;pointer-events:auto;transition:opacity 150ms var(--ease-smooth)}
-.bstop .ic{width:12px;height:12px}
-.bstop:active{transform:translate(-100%,calc(-100% - 8px)) scale(.97)}
-@media (prefers-reduced-motion:reduce){.bplay,.bplay.on{transition:opacity 100ms linear;transform:translate(-50%,-50%)}}
 
 /* ---------- left panel tabs: one row of icons; the active one opens out to show its name ---------- */
 /* motion after transitions.dev's sliding tabs and page slide (250ms, smooth-out, 2px blur); own code */
@@ -1285,6 +1286,15 @@ html[data-intro] .app{visibility:hidden}
 .hplus{display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--raise);box-shadow:var(--sh-card);transition:scale 240ms var(--ease-spring)}
 .htile.hot .hplus{scale:1.08}
 .hplus .ic{width:20px;height:20px}
+/* a prototype: your own work, on the inverse surface (ink in light, light in dark), so it never
+   reads as one of the guides or placeholders around it */
+.htile.hproj{background:var(--raise-ink);box-shadow:var(--sh-card-inv)}
+.htile.hproj.hot{box-shadow:var(--sh-card-inv-hi)}
+.htile.hproj .htt{background:color-mix(in srgb,var(--on-primary) 8%,transparent)}
+.htile.hproj .htt::before{box-shadow:inset 0 0 0 .5px color-mix(in srgb,var(--on-primary) 14%,transparent)}
+.htile.hproj .hcap b{color:var(--on-primary)}
+.htile.hproj .hcap .m{color:color-mix(in srgb,var(--on-primary) 62%,transparent)}
+.htile.hproj.noboard .htt::after{color:color-mix(in srgb,var(--on-primary) 50%,transparent)}
 /* a guide: its picture on the studio canvas, its title and one line */
 .htile.hguide .htt{background:var(--bg-canvas)}
 .htile.hguide .pv{position:absolute;inset:0}

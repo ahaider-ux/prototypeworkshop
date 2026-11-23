@@ -66,8 +66,9 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   have to: home thumbnails and the background pages that draw boards load from the other loopback
   name (`apartUrl` in `ui/lib.js`: 127.0.0.1 ↔ localhost), so Chrome runs them in their own process,
   and a background page draws itself (`ui/snap.js`, imported by the runtime on the editor's request)
-  and sends back only the drawing. Only live boards (Play, element editing) load on the editor's own
-  site. Every frame loads through `loadPage`/`pagesFree`, which hold while the intro plays. Saved
+  and sends back only the drawing. Only live boards load on the editor's own site: while designing, the frame
+  under the pointer and the selected one (so a frame is editable as it stands, as in Figma), and the
+  one that's running or presenting; at most `MAX_LIVE`, the rest are pictures. Every frame loads through `loadPage`/`pagesFree`, which hold while the intro plays. Saved
   drawings carry only what's shown: hidden parts emptied, CSS trimmed to what matches, each picture
   once. They decode one at a time when idle. Bump `DRAWING` in `ui/gfx.js` when what goes into a
   drawing changes. `ui/snap.js` takes no imports: it runs inside any prototype.
@@ -83,7 +84,8 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   the main area under it changes with the section (`#/`, `#/prototypes`, `#/learn`, `#/activity`)
   and only the main area re-renders. Home (`#/`) is the endless canvas, edge to edge: your
   prototypes (most recent in the middle), placeholder cards that do what they say (add a prototype,
-  connect a folder, connect your AI tool) and the guides. Cards are lifted off the canvas
+  connect a folder, connect your AI tool) and the guides. Your prototypes are the inverse cards
+  (`--raise-ink`, `--sh-card-inv`) so they never read as one of the guides. Cards are lifted off the canvas
   (`--sh-card`, `--sh-card-hi`); over one, the pointer's dot opens into a glass label saying what a
   click does ("Open", "Start", "Connect", "Learn") and trails the pointer by a hair. Prototypes
   (`#/prototypes`) lists them as cards. The header's one call to action is "Connect your AI tool"
@@ -92,10 +94,13 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   piece of Atelier on a flat dotted canvas (no pastel blooms); follow the `product-visuals` skill
   (`.claude/skills/product-visuals/SKILL.md`) for any new one.
 - **Editing a live screen picks layers the way Figma does** (`pickLayer` in `ui/pick.js`, tested in
-  Node): the first click selects the screen, a click selects at the current level, a double-click
+  Node): a click on a screen's content selects its top-level layer (its title row selects the
+  screen), a click then selects at the current level, a double-click
   goes one level in (and on a text leaf, edits its text, zooming in first when the text is too small
   to read: `readableZoom` in `ui/motion.js`), Cmd/Ctrl-click selects the deepest layer, and
-  pass-through wrappers are skipped.
+  pass-through wrappers are skipped. Run (at the far end of a frame's title row, on the frame under
+  the pointer or selected; P for the selected one) makes the frame's prototype respond to clicks;
+  it turns into Stop while it runs.
 - **No dead ends.** Every guide step, empty state and dialog ends in something real to do on the
   person's own work (the Learn steps' `try` actions in `ui/app.js`). Connecting an AI tool shows the
   setup for each tool and a live status that turns on as soon as it connects (`openConnect`).

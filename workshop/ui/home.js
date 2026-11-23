@@ -132,7 +132,7 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
       }
     } else {
       const it = list[idx];
-      el.className = "htile";
+      el.className = "htile hproj";
       el.querySelector("b").textContent = it.name;
       el.querySelector(".m").textContent = it.meta;
       el.setAttribute("aria-label", `Open ${it.name}`);

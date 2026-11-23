@@ -411,13 +411,14 @@ function unmount(id, now = false) {
 function planLive() {
   const wantLive = [];
   const add = (id) => id && B.has(id) && !isGhost(id) && !wantLive.includes(id) && wantLive.push(id);
-  // Frames are pictures until someone presses Play on one (or presents it). Editing an element is
-  // the one other time a page runs: clicking into a frame starts it (pendingPick) and it keeps
-  // running while one of its elements is selected.
+  // A frame is editable as it stands, as in Figma: while designing, the frame under the pointer and
+  // the selected one are live pages (their layers outline under the pointer and a click picks one
+  // at once), and the rest are pictures. Run is what makes a frame's prototype respond to clicks.
   add(S.presenting);
   add(S.playing);
   add(pendingPick?.id);
-  if (S.sel?.kind === "el") add(S.sel.item);
+  if (S.sel?.item && item(S.sel.item)?.type === "board") add(S.sel.item);
+  if (S.mode === "design" && (S.tool === "move" || S.tool === "comment")) add(hoverBoard);
   const keep = new Set(wantLive.slice(0, MAX_LIVE));
   for (const id of keep) mount(id);
   const now = performance.now();
@@ -978,7 +979,7 @@ export function setMode(m) {
   cv.classList.toggle("mode-prototype", m === "prototype");
   $("interactBtn").setAttribute("aria-pressed", String(m === "prototype"));
   const lb = $("interactBtn").querySelector(".lb");
-  if (lb) lb.textContent = m === "prototype" ? "Stop" : "Play";
+  if (lb) lb.textContent = m === "prototype" ? "Stop" : "Run";
   if (m === "prototype") {
     setHover(null, null);
     if (S.sel?.kind === "el") selectBoard(S.sel.item, { quiet: true });
@@ -1010,35 +1011,6 @@ export function stopPlaying() {
   dirty = true;
   fire("playing", null);
 }
-// a Play button over the frame under the pointer, and Stop on the one that's playing
-function drawPlay() {
-  if (!HUD.play) {
-    HUD.play = h(`<button type="button" class="bplay" aria-label="Play this frame"><span class="pic">${IC.play}</span><span class="plb">Play</span></button>`);
-    HUD.stop = h(`<button type="button" class="bstop" aria-label="Stop playing">${IC.stop}<span>Stop</span></button>`);
-    for (const el of [HUD.play, HUD.stop]) el.addEventListener("pointerdown", (e) => e.stopPropagation());
-    HUD.play.onclick = (e) => (e.stopPropagation(), HUD.play.dataset.item && playBoard(HUD.play.dataset.item));
-    HUD.stop.onclick = (e) => (e.stopPropagation(), stopPlaying());
-    hud.append(HUD.play, HUD.stop);
-  }
-  const hb = hoverBoard && hoverBoard !== S.playing && item(hoverBoard) && !isGhost(hoverBoard) && !drag && (S.tool === "move" || S.tool === "hand") ? item(hoverBoard) : null;
-  const r = hb && screenRect(hb);
-  const show = !!r && r.w > 120 && r.h > 80;
-  HUD.play.classList.toggle("on", show);
-  if (show) {
-    HUD.play.dataset.item = hb.id;
-    HUD.play.style.left = r.x + r.w / 2 + "px";
-    HUD.play.style.top = r.y + r.h / 2 + "px";
-    HUD.play.classList.toggle("small", r.w < 260);
-  }
-  const pb = S.playing && item(S.playing);
-  const pr = pb && screenRect(pb);
-  HUD.stop.classList.toggle("on", !!pr);
-  if (pr) {
-    HUD.stop.style.left = pr.x + pr.w + "px";
-    HUD.stop.style.top = pr.y + "px";
-  }
-}
-
 // ---------- HUD ----------
 function placeBox(el, r, tag) {
   if (!r) return void (el.hidden = true);
@@ -1235,14 +1207,28 @@ export function drawHud() {
     live.add(it.id);
     let l = HUD.labels.get(it.id);
     if (!l) {
-      l = h(`<div class="blabel" data-item="${esc(it.id)}"><span class="g"></span><span class="n"></span><span class="flash"></span></div>`);
+      // the frame's title row: its name, and Run at the far end (as Figma puts a frame's play)
+      l = h(`<div class="blabel" data-item="${esc(it.id)}"><span class="g"></span><span class="n"></span><span class="flash"></span><button type="button" class="brun" aria-label="Run this frame"><span class="ic-run">${IC.play}</span><span class="ic-stop">${IC.stop}</span><span class="rl">Run</span></button></div>`);
+      const run = l.querySelector(".brun");
+      run.addEventListener("pointerdown", (e) => e.stopPropagation());
+      run.addEventListener("dblclick", (e) => e.stopPropagation());
+      run.onclick = (e) => (e.stopPropagation(), S.playing === it.id ? stopPlaying() : playBoard(it.id));
       hud.append(l);
       HUD.labels.set(it.id, l);
     }
     const s = screenRect(it);
     l.style.left = s.x + "px";
     l.style.top = s.y + "px";
-    l.style.maxWidth = Math.max(80, s.w) + "px";
+    l.style.width = Math.max(80, s.w) + "px";
+    // Run shows on the frame under the pointer or selected; Stop stays on the one running
+    const running = S.playing === it.id;
+    const runOn = !it.ghost && s.w >= 120 && (running || hoverBoard === it.id || S.sel?.item === it.id);
+    const run = l.querySelector(".brun");
+    run.classList.toggle("on", runOn);
+    run.classList.toggle("stop", running);
+    run.classList.toggle("icon", s.w < 200);
+    const rl = running ? "Stop" : "Run";
+    if (run.querySelector(".rl").textContent !== rl) (run.querySelector(".rl").textContent = rl), run.setAttribute("aria-label", running ? "Stop running this frame" : "Run this frame");
     const g = it.ghost ? parentName.slice(0, 32) : GH.size ? "This branch" : "";
     if (l.querySelector(".g").textContent !== g) l.querySelector(".g").textContent = g;
     const n = `${screenName(it)}${it.state && it.state !== "Default" ? ` · ${it.state}` : ""}`;
@@ -1342,7 +1328,6 @@ export function drawHud() {
   const hv = S.hover;
   const hr = hv && S.mode === "design" && S.tool === "move" && !(s?.kind === "el" && s.el === hv.el) ? elScreenRect(hv.item, hv.el) : null;
   placeBox(HUD.hover, hr, null);
-  drawPlay();
   // comment pins sit on their board: who started the thread, how many replies, and a dot when
   // there's something you haven't read
   const pins = new Set();
@@ -2471,15 +2456,15 @@ function onDown(e) {
     // Design mode: a drag inside a board edits the layer a click picks there (one level at a time, as
     // in Figma) — or the selected element when the drag starts on it. Drag a frame by its title, or
     // once the frame itself is selected.
-    // a screen you haven't started on yet: the first click selects the screen itself; after that,
-    // clicks pick its layers (always the same answer, whether or not its live page has loaded)
+    // a click on a screen's content picks its top-level layer straight away (its title selects the
+    // screen itself), as Figma does for a frame's children
     const inside = S.sel?.item === id;
     if (S.mode === "design" && S.tool === "move" && !boardSel && inside && under) {
       const cur = S.sel?.kind === "el" && S.sel.item === id && S.sel.el.isConnected ? S.sel.el : null;
       const r = cur && elScreenRect(id, cur);
       const onCur = r && p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
       drag = { kind: "el", id, el: onCur ? cur : under, click: under, p0: p, moved: false };
-    } else drag = { kind: "board", id, p0: p, group: withMarks([{ id, x: item(id).x, y: item(id).y }]), moved: false, el: under, deep: e.metaKey || e.ctrlKey, fresh: !inside && !(e.metaKey || e.ctrlKey) };
+    } else drag = { kind: "board", id, p0: p, group: withMarks([{ id, x: item(id).x, y: item(id).y }]), moved: false, el: under, deep: e.metaKey || e.ctrlKey };
   } else {
     // an empty spot: drag a box to select what it touches (pan with Space, the hand, or scrolling)
     drag = { kind: "marquee", p0: p, w0: w, add: e.shiftKey ? selIds() : [], moved: false };
@@ -2492,11 +2477,13 @@ function onMove(e) {
   const p = local(e);
   lastWorld = toWorld(p);
   if (!drag) {
-    const over = e.target.closest?.(".bd:not(.ghost)")?.dataset.item || e.target.closest?.(".bplay")?.dataset.item || null;
-    // the board under the pointer goes live after a moment, so it's ready to pick from or use
+    // a frame's title row counts as the frame: reaching for Run doesn't lose it
+    const over = e.target.closest?.(".bd:not(.ghost)")?.dataset.item || e.target.closest?.(".blabel:not(.ghost)")?.dataset.item || null;
+    // the board under the pointer goes live after a moment, so it's ready to pick from or use; off
+    // every frame, the last one lets go a little later (no flicker crossing the gap between two)
     if (over !== hoverBoard) {
       clearTimeout(hoverT);
-      if (over) hoverT = setTimeout(() => ((hoverBoard = over), (dirty = true)), S.mode === "prototype" ? 60 : 160);
+      hoverT = setTimeout(() => ((hoverBoard = over), (dirty = true)), over ? (S.mode === "prototype" ? 60 : 120) : 400);
     }
     if (S.mode === "design" && S.tool === "move" && !spaceDown) {
       if (over) setHover(over, layerAt(over, elAt(over, p), { deep: e.metaKey || e.ctrlKey }));
@@ -2664,7 +2651,6 @@ async function onUp(e) {
   }
   if (d.kind === "elresize") return endElResize(d);
   if (d.kind === "board" && !d.moved) {
-    if (d.fresh) return selectBoard(d.id);
     if (S.mode === "design" && S.tool === "move") {
       const el = d.el || layerAt(d.id, elAt(d.id, p), { deep: d.deep });
       if (el) selectEl(d.id, el);

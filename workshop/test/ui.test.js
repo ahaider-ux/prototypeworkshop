@@ -383,3 +383,26 @@ test("ui: the home canvas holds prototypes, placeholders and guides, and names e
   assert.match(home, /el\.className = "htile hguide"/);
   assert.match(read("app.css"), /\.hcur\.on \.hcl\{[^}]*background:var\(--glass-bg\)/, "the label is glass");
 });
+
+// Your own prototypes never read as one of the guides around them: they're on the inverse surface.
+test("ui: prototype cards on the home are inverse, unlike guides and placeholders", () => {
+  assert.match(read("home.js"), /el\.className = "htile hproj"/);
+  const css = read("app.css");
+  assert.match(css, /\.htile\.hproj\{background:var\(--raise-ink\);box-shadow:var\(--sh-card-inv\)\}/);
+  assert.match(css, /\.htile\.hproj \.hcap b\{color:var\(--on-primary\)\}/);
+  for (const t of ["--sh-card-inv:", "--sh-card-inv-hi:"]) assert.equal(css.split(t).length - 1, 2, `${t} has a dark-mode pair`);
+});
+
+// A frame is editable as it stands, as in Figma: the frame under the pointer and the selected one are
+// live, a click on content picks its layer at once (no "first click selects the screen"), and Run
+// lives in the frame's title row rather than over the middle of the frame.
+test("ui: frames are editable by default, and Run sits in the frame's title", () => {
+  const cv = read("canvas.js");
+  const plan = cv.slice(cv.indexOf("function planLive()"), cv.indexOf("function planSnapshots()"));
+  assert.match(plan, /if \(S\.mode === "design" && \(S\.tool === "move" \|\| S\.tool === "comment"\)\) add\(hoverBoard\);/);
+  assert.ok(!/fresh:/.test(cv) && !/d\.fresh/.test(cv), "no first-click-selects-the-screen rule");
+  assert.match(cv, /class="blabel"[^`]*<button type="button" class="brun"/, "Run is in the title row");
+  assert.ok(!/bplay|drawPlay/.test(cv), "no Play button over the middle of the frame");
+  assert.match(cv, /lb\.textContent = m === "prototype" \? "Stop" : "Run"/);
+  assert.match(read("index.html"), /<span class="lb">Run<\/span>/);
+});
