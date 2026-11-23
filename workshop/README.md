@@ -38,9 +38,13 @@ it's still there in the middle. The bar on top shows the space, the most recent 
 one to glide to it) and a switch to a plain list. Pictures are saved drawings, not live pages, so
 it stays smooth however many there are.
 
-**Type.** Atelier sets only its wordmark (the logo and the intro) in Zilla Slab; everything in the
-app, titles included, is Schibsted Grotesk, and sticky notes in Shantell Sans, a marker handwriting. All three
-are OFL-1.1. Font files don't live in this repository: Atelier serves them from a
+**Look.** "Studio white": neutral greys, white surfaces lifted off a soft studio light, raised white
+pills and an ink pill for the main action, hairlines and soft shadows, status lights that glow, and
+one blue for selection. Dark mode is the same in graphite.
+
+**Type.** Inter throughout: Bold for the wordmark (the logo and the intro), SemiBold for headings,
+Regular for everything you read and press; sticky notes are in Shantell Sans, a marker
+handwriting. Both are OFL-1.1. Font files don't live in this repository: Atelier serves them from a
 [craft-fonts](https://github.com/storytold/craft-fonts) checkout, found at `CRAFT_FONTS_DIR` or in
 `craft-fonts` next to this repository (the faces are in its Latin catalog). Without one it uses
 the same fonts if they're installed on the computer, and otherwise system fonts, so nothing is

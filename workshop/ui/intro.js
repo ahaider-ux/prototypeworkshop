@@ -124,6 +124,26 @@ function copyOf(id) {
   return c;
 }
 
+// The dotless i's ink, in the font it is drawn in: how far its stem's top is from the top of its
+// line box, and the middle of its ink from the left of its box (both in stage px). Falls back to
+// Inter's own proportions if the browser can't measure.
+export function glyphOf(el, em) {
+  const cs = getComputedStyle(el);
+  const pad = parseFloat(cs.paddingLeft) || 0;
+  try {
+    const c = (glyphOf.c ||= document.createElement("canvas").getContext("2d"));
+    c.font = `${cs.fontWeight} ${em}px ${cs.fontFamily}`;
+    const m = c.measureText("ı");
+    const asc = m.fontBoundingBoxAscent,
+      desc = m.fontBoundingBoxDescent;
+    if ([asc, desc, m.actualBoundingBoxAscent, m.actualBoundingBoxLeft, m.actualBoundingBoxRight].every(Number.isFinite) && asc > 0) {
+      const baseline = (em - (asc + desc)) / 2 + asc; // the line box is 1em tall, its content centred in it
+      return { stemTop: baseline - m.actualBoundingBoxAscent, mid: pad + (m.actualBoundingBoxRight - m.actualBoundingBoxLeft) / 2 };
+    }
+  } catch {}
+  return { stemTop: em * 0.318, mid: pad + em * 0.14 };
+}
+
 // the app is uncovered: the home canvas brings its pictures in now, once the logo has settled
 const landed = () => dispatchEvent(new Event("atelier:landed"));
 // index.html hides the app before first paint when the intro is due, so it never flashes up first
@@ -277,14 +297,17 @@ export function playIntro({ force = false } = {}) {
 
   // the pin, from wherever it is, onto the dot of the i
   function placeDot(now) {
-    const i = root.querySelector(".ilock .li").getBoundingClientRect();
+    const li = root.querySelector(".ilock .li");
+    const i = li.getBoundingClientRect();
     const s = stage.getBoundingClientRect();
     const kk = k();
     const em = i.height / kk; // the line is 1em tall
-    // tuned to the slab's ı: the pin sits just above the stem, a little to the left of centre
     const size = em * 0.34;
-    const cx = (i.left - s.left) / kk + i.width / kk / 2 - em * 0.02;
-    const cy = (i.top - s.top) / kk + em * 0.327 - size * 0.42;
+    // Where the pin sits comes from the ı itself, measured in the font actually showing (Inter, or
+    // whatever the computer falls back to): just on top of its stem, centred on its ink
+    const g = glyphOf(li, em);
+    const cx = (i.left - s.left) / kk + g.mid;
+    const cy = (i.top - s.top) / kk + g.stemTop - size * 0.42;
     const target = `translate(${cx - W / 2}px, ${cy - H / 2}px) scale(${size / 72})`;
     mk.classList.remove("hop");
     if (now) return void (mk.style.transform = target);

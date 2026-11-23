@@ -31,21 +31,28 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
 - **No runtime dependencies.** Node 20+ built-ins only, ES modules, no build step. Playwright is
   optional and only used for screenshots when it is already installed.
 - **Atelier has its own look, not Libra's.** The editor's colours, shadows, type and motion come
-  from the Atelier tokens at the top of `ui/app.css` (warm oat neutrals on paper, a faint grain on the canvas and home, surfaces set apart by tone
-  and hairlines before shadows; soft fills, hovers and hairlines are translucent warm tints so they sit
-  on paper, white and glass alike; fields are white with a hairline; meta tags are outlined; a tool-blue accent for selection and links only; empty states carry a
+  from the Atelier tokens at the top of `ui/app.css` ("studio white": neutral greys with no warm tint,
+  white surfaces lifted off a soft studio light (`--studio` behind the home, a plain neutral canvas),
+  hairlines and soft layered shadows; fills, hovers and hairlines are translucent neutral tints;
+  controls are raised: white pills lit from above (`--raise`, `--sh-btn`) and the ink pill for the
+  one main action (`--raise-ink`, `--sh-ink`), and hover deepens a shadow rather than swapping a
+  gradient, so it eases; status lights glow; every control's surface, edge and shadow is set once,
+  in the Skins block at the end of `ui/app.css`; no texture or grain; fields are white with a hairline; meta tags are outlined; a tool-blue accent for selection and links only; empty states carry a
   hand-drawn mark; shapes: what you press is a pill and icon buttons are circles, list rows are
   rounded 8, fields 10, sheets 16 and panels 20; padding follows the control scale at the end
   of `ui/app.css` (32-tall pills 14 a side, 28-tall 12, 24-tall 8, a leading icon takes 2 off the left); type in
-  three tokens: `--display` Zilla Slab for the wordmark only (header logo and intro lockup; never titles or other app text), `--fakt` Schibsted Grotesk for the
-  interface, `--hand` Shantell Sans for notes and handwritten marks, never on buttons; mono only for
+  three tokens: `--display` Inter Bold for the wordmark only (header logo and intro lockup; never
+  titles or other app text), `--fakt` Inter for the interface (Regular for controls and values,
+  SemiBold for headings, tightening as it grows: no letter-spacing at 12–14px, about -.02em on
+  titles), `--hand` Shantell Sans for notes and handwritten marks, never on buttons; mono only for
   code). Font files are never committed here: `src/fonts.js` serves them from a craft-fonts
   checkout, and every token falls back to system fonts. Libra's tokens belong to the prototypes: they appear only inside boards
   and in the inspector's swatches. Compose new surfaces from the existing classes (`.dbtn`,
   `.createbtn`, `.ghbtn`, `.segds`, `.cnmenu`, `.ddtrig`, `.afld-in`, `.tagro`, `.tct`, `.md`,
   `.toast`, `.isec`/`.irow`). No new hex values outside the token block, spacing 2/4/6/8/12/16/24/32,
   12px text and 28px rows in panels and menus, sentence case, verb-first buttons, and a dark-mode
-  pair for every token. Motion follows the animations.dev bar: nothing animates on keyboard or
+  pair for every token. Motion uses four curves and nothing else (`--ease-out`, `--ease-smooth`, `--ease-io`,
+  `--ease-spring`), and follows the animations.dev bar: nothing animates on keyboard or
   high-frequency actions, menus 180ms in and 120ms out from their trigger, press `scale(.97)`, no
   hover scaling (one exception: a home-canvas card swells under the pointer, after
   design.cash.app), and reduced motion keeps colour and opacity only. Chrome is glass after iOS 27

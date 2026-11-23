@@ -1164,7 +1164,7 @@ function drawRulers() {
       c.fillStyle = col.edge;
       horiz ? (c.fillRect(a, 0, 1, hh), c.fillRect(b - 1, 0, 1, hh)) : (c.fillRect(0, a, w, 1), c.fillRect(0, b - 1, w, 1));
     }
-    c.font = '500 10px "Geist Mono", ui-monospace, monospace';
+    c.font = '500 10px ui-monospace, "SF Mono", Menlo, monospace'; // the app's --mono
     c.textBaseline = "top";
     const i0 = Math.floor(-off / z / minor),
       i1 = Math.ceil((len - off) / z / minor);

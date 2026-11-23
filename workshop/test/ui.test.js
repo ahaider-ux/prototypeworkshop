@@ -148,8 +148,10 @@ test("ui: the intro lands letter for letter on the header logo", () => {
   assert.match(land, /classList\.add\("flying"\)/);
   assert.ok(land.indexOf('li.textContent = "i"') < land.indexOf("getBoundingClientRect"), "swap before measuring");
   assert.match(land, /cubic-bezier\(\.65,0,\.25,1\)/);
-  assert.match(read("app.css"), /\.ilock\.flying\{letter-spacing:-\.01em\}/);
-  assert.match(read("app.css"), /\.tlogo b\.wm\{[^}]*letter-spacing:-\.01em/, "the header's spacing it must match");
+  const css = read("app.css");
+  const flying = /\.ilock\.flying\{letter-spacing:([-.\d]+em)\}/.exec(css)?.[1];
+  const header = /\.tlogo b\.wm\{[^}]*letter-spacing:([-.\d]+em)/.exec(css)?.[1];
+  assert.ok(flying && flying === header, `the flying word's spacing (${flying}) must be the header's (${header})`);
 });
 
 // The intro is product-led but restrained: the first version was a wall of ~20 app parts at once

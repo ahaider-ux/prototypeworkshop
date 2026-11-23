@@ -17,9 +17,9 @@ const MAX_FONT_BYTES = 8 * 1024 * 1024; // Guard: a face is a few hundred KB; ne
 
 // Guard: the only faces the editor can ask for, by a fixed name. A request never names a path.
 export const FACES = {
-  "zilla-slab-semibold": ["Zilla Slab", "SemiBold"],
-  "zilla-slab-bold": ["Zilla Slab", "Bold"],
-  "schibsted-grotesk": ["Schibsted Grotesk", "Variable"],
+  "inter-regular": ["Inter", "Regular"],
+  "inter-semibold": ["Inter", "SemiBold"],
+  "inter-bold": ["Inter", "Bold"],
   "shantell-sans": ["Shantell Sans", "Variable"],
 };
 

@@ -39,7 +39,7 @@ const memory = new Map();
 // agent): with only a few prototypes the spare places hold these as empty-state cards, so the canvas
 // never needs made-up content to look full. key names the space, for coming back.
 export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
-  const root = h(`<div class="hcanvas" role="region" aria-label="Prototypes. Drag to look around."><div class="hworld"></div><div class="hcur" aria-hidden="true"><i></i></div><div class="hhint hand" aria-hidden="true">drag to look around</div></div>`);
+  const root = h(`<div class="hcanvas" role="region" aria-label="Prototypes. Drag to look around."><div class="hworld"></div><div class="hcur" aria-hidden="true"><i></i></div><div class="hhint" aria-hidden="true">Drag to look around</div></div>`);
   const world = root.querySelector(".hworld");
   const cur = root.querySelector(".hcur");
   host.classList.remove("hleaving");

@@ -260,32 +260,32 @@ test("spaces: connect a project folder, edit it in place, switch back", async ()
 
 test("fonts: served from a craft-fonts checkout by fixed name only, a 404 without one", async () => {
   const dir = await tmp();
-  await fsp.mkdir(path.join(dir, "fonts", "zilla-slab"), { recursive: true });
-  await fsp.writeFile(path.join(dir, "fonts", "zilla-slab", "ZillaSlab-Bold.ttf"), "TTF-BYTES");
+  await fsp.mkdir(path.join(dir, "fonts", "inter"), { recursive: true });
+  await fsp.writeFile(path.join(dir, "fonts", "inter", "Inter-Bold.ttf"), "TTF-BYTES");
   await fsp.writeFile(path.join(dir, "secret.txt"), "nope");
   await fsp.writeFile(
     path.join(dir, "fonts", "latin-manifest.txt"),
     [
       "# family | style | file | scripts | licence | licence file | sha256 | source",
-      "Zilla Slab | Bold | fonts/zilla-slab/ZillaSlab-Bold.ttf | Latn | OFL-1.1 | fonts/zilla-slab/OFL.txt | x | https://example.invalid",
+      "Inter | Bold | fonts/inter/Inter-Bold.ttf | Latn | OFL-1.1 | fonts/inter/OFL.txt | x | https://example.invalid",
       // a hostile manifest line must not reach outside the checkout
       "Shantell Sans | Variable | ../../etc/passwd.ttf | Latn | OFL-1.1 | x | x | https://example.invalid",
-      "Schibsted Grotesk | Variable | secret.txt | Latn | OFL-1.1 | x | x | https://example.invalid",
+      "Inter | Regular | secret.txt | Latn | OFL-1.1 | x | x | https://example.invalid",
     ].join("\n"),
   );
   const srv = await startServer({ workspace: await tmp(), port: 0, quiet: true, fontsDir: dir });
   const bare = await startServer({ workspace: await tmp(), port: 0, quiet: true, fontsDir: null });
   try {
-    const ok = await fetch(`${srv.url}/fonts/zilla-slab-bold.ttf`);
+    const ok = await fetch(`${srv.url}/fonts/inter-bold.ttf`);
     assert.equal(ok.status, 200);
     assert.equal(ok.headers.get("content-type"), "font/ttf");
     assert.equal(await ok.text(), "TTF-BYTES");
     assert.equal((await fetch(`${srv.url}/fonts/shantell-sans.ttf`)).status, 404); // ../ in the manifest
-    assert.equal((await fetch(`${srv.url}/fonts/schibsted-grotesk.ttf`)).status, 404); // not a font file
-    assert.equal((await fetch(`${srv.url}/fonts/zilla-slab-semibold.ttf`)).status, 404); // not listed
-    assert.equal((await fetch(`${srv.url}/fonts/inter.ttf`)).status, 404); // not one of Atelier's faces
+    assert.equal((await fetch(`${srv.url}/fonts/inter-regular.ttf`)).status, 404); // not a font file
+    assert.equal((await fetch(`${srv.url}/fonts/inter-semibold.ttf`)).status, 404); // not listed
+    assert.equal((await fetch(`${srv.url}/fonts/zilla-slab-bold.ttf`)).status, 404); // not one of Atelier's faces
     assert.equal((await fetch(`${srv.url}/fonts/..%2Fsecret.ttf`)).status, 404);
-    assert.equal((await fetch(`${bare.url}/fonts/zilla-slab-bold.ttf`)).status, 404); // no checkout: the CSS falls back
+    assert.equal((await fetch(`${bare.url}/fonts/inter-bold.ttf`)).status, 404); // no checkout: the CSS falls back
   } finally {
     await srv.close();
     await bare.close();
