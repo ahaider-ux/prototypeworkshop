@@ -1065,13 +1065,17 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 /* the landing: the paper lifts off the app while the lockup flies into the header */
 .intro.land{background:transparent;pointer-events:none;transition:background-color 480ms cubic-bezier(.4,0,.2,1) 180ms}
 .tlogo.landing .pinmark,.tlogo.landing .wm{visibility:hidden}
+.tlogo.pinin .pinmark{animation:i-pinin 300ms cubic-bezier(.34,1.45,.64,1) both}
+.tlogo.pinin .pinmark .eye{animation:i-blink 180ms ease-in-out 420ms}
+@keyframes i-pinin{from{opacity:0;transform:scale(.4)}}
+@media (prefers-reduced-motion:reduce){.tlogo.pinin .pinmark,.tlogo.pinin .pinmark .eye{animation:none}}
 /* index.html sets data-intro before first paint when the intro is due: the app stays hidden until it covers it */
 html[data-intro] body{background:var(--i-paper)}
 html[data-intro] .app{visibility:hidden}
 .istage{position:absolute;left:50%;top:50%;width:1600px;height:1000px;transform:translate(-50%,-50%) scale(var(--k,1));transform-origin:50% 50%}
-/* the composition, at 1:1 with a slow push */
-.icol{position:absolute;inset:0;transform-origin:50% 50%;will-change:transform;animation:i-push 1400ms linear 1400ms both}
-@keyframes i-push{from{transform:scale(1)}to{transform:scale(1.04)}}
+/* the app's pieces at their real size, shown large, with a slow push */
+.icol{position:absolute;inset:0;transform-origin:50% 50%;transform:scale(1.5);will-change:transform;animation:i-push 1400ms linear 1400ms both}
+@keyframes i-push{from{transform:scale(1.5)}to{transform:scale(1.56)}}
 /* a piece pops in with a little overshoot, and leaves by a cut */
 .ip{position:absolute;opacity:0;transform-origin:50% 50%;animation:i-in 420ms cubic-bezier(.22,1,.36,1) var(--in) both;pointer-events:none}
 @keyframes i-in{0%{opacity:0;transform:scale(.6)}1%{opacity:1}55%{transform:scale(1.045)}100%{opacity:1;transform:scale(1)}}
@@ -1079,20 +1083,36 @@ html[data-intro] .app{visibility:hidden}
 /* glass over flat paper shows only paper: no blur, which would be redone every frame under the slow push */
 .intro .ip *{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 .ip button{pointer-events:none}
+/* frames: a page with its title, and the selection as the canvas draws it */
+.ip.p-frame{background:var(--i-white);box-shadow:0 0 0 1px var(--border-subtle)}
+.ip.p-frame .flbl{position:absolute;left:0;top:-24px;font-size:14px;color:var(--text-secondary);white-space:nowrap}
+.ip.p-frame .flbl.on{color:var(--text-accent)}
+.ipg{position:absolute;inset:0;display:grid;gap:10px;padding:14px;transition:gap 420ms cubic-bezier(.22,1,.36,1)}
+.ipg.tight{gap:4px} /* the agent's change: the cards tighten */
+.ipg i{border-radius:4px;background:var(--bg-secondary)}
+.ipg.desk{grid-template-columns:22% 1fr 1fr 1fr;grid-template-rows:12% 1fr 1fr}
+.ipg.desk .sb{grid-row:1/4}
+.ipg.desk .hd{grid-column:2/4}
+.ipg.desk .c1{background:var(--text-accent)}
+.ipg.desk .c4{background:var(--i-yellow)}
+.isel{position:absolute;inset:-1px;box-shadow:0 0 0 1px var(--text-accent)}
+.isel i{position:absolute;width:8px;height:8px;background:var(--i-white);box-shadow:0 0 0 1px var(--text-accent)}
+.isel .ic1{left:-4px;top:-4px}.isel .ic2{right:-4px;top:-4px}.isel .ic3{left:-4px;bottom:-4px}.isel .ic4{right:-4px;bottom:-4px}
+
 /* real marker strokes, drawn on */
 /* hand-drawn marks: the path is redrawn frame by frame (on eights) by intro.js */
 .ip.p-ink svg,.iund svg{width:100%;height:100%;overflow:visible}
 .ik.red{fill:var(--i-red)}.ik.green{fill:var(--i-green)}.ik.blue{fill:var(--text-accent)}
-/* the composition: paper sheets and flat colour, loose and askew, then snapped into place */
-.ip.p-block{border-radius:6px;translate:var(--dx,0) var(--dy,0);rotate:var(--r,0deg);transition:translate 560ms cubic-bezier(.34,1.25,.64,1) var(--set,0ms),rotate 560ms cubic-bezier(.34,1.25,.64,1) var(--set,0ms)}
-.icol.set .ip.p-block{translate:0 0;rotate:0deg}
-.ip.p-sheet{background:var(--i-white);box-shadow:0 0 0 1px var(--border-subtle),var(--sh-sm)}
-.ip.p-blue{background:var(--text-accent)}
-.ip.p-yellow{background:var(--i-yellow)}
-.ip.p-red{background:var(--i-red)}
-.ip.p-black{background:var(--i-ink)}
-.ip.p-round{border-radius:50%}
-.ip.p-pill{border-radius:99px}
+.ip.p-peek .pinpeek{pointer-events:none}
+.ip.p-toolbar .tb{position:relative;left:auto;bottom:auto;transform:none;max-width:none}
+.ip.p-toast .toast{width:auto;min-width:0} /* hugs its words, lined up under the comment */
+.ip.p-toast .tt2{display:inline-flex;align-items:center;gap:6px}
+.ip.p-toast .tt2 .ic{width:16px;height:16px;color:var(--text-success)}
+/* the agent's cursor (translate, not transform: the arrival animation owns transform) */
+.ip.p-cursor{display:inline-flex;align-items:flex-start;gap:2px;z-index:4;transition:translate 640ms cubic-bezier(.65,0,.25,1)}
+.ip.p-cursor svg{width:26px;height:26px;fill:var(--i-orange);stroke:var(--i-white);stroke-width:1.2;stroke-linejoin:round}
+.ip.p-cursor b{margin-top:18px;padding:3px 9px;border-radius:99px;font-size:13px;font-weight:500;color:var(--i-white);background:var(--i-orange)}
+.ip.p-cursor.go{translate:-548px -14px}
 /* the mark: a comment pin with an eye; it blinks */
 .pinmark{display:block;width:100%;height:100%;overflow:visible;--m-b:var(--text-accent);--m-e:var(--i-white)}
 .pinmark .pb{fill:var(--m-b)}
@@ -1110,14 +1130,7 @@ html[data-intro] .app{visibility:hidden}
 .itile>.ic4,.imk>.ic4,.p-marked>.ic4{right:-11px;bottom:-11px;border-right-width:1px;border-bottom-width:1px}
 .iopen,.ibrand{position:absolute;inset:0;border-radius:6px;overflow:hidden}
 .ot{position:absolute;inset:0;display:grid;place-items:center}
-/* the opening cuts: one flat shape each */
-.ot i{display:block;background:currentColor}
-.ot .s-dot{width:30px;height:30px;border-radius:50%}
-.ot .s-half{width:40px;height:20px;border-radius:40px 40px 0 0;margin-top:-10px}
-.ot .s-bar{width:40px;height:10px;border-radius:99px}
-.ot .s-ring{width:34px;height:34px;border-radius:50%;background:none;box-shadow:inset 0 0 0 7px currentColor}
-.ot .s-sq{width:30px;height:30px;background:var(--text-accent)}
-.ot .s-tri{width:36px;height:32px;clip-path:polygon(50% 0,100% 100%,0 100%)}
+.ot .ic{width:38px;height:38px;stroke-width:1.6}
 .ot.blue{background:var(--text-accent);color:var(--i-white)}
 .ot.yellow{background:var(--i-yellow);color:var(--i-ink)}
 .ot.red{background:var(--i-red);color:var(--i-white)}

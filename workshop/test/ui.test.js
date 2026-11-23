@@ -152,10 +152,24 @@ test("ui: the intro lands letter for letter on the header logo", () => {
   assert.match(read("app.css"), /\.tlogo b\.wm\{[^}]*letter-spacing:-\.01em/, "the header's spacing it must match");
 });
 
-// The intro is abstract: the owner found the literal app parts (toolbars, panels, toasts, cursors,
-// tool icons) generic. It must not copy the page's interface or use the app's icons.
-test("ui: the intro is abstract, not a collage of app screens", () => {
-  const js = read("intro.js").replace(/^\s*\/\/.*$/gm, ""); // code only, not the comments that explain the rule
-  assert.ok(!/copyOf|cloneNode|IC\./.test(js), "no copies of the interface and no app icons");
-  for (const literal of ["toast", "createbtn", "pinpeek", "cursor", "ltabs", "Review and merge"]) assert.ok(!js.includes(literal), `intro still shows "${literal}"`);
+// The intro is product-led but restrained: the first version was a wall of ~20 app parts at once
+// and read as generated. It tells one story with a few large pieces, and has no rainbow ink tray
+// or copied side panel.
+test("ui: the intro's scene stays focused", () => {
+  const js = read("intro.js");
+  const pieces = js.slice(js.indexOf("const PIECES = () => ["), js.indexOf("];", js.indexOf("const PIECES = () => [")));
+  const n = (pieces.match(/^\s*\["/gm) || []).length;
+  assert.ok(n > 0 && n <= 8, `${n} pieces on screen at once`);
+  for (const busy of ["inktray", "ltabs", "rcard", "ccomp", "note warm"]) assert.ok(!pieces.includes(busy), `the scene brings back "${busy}"`);
+});
+
+// The ending: the pin fades as the word sets off for the header, and the header's own pin appears
+// only once the word is in place (it used to fly along and hop, which read as fussy).
+test("ui: the intro's pin steps aside while the word lands", () => {
+  const js = read("intro.js");
+  const land = js.slice(js.indexOf("const landInHeader"), js.indexOf("const onKey"));
+  assert.match(land, /mk\.animate\(\[\{ opacity: 1/);
+  assert.match(land, /classList\.add\("pinin"\)/);
+  assert.ok(land.indexOf('classList.remove("landing")') < land.indexOf('classList.add("pinin")'), "the header pin appears as the word is set");
+  assert.match(read("app.css"), /\.tlogo\.pinin \.pinmark\{animation:i-pinin/);
 });
