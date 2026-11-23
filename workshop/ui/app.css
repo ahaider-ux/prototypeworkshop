@@ -48,7 +48,7 @@
   /* the studio light behind the home: white from above, falling to a soft grey (light, not decoration) */
   --studio:radial-gradient(140% 90% at 50% -12%,#ffffff 0%,#f8f8f7 42%,#ededec 100%);--i-studio:var(--studio);
   /* product pictures: a pale cool base with soft blooms (white, ice, mint) */
-  --pv-base:#f2f4f6;--i-page-ink:#666666;--i-page-fill:rgba(0,0,0,.05);--i-page-line:rgba(0,0,0,.12);--i-lit:linear-gradient(180deg,rgba(255,255,255,.24) 0%,rgba(255,255,255,0) 46%,rgba(0,0,0,.07) 100%);--i-lit-rim:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(0,0,0,.14);--bloom-a:rgba(255,255,255,.95);--bloom-b:rgba(198,222,255,.6);--bloom-c:rgba(206,238,222,.55);
+  --pv-base:#f2f4f6;--i-page-ink:#666666;--i-page-fill:rgba(0,0,0,.05);--i-page-line:rgba(0,0,0,.12);--i-lit:linear-gradient(180deg,rgba(255,255,255,.24) 0%,rgba(255,255,255,0) 46%,rgba(0,0,0,.07) 100%);--i-lit-rim:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(0,0,0,.14);--i-obsidian:linear-gradient(180deg,#3a3a40 0%,#0e0e11 100%);--i-bone:#ece7de;--i-graphite:#3b3c41;--i-steel-edge:rgba(40,43,48,.42);--sh-tile:0 1px 2px rgba(0,0,0,.2),0 18px 40px rgba(0,0,0,.26);--sh-pin:drop-shadow(0 6px 8px rgba(0,0,0,.28));--bloom-a:rgba(255,255,255,.95);--bloom-b:rgba(198,222,255,.6);--bloom-c:rgba(206,238,222,.55);
   --grain:none;
   --display:'Atelier Display','Inter',ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;--hand:'Atelier Hand','Shantell Sans','Comic Neue','Segoe Print','Bradley Hand',cursive;
   --fakt:'Atelier Sans','Inter',ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;--ivar:var(--fakt);
@@ -78,7 +78,7 @@
   --sh-btn-hover:0 0 0 .5px rgba(255,255,255,.18),0 1px 2px rgba(0,0,0,.5),0 4px 14px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.08);
   --studio:radial-gradient(140% 90% at 50% -12%,#202020 0%,#151515 45%,#0d0d0d 100%);
   --i-studio:radial-gradient(140% 90% at 50% -12%,#ffffff 0%,#f8f8f7 42%,#ededec 100%); /* the intro is always on paper */
-  --pv-base:#171819;--i-page-ink:#666666;--i-page-fill:rgba(0,0,0,.05);--i-page-line:rgba(0,0,0,.12);--i-lit:linear-gradient(180deg,rgba(255,255,255,.24) 0%,rgba(255,255,255,0) 46%,rgba(0,0,0,.07) 100%);--i-lit-rim:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(0,0,0,.14);--bloom-a:rgba(255,255,255,.07);--bloom-b:rgba(107,155,255,.16);--bloom-c:rgba(79,207,152,.1);
+  --pv-base:#171819;--i-page-ink:#666666;--i-page-fill:rgba(0,0,0,.05);--i-page-line:rgba(0,0,0,.12);--i-lit:linear-gradient(180deg,rgba(255,255,255,.24) 0%,rgba(255,255,255,0) 46%,rgba(0,0,0,.07) 100%);--i-lit-rim:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(0,0,0,.14);--i-obsidian:linear-gradient(180deg,#3a3a40 0%,#0e0e11 100%);--i-bone:#ece7de;--i-graphite:#3b3c41;--i-steel-edge:rgba(40,43,48,.42);--sh-tile:0 1px 2px rgba(0,0,0,.2),0 18px 40px rgba(0,0,0,.26);--sh-pin:drop-shadow(0 6px 8px rgba(0,0,0,.28));--bloom-a:rgba(255,255,255,.07);--bloom-b:rgba(107,155,255,.16);--bloom-c:rgba(79,207,152,.1);
 }
 
 /* ═══ Base ═══ */
@@ -1130,17 +1130,25 @@ html[data-intro] .app{visibility:hidden}
 .ip.p-cursor b{margin-top:18px;padding:3px 9px;border-radius:99px;font-size:13px;font-weight:500;color:var(--i-white);background:var(--i-orange)}
 .ip.p-cursor.go{translate:-506px 36px} /* arrives at the frame's corner, beside the empty state, not on it */
 /* the mark: a comment pin with an eye; it blinks */
-.pinmark{display:block;width:100%;height:100%;overflow:visible;--m-b:var(--text-accent);--m-e:var(--i-white)}
-.pinmark .pb{fill:var(--m-b)}
+/* the mark: a polished chrome pin, its eye a dark glass lens with a glint (a jeweller's loupe:
+   Atelier is a workshop for bespoke work). Chrome and lens are shared gradients in index.html */
+.pinmark{display:block;width:100%;height:100%;overflow:visible}
+.pinmark .pb{fill:url(#pm-chrome)}
 /* depth: light from the top-left, shade low on the right, a bright rim on the top edge, and the
    eye set in (shaded at its top). The gradients are white and black at low opacity (index.html),
    so they suit any colour the pin takes */
-.pinmark .pl{fill:url(#pm-light)}
-.pinmark .ps{fill:url(#pm-shade)}
+.pinmark .pl{fill:url(#pm-light);opacity:.5}
+.pinmark .ps{fill:url(#pm-shade);opacity:.7}
 .pinmark .pr{fill:none;stroke:url(#pm-rim);stroke-width:.8}
+/* on paper, polished metal needs an edge: a fine steel line (its bright top would melt into white);
+   on the obsidian tile the bright rim does that job instead */
+.pinmark .pe{fill:none;stroke:var(--i-steel-edge);stroke-width:.55;display:none}
+.tlogo .pinmark .pe,.imk .pinmark .pe,.itile.f3 .pinmark .pe,.itile.f4 .pinmark .pe,.itile.f1 .pinmark .pe{display:block}
+.tlogo .pinmark .pr,.imk .pinmark .pr,.itile.f3 .pinmark .pr,.itile.f4 .pinmark .pr,.itile.f1 .pinmark .pr{display:none}
 .pinmark .ei{fill:url(#pm-eye)}
 .pmdefs{position:absolute;width:0;height:0;overflow:hidden}
-.pinmark .ew{fill:var(--m-e)}
+.pinmark .ew{fill:url(#pm-lens)}
+.pinmark .eg{fill:var(--i-white);fill-opacity:.85}
 .pinmark .eye{transform-box:fill-box;transform-origin:50% 50%}
 .blink .pinmark .eye{animation:i-blink 180ms ease-in-out}
 @keyframes i-blink{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.08)}}
@@ -1157,27 +1165,27 @@ html[data-intro] .app{visibility:hidden}
 .ibrand .pinmark{position:relative;z-index:1}
 .ot{position:absolute;inset:0;display:grid;place-items:center}
 .ot .ic{width:38px;height:38px;stroke-width:1.6}
-.ot.blue{background:var(--text-accent);color:var(--i-white)}
+.ot.blue{background:var(--i-obsidian);color:var(--i-white)}
 .ot.yellow{background:var(--i-yellow);color:var(--i-ink)}
 .ot.red{background:var(--i-red);color:var(--i-white)}
 .ot.ink{background:var(--i-ink);color:var(--i-white)}
 .ot.white{background:var(--i-white);color:var(--i-ink);box-shadow:inset 0 0 0 1px var(--border-subtle)}
-.ibrand{display:none;place-items:center;background:linear-gradient(180deg,color-mix(in srgb,var(--text-accent) 82%,#fff) 0%,var(--text-accent) 62%);box-shadow:0 18px 48px color-mix(in srgb,var(--text-accent) 34%,transparent),inset 0 1px 0 rgba(255,255,255,.28)} /* the brand tile, lit from above, glowing in its blue */
-.ibrand .pinmark{width:56%;height:56%;--m-b:var(--i-white);--m-e:var(--text-accent);filter:drop-shadow(0 6px 9px color-mix(in srgb,color-mix(in srgb,var(--text-accent) 60%,black) 45%,transparent))} /* a white pin standing on its tile */
+.ibrand{display:none;place-items:center;background:var(--i-obsidian);box-shadow:var(--sh-tile)} /* the brand tile: obsidian, lit from above, the chrome pin standing on it */
+.ibrand .pinmark{width:56%;height:56%;filter:var(--sh-pin)}
 .itile.brand .ibrand{display:grid}
 .itile.brand>i{display:none}
 .itile.grow{width:190px;height:190px;margin:-95px 0 0 -95px;transition:width 300ms var(--ease-spring),height 300ms var(--ease-spring),margin 300ms var(--ease-spring)}
 .itile.f1,.itile.f2,.itile.f3,.itile.f4{transition:none}
 .itile.f1 .ibrand,.itile.f2 .ibrand,.itile.f3 .ibrand,.itile.f4 .ibrand{box-shadow:none}
-.itile.f1 .ibrand{background:var(--i-yellow)}.itile.f1 .pinmark{--m-b:var(--i-ink);--m-e:var(--i-white)}
-.itile.f2{width:160px;height:160px;margin:-80px 0 0 -80px}.itile.f2 .ibrand .pinmark{width:58%;height:58%}.itile.f2 .ibrand{background:var(--i-red)}.itile.f2 .pinmark{--m-b:var(--i-white);--m-e:var(--i-red)}
-.itile.f3{width:124px;height:124px;margin:-62px 0 0 -62px}.itile.f3 .ibrand .pinmark{width:62%;height:62%}.itile.f3 .ibrand{background:var(--i-ink)}.itile.f3 .pinmark{--m-b:var(--i-yellow);--m-e:var(--i-ink)}
-.itile.f4{width:96px;height:96px;margin:-48px 0 0 -48px}.itile.f4 .ibrand .pinmark{width:75%;height:75%;--m-b:var(--text-accent);--m-e:var(--i-white);filter:drop-shadow(0 8px 12px color-mix(in srgb,var(--text-accent) 30%,transparent))} /* 72px and blue: exactly the lone pin that follows, so nothing jumps */.itile.f4 .ibrand{background:var(--i-white);box-shadow:inset 0 0 0 1px var(--border-subtle)}
+.itile.f1 .ibrand{background:var(--i-bone)}
+.itile.f2{width:160px;height:160px;margin:-80px 0 0 -80px}.itile.f2 .ibrand .pinmark{width:58%;height:58%}.itile.f2 .ibrand{background:var(--i-graphite)}
+.itile.f3{width:124px;height:124px;margin:-62px 0 0 -62px}.itile.f3 .ibrand .pinmark{width:62%;height:62%}.itile.f3 .ibrand{background:var(--i-white);box-shadow:inset 0 0 0 1px var(--border-subtle),var(--sh-tile)}
+.itile.f4{width:96px;height:96px;margin:-48px 0 0 -48px}.itile.f4 .ibrand .pinmark{width:75%;height:75%;filter:var(--sh-pin)}.itile.f4 .ibrand{background:transparent;box-shadow:none}.itile.f4 .ibrand::after{display:none} /* 72px: exactly the lone pin that follows, so nothing jumps */
 /* the lockup: "atelıer", and the pin that becomes its dot */
 .imk{position:absolute;left:50%;top:50%;width:72px;height:72px;margin:-36px 0 0 -36px;display:none;transition:transform 340ms var(--ease-spring)}
 .intro.lock .itile{display:none}
 .intro.lock .imk{display:block}
-.imk .pinmark{filter:drop-shadow(0 8px 12px color-mix(in srgb,var(--text-accent) 30%,transparent))}
+.imk .pinmark{filter:var(--sh-pin)}
 .intro.typing .imk>i,.intro.dotted .imk>i{display:none}
 .ilock{position:absolute;left:50%;top:50%;transform:translate(-50%,-38%);display:none;align-items:baseline;font:700 136px/1 var(--display);letter-spacing:-.03em;color:var(--i-ink)} /* the header's spacing: nothing shifts when it flies there */
 .intro.lock .ilock{display:flex}
@@ -1195,7 +1203,7 @@ html[data-intro] .app{visibility:hidden}
 .intro.still .imk{display:block}
 .intro.still .imk>i{display:none}
 /* the header lockup: the pin, and the name in lowercase, heavy and tight */
-.tlogo .amark.pinmark{width:20px;height:20px;translate:0 -1px;filter:drop-shadow(0 1px 1.5px color-mix(in srgb,var(--m-b) 45%,transparent))} /* optically centred on the word: ascenders to baseline, not its line box */
+.tlogo .amark.pinmark{width:20px;height:20px;translate:0 -1px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3))} /* optically centred on the word: ascenders to baseline, not its line box */
 .tlogo b.wm{font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:-.03em}
 .tlogo:hover .pinmark .eye{animation:i-blink 180ms ease-in-out}
 

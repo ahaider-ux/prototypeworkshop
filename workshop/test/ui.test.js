@@ -261,7 +261,7 @@ test("ui: the intro's letters and pin never jump", () => {
   const lock = /\.ilock\{[^}]*letter-spacing:([-.\d]+em)/.exec(css)?.[1];
   const flying = /\.ilock\.flying\{letter-spacing:([-.\d]+em)\}/.exec(css)?.[1];
   assert.equal(lock, flying, "the word keeps its spacing when it flies");
-  assert.match(css, /\.itile\.f4 \.ibrand \.pinmark\{width:75%;height:75%;--m-b:var\(--text-accent\)/, "the last flash is the lone pin's size and colour");
+  assert.match(css, /\.itile\.f4 \.ibrand \.pinmark\{width:75%;height:75%;filter:var\(--sh-pin\)\}/, "the last flash is the lone pin's size, on bare paper");
   assert.ok(!/"hop"/.test(read("intro.js")), "the pin waits above the ı, measured, not at a fixed hop");
 });
 
@@ -269,7 +269,13 @@ test("ui: the intro's letters and pin never jump", () => {
 // gradients; and Atelier has an app icon in the tab.
 test("ui: the mark has depth, and the tab has the app icon", () => {
   const html = read("index.html");
-  for (const id of ["pm-light", "pm-shade", "pm-rim", "pm-eye"]) assert.ok(html.includes(`id="${id}"`), id);
+  for (const id of ["pm-light", "pm-shade", "pm-rim", "pm-eye", "pm-chrome", "pm-lens"]) assert.ok(html.includes(`id="${id}"`), id);
+  // chrome and a glass lens, not a flat brand blue: the tile is obsidian, the flashes are materials
+  const css = read("app.css");
+  assert.match(css, /\.pinmark \.pb\{fill:url\(#pm-chrome\)\}/);
+  assert.match(css, /\.pinmark \.ew\{fill:url\(#pm-lens\)\}/);
+  assert.match(css, /\.ibrand\{display:none;place-items:center;background:var\(--i-obsidian\)/);
+  assert.ok(!/\.ibrand[^{]*\{[^}]*--text-accent/.test(css), "no blue in the brand tile");
   for (const src of [html, read("intro.js")]) assert.match(src, /class="pb"[^>]*\/><path class="pl"[^>]*\/><path class="ps"[^>]*\/><path class="pr"/);
   assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="data:image\/svg\+xml,/);
 });
