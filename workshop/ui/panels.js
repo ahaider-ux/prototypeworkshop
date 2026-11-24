@@ -153,21 +153,32 @@ export async function loadVersions(id) {
 }
 
 // ======================= LEFT PANEL =======================
-const LEFT = { screens: "Screens", agents: "Agents", recipes: "Recipes", notes: "Notes", history: "History", activity: "Activity" };
+const LEFT = { screens: "Screens", agents: "Agent", recipes: "Recipes", notes: "Notes", history: "Versions", activity: "Activity" };
+// Three tabs, each with its sections: what's in the prototype, the agent, and what happened. S.leftTab
+// is the section showing; a tab remembers the section it was last on.
+const GROUPS = {
+  layers: [["file", "Layers"], ["screens", "Screens"]],
+  agent: [["agents", "Requests"], ["recipes", "Recipes"]],
+  activity: [["activity", "Updates"], ["notes", "Notes"], ["history", "Versions"]],
+};
+const SECTIONS = Object.values(GROUPS).flatMap((g) => g.map(([t]) => t));
+const groupOf = (t) => Object.keys(GROUPS).find((g) => GROUPS[g].some(([x]) => x === t)) || "layers";
+const lastIn = { layers: "file", agent: "agents", activity: "activity" };
 export function renderLeft() {
   selectTab();
   renderLeftBody();
 }
 // the tab row: which tab is on, the pill, the badges
 function selectTab() {
-  const was = document.querySelector("#ltabs [data-t][aria-selected='true']")?.dataset.t;
-  for (const b of document.querySelectorAll("#ltabs [data-t]")) {
-    const on = b.dataset.t === S.leftTab;
+  const g = groupOf(S.leftTab);
+  const was = document.querySelector("#ltabs [data-g][aria-selected='true']")?.dataset.g;
+  for (const b of document.querySelectorAll("#ltabs [data-g]")) {
+    const on = b.dataset.g === g;
     b.classList.toggle("on", on);
     b.setAttribute("aria-selected", String(on));
     b.tabIndex = on ? 0 : -1;
   }
-  movePill(!!was && was !== S.leftTab);
+  movePill(!!was && was !== g);
   railBadges();
 }
 let bodyTab = null; // the tab the panel body was last built for
@@ -177,6 +188,12 @@ function renderLeftBody() {
     foot = $("lFoot");
   if (bodyTab && bodyTab !== S.leftTab) slideIn(bodyTab, S.leftTab); // the new content slides in with itself, not the old
   bodyTab = S.leftTab;
+  lastIn[groupOf(S.leftTab)] = S.leftTab;
+  // the tab's sections, as a switch under the tabs
+  const sub = $("lSub"),
+    secs = GROUPS[groupOf(S.leftTab)];
+  sub.hidden = false;
+  sub.replaceChildren(segmented(secs.map(([value, label]) => ({ value, label })), S.leftTab, (v) => ((S.leftTab = v), renderLeft()), { full: true, label: "Section" }));
   const env = pageEnv();
   const st = body.scrollTop;
   foot.replaceChildren();
@@ -250,58 +267,26 @@ function renderActivity(body, foot, env) {
   ta.onkeydown = (ev) => ev.key === "Enter" && !ev.shiftKey && (ev.preventDefault(), post());
   foot.append(comp);
 }
-// The pill under the active tab, and each label's width. Every tab's final geometry is worked out from
-// its real computed padding and the label's measured width (the labels are still animating when this
-// runs), so the pill and the tabs travel the same path, at the same speed, and end exactly together.
-// The pill is only moved when where it should be changes: a panel re-render never snaps it.
+// The thumb under the selected tab: that tab's own box. Only moved when where it should be changes,
+// so a panel re-render never snaps it; placed at once the first time it's seen.
 let pillAt = "";
-// Each label's own width, for the selected tab to open to. Only while the row is on screen: hidden
-// (Atelier opens on the home screen, with the editor out of the layout) everything measures 0, and a
-// 0 left the selected tab with no title and the pill with a stray gap where it should be.
-function measureLabels() {
-  if (!$("ltabs")?.offsetParent) return false;
-  let all = true;
-  for (const t of document.querySelectorAll("#ltabs [data-t]")) {
-    const lb = t.querySelector(".lb");
-    const w = lb ? Math.ceil(lb.scrollWidth) : 0;
-    if (w > 0) t.style.setProperty("--lbw", `${w}px`);
-    else all = false;
-  }
-  return all;
-}
-const labelsMeasured = () => [...document.querySelectorAll("#ltabs [data-t]")].every((t) => parseFloat(t.style.getPropertyValue("--lbw")) > 0);
 function movePill(animate) {
   const bar = $("ltabs");
   const pill = bar?.querySelector(".ltpill");
-  if (!pill || !bar.offsetParent) return;
-  if (!labelsMeasured()) measureLabels(); // first time on screen
-  const bs = getComputedStyle(bar);
-  const gap = parseFloat(bs.columnGap) || 0;
-  let x = parseFloat(bs.paddingLeft) || 0,
-    w = 0;
-  for (const t of bar.querySelectorAll("[data-t]")) {
-    const ts = getComputedStyle(t);
-    const icon = t.querySelector("i")?.offsetWidth || 16;
-    const shut = Math.max(parseFloat(ts.minWidth) || 0, (parseFloat(ts.paddingLeft) || 0) + (parseFloat(ts.paddingRight) || 0) + icon);
-    if (t.getAttribute("aria-selected") === "true") {
-      w = shut + 6 + (parseFloat(t.style.getPropertyValue("--lbw")) || 0);
-      break;
-    }
-    x += shut + gap;
-  }
-  const at = `${x.toFixed(1)}|${w.toFixed(1)}`;
-  if (at === pillAt) return; // already there, or already on its way
+  const sel = bar?.querySelector("[data-g][aria-selected='true']");
+  if (!pill || !sel || !bar.offsetParent) return;
+  const at = `${sel.offsetLeft}|${sel.offsetWidth}`;
+  if (at === pillAt) return;
   const first = !pillAt;
   pillAt = at;
   if (first || !animate) pill.style.transition = "none";
-  pill.style.transform = `translateX(${x}px)`;
-  pill.style.width = `${w}px`;
+  pill.style.transform = `translateX(${sel.offsetLeft}px)`;
+  pill.style.width = `${sel.offsetWidth}px`;
   if (first || !animate) void pill.offsetWidth, (pill.style.transition = "");
 }
 // the new tab's content comes in from the side you moved towards
 function slideIn(from, to) {
-  const order = [...document.querySelectorAll("#ltabs [data-t]")].map((t) => t.dataset.t);
-  const dx = order.indexOf(to) > order.indexOf(from) ? "8px" : "-8px";
+  const dx = SECTIONS.indexOf(to) > SECTIONS.indexOf(from) ? "8px" : "-8px";
   for (const el of [$("lBody"), $("lHead")]) {
     el.style.setProperty("--ltab-dx", dx);
     el.classList.remove("ltab-in");
@@ -310,8 +295,8 @@ function slideIn(from, to) {
   }
 }
 function railBadges() {
-  const set = (t, n) => {
-    const b = document.querySelector(`#ltabs [data-t="${t}"]`);
+  const set = (g, n) => {
+    const b = document.querySelector(`#ltabs [data-g="${g}"]`);
     if (!b) return;
     let c = b.querySelector(".tct");
     if (!n) return c?.remove();
@@ -319,9 +304,8 @@ function railBadges() {
     c.textContent = String(n);
   };
   const fam = new Set(familyOf(protoId()).map((x) => x.env.id));
-  set("agents", S.tasks.filter((t) => fam.has(t.env) && (t.status === "queued" || t.status === "working")).length);
-  set("activity", unseenActivity());
-  set("notes", S.comments.filter((c) => !c.parent && !c.resolved && c.env === S.page).length);
+  set("agent", S.tasks.filter((t) => fam.has(t.env) && (t.status === "queued" || t.status === "working")).length);
+  set("activity", unseenActivity() + S.comments.filter((c) => !c.parent && !c.resolved && c.env === S.page).length);
 }
 function agentLine() {
   const ws = S.ws;
@@ -658,10 +642,11 @@ export function renderBanner() {
     const rv = add(`<button type="button" class="createbtn sm">Review and merge</button>`, () => fire("review", env.id));
     rv.disabled = !!d && !d.changes.length;
   } else {
-    const kids = envList().filter((e) => e.parent === env.id && !e.archived).length;
-    b.append(h(IC.board), h(`<b>Main</b>`), h(`<span class="meta">${esc(env.name)} · ${plural(boardsOf(env.id).length, "screen")}${kids ? ` · ${plural(kids, "open branch", "open branches")}` : ""}</span>`), h(`<span class="vsep"></span>`), h(`<span class="acts"></span>`));
-    add(`<button type="button" class="dbtn sm">${IC.fork}Create branch</button>`, () => fire("branch", env.id));
+    // Main: nothing to say that the panel beside it doesn't (its name, its branches, Create branch)
+    b.hidden = true;
+    return markDirty();
   }
+  b.hidden = false;
   markDirty();
 }
 
@@ -749,41 +734,10 @@ function designPage(body, env) {
         if (d.changes.length > 12) ch.append(h(`<div class="r"><span>and ${d.changes.length - 12} more</span></div>`));
         L.append(ch);
       } else if (d) L.append(h(`<span class="lineage">Nothing yet. Change a token, a variant, some text or a file here, or ask an agent, and it shows up to review.</span>`));
-      const acts = h(`<div style="display:flex;gap:8px;flex-wrap:wrap"></div>`);
-      const rv = h(`<button type="button" class="createbtn sm" ${d && d.changes.length ? "" : "disabled"}>Review and merge</button>`);
-      rv.onclick = () => fire("review", id);
-      const cmp = h(`<button type="button" class="dbtn sm">${IC.compare}${S.compare ? "Hide compare" : "Compare"}</button>`);
-      cmp.onclick = () => fire("compare");
-      acts.append(rv, cmp);
-      if (d?.behind) {
-        const up = h(`<button type="button" class="dbtn sm">Update from ${esc(pageName(parent))}</button>`);
-        up.onclick = () => fire("update-from-main", id);
-        acts.append(up);
-      }
-      L.append(acts);
     }
-    body.append(L);
-  } else {
-    const kids = envList().filter((e) => e.parent === id && !e.archived);
-    const L = sec("Branches", `<span class="tct">${kids.length || ""}</span>`);
-    L.append(h(`<span class="lineage">Main only changes when you merge a branch. Try ideas on branches; agents work on them too.</span>`));
-    for (const k of kids) {
-      const m = pageMeta(k);
-      const r = h(`<div class="pg" role="button" tabindex="0" style="margin:0 -8px">${IC.fork}<span class="t">${esc(k.name)}</span><span class="m ${m.cls}">${esc(m.title || m.t)}</span></div>`);
-      r.onclick = () => fire("go", k.id);
-      L.append(r);
-      if (!S.diffs.has(k.id)) loadDiff(k.id);
-    }
-    const br = h(`<button type="button" class="dbtn sm" style="align-self:flex-start">${IC.fork}Create branch</button>`);
-    br.onclick = () => fire("branch", id);
-    L.append(br);
     body.append(L);
   }
-  const counts = sec("On this page");
-  const nNotes = pageItems("note").length + pageItems("box").length + pageItems("arrow").length;
-  const nCm = S.comments.filter((c) => !c.parent && !c.resolved && c.env === id).length;
-  counts.append(h(`<div class="xyrow"><span class="xy"><i>Screens</i>${boardsOf(id).length}</span><span class="xy"><i>Notes</i>${nNotes + nCm}</span></div>`));
-  body.append(counts);
+  // branches are listed once, in the Layers tab; what's on the page is its layers
   const del = h(`<div class="isec" style="display:flex;flex-direction:row;flex-wrap:wrap;gap:8px">${branch && !env.archived ? `<button type="button" class="dbtn sm" data-a="arch">Archive</button>` : ""}<button type="button" class="dbtn sm err" data-a="del">${IC.trash}${env.linked ? "Remove from Atelier" : `Delete ${branch ? "branch" : "prototype"}`}</button></div>`);
   del.querySelector('[data-a="del"]').onclick = () => fire("delete", id);
   const ar = del.querySelector('[data-a="arch"]');
@@ -926,7 +880,7 @@ function designBoard(body, bid) {
   } })));
   L.append(h(`<div class="xyrow"><span class="xy"><i>X</i>${b.x}</span><span class="xy"><i>Y</i>${b.y}</span><span class="xy"><i>W</i>${b.w}</span><span class="xy"><i>H</i>${b.h}</span></div>`));
   body.append(L);
-  if (ad?.screen) body.append(h(`<div class="isec"><span class="lineage">Showing ${esc(ad.screen)} now. Press Play (P) to click through it.</span></div>`));
+  if (ad?.screen) body.append(h(`<div class="isec"><span class="lineage">Showing ${esc(ad.screen)} now. Run it (P) to click through it.</span></div>`));
   const acts = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="pr">${IC.play}Present</button><button type="button" class="dbtn sm" data-a="dup">${IC.copy}Duplicate</button><button type="button" class="dbtn sm" data-a="agent">${IC.spark}Ask</button></div></div>`);
   acts.querySelector('[data-a="dup"]').onclick = () => placeScreen(b.env, b.screen, b.state).then((it) => it && selectBoard(it.id));
   acts.querySelector('[data-a="pr"]').onclick = () => fire("present", bid);
@@ -1673,10 +1627,10 @@ export function initPanels() {
   // A tab click builds the panel first and starts moving the tabs on the next frame, so building it
   // never lands in the middle of the move (a held frame mid-move is what made the row jump).
   let fill = 0;
-  for (const b of document.querySelectorAll("#ltabs [data-t]"))
+  for (const b of document.querySelectorAll("#ltabs [data-g]"))
     b.addEventListener("click", () => {
-      if (S.leftTab === b.dataset.t) return;
-      S.leftTab = b.dataset.t;
+      if (groupOf(S.leftTab) === b.dataset.g) return;
+      S.leftTab = lastIn[b.dataset.g];
       $("frame").classList.remove("ui-off");
       renderLeftBody(); // the heavy part first, inside the click...
       cancelAnimationFrame(fill);
@@ -1685,19 +1639,18 @@ export function initPanels() {
   // ← → move between the tabs, as in any tab list
   $("ltabs").addEventListener("keydown", (e) => {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-    const tabs = [...document.querySelectorAll("#ltabs [data-t]")];
-    const i = tabs.findIndex((t) => t.dataset.t === S.leftTab);
+    const tabs = [...document.querySelectorAll("#ltabs [data-g]")];
+    const i = tabs.findIndex((t) => t.dataset.g === groupOf(S.leftTab));
     const next = tabs[(i + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length];
     e.preventDefault();
     next.click();
     next.focus();
   });
   addEventListener("resize", () => movePill(false));
-  // labels are measured once the type is in (a font arriving late changes their width)
-  measureLabels();
+  // the type arriving late changes the tabs' widths
   requestAnimationFrame(() => movePill(false));
-  document.fonts?.ready.then(() => (measureLabels(), movePill(false)));
-  document.fonts?.addEventListener?.("loadingdone", () => (measureLabels(), movePill(false)));
+  document.fonts?.ready.then(() => movePill(false));
+  document.fonts?.addEventListener?.("loadingdone", () => movePill(false));
   for (const b of document.querySelectorAll("#rTabs button")) b.addEventListener("click", () => ((S.rightTab = b.dataset.t), renderRight()));
   on("left-tab", (t) => ((S.leftTab = t), renderLeft()));
   on("sel", () => {

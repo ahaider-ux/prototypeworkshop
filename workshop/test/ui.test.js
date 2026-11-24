@@ -73,13 +73,16 @@ test("ui: tooltips float outside the panels", () => {
   assert.match(read("app.js"), /initTips\(\)/);
 });
 
-// The active tab's label opened by animating max-width to 96px: the real label is narrower, so it
-// raced open and sat still before snapping shut, while the pill moved on its own path. Labels open
-// to their measured width and the pill is placed from the tabs' real geometry.
-test("ui: the tab row moves on one path", () => {
+// The editor's left panel has three tabs that always show their names (Layers, Agent, Activity), so
+// nothing opens, closes or shifts when you pick one; each tab's sections are a switch under it. The
+// thumb is the selected tab's own box.
+test("ui: the left panel is three labelled tabs with sections", () => {
+  const html = read("index.html");
+  const tabs = [...html.matchAll(/data-g="(\w+)" data-t="\w+" role="tab"[^>]*>.*?<span class="lb">(\w+)<\/span>/g)].map((m) => `${m[1]}:${m[2]}`);
+  assert.deepEqual(tabs, ["layers:Layers", "agent:Agent", "activity:Activity"]);
   const css = read("app.css");
-  assert.match(css, /\.ltabs \[data-t\]\[aria-selected="true"\] \.lb\{width:var\(--lbw/);
-  assert.doesNotMatch(css, /\.ltabs \[data-t\]\[aria-selected="true"\] \.lb\{max-width/);
+  assert.doesNotMatch(css, /\.ltabs \[data-t\] \.lb\{[^}]*width:0/, "labels are never hidden");
+  assert.doesNotMatch(css, /--lbw/);
   const panels = read("panels.js");
   assert.doesNotMatch(panels, /ICON = small \? 30 : 32/, "the pill is placed from computed geometry, not constants");
   assert.match(panels, /if \(at === pillAt\) return/, "a re-render never snaps the pill");
@@ -210,16 +213,16 @@ test("ui: the intro pin is placed from the live font's layout", () => {
   assert.ok(!/measureText|getContext/.test(js), "no canvas measurement");
 });
 
-// Atelier opens on the home screen, with the editor and its tab row out of the layout. Labels were
-// measured then, all at 0px: the selected tab lost its title and the pill kept a stray 6px gap.
-// A width is only recorded once the row is on screen, and the pill measures before it moves.
-test("ui: tab labels are measured once the row is on screen", () => {
+// Every section the seven old tabs held is still there, under one of the three, and the thumb is
+// placed from the selected tab's own box (nothing to measure, so nothing to get wrong while hidden).
+test("ui: every panel section lives under one of the three tabs", () => {
   const js = read("panels.js");
-  const measure = js.slice(js.indexOf("function measureLabels()"), js.indexOf("function movePill"));
-  assert.match(measure, /if \(!\$\("ltabs"\)\?\.offsetParent\) return false;/, "skips while hidden");
-  assert.match(measure, /if \(w > 0\) t\.style\.setProperty\("--lbw"/, "never records a 0");
-  const move = js.slice(js.indexOf("function movePill"), js.indexOf("function movePill") + 400);
-  assert.match(move, /if \(!labelsMeasured\(\)\) measureLabels\(\);/);
+  const groups = js.slice(js.indexOf("const GROUPS = {"), js.indexOf("const SECTIONS"));
+  for (const t of ["file", "screens", "agents", "recipes", "activity", "notes", "history"]) assert.ok(groups.includes(`["${t}",`), t);
+  const move = js.slice(js.indexOf("function movePill"), js.indexOf("function movePill") + 500);
+  assert.match(move, /if \(!pill \|\| !sel \|\| !bar\.offsetParent\) return;/, "skips while hidden");
+  assert.match(move, /sel\.offsetLeft/);
+  assert.ok(!/measureLabels/.test(js));
 });
 
 // The home is a floating utility that stays and a main area that changes: picking a section
@@ -414,4 +417,46 @@ test("ui: a frame that goes live under a still pointer outlines its layer", () =
   assert.match(cv, /function onMove\(e\) \{\s*const p = local\(e\);\s*lastWorld = toWorld\(p\);\s*lastPtr = p;/);
   const load = cv.slice(cv.indexOf("function onBoardLoad(b)"), cv.indexOf("function onBoardLoad(b)") + 600);
   assert.match(load, /setHover\(b\.id, layerAt\(b\.id, elAt\(b\.id, lastPtr\)\)\)/);
+});
+
+// One place for each thing in the editor: branches are listed in the Layers tab only (not again in
+// the right panel or in a bar over Main), and Run is in each frame's title, always there, with the
+// tool bar offering only Stop while a frame runs. Asking an agent is the tool bar's main action.
+test("ui: the editor shows each thing once", () => {
+  const panels = read("panels.js");
+  const page = panels.slice(panels.indexOf("function designPage"), panels.indexOf("// several boards and annotations"));
+  assert.ok(!/sec\("Branches"/.test(page), "the right panel doesn't list branches again");
+  assert.ok(!/Review and merge<\/button>/.test(page), "review lives in the branch's bar");
+  const banner = panels.slice(panels.indexOf("export function renderBanner"), panels.indexOf("// ======================= RIGHT PANEL"));
+  assert.match(banner, /b\.hidden = true;\s*return markDirty\(\);/, "no bar over Main");
+  const css = read("app.css");
+  assert.match(css, /\.tb #interactBtn:not\(\[aria-pressed="true"\]\)\{display:none\}/);
+  assert.match(css, /\.tb #askBtn\{background:var\(--raise-ink\)/);
+  assert.match(read("canvas.js"), /run\.classList\.toggle\("on", !it\.ghost && s\.w >= 120\);/, "Run doesn't come and go with the pointer");
+});
+
+// The brand is flat: one colour for the mark, no gloss, rim, glow or drop shadow; panels are nearly
+// solid with no bright top edge; blue is for selection and links, so switches and badges are ink;
+// and nothing blinks or pulses on its own.
+test("ui: the brand and chrome are flat and still", () => {
+  const css = read("app.css");
+  assert.match(css, /\.pinmark \.pl,\.pinmark \.ps,\.pinmark \.pr,\.pinmark \.ei\{display:none\}/);
+  assert.ok(!/pinmark[^}]*drop-shadow/.test(css), "no shadow under the mark");
+  assert.ok(!/\.tlogo:hover \.pinmark \.eye\{animation/.test(css), "the mark doesn't blink when hovered");
+  assert.match(css, /\.hdot\.on\{box-shadow:none\}/, "status lights don't glow");
+  assert.match(css, /--glass-a:\.94;--glass-blur:blur\(20px\);/);
+  assert.ok(!/--glass-spec:inset 0 1px 0 rgba\(255,255,255,\.85\)/.test(css), "no specular top edge");
+  assert.match(css, /--switch-on:#121212;/);
+  assert.ok(!/hpulse/.test(css), "thumbnails don't pulse while they load");
+  assert.ok(!/harrive [0-9]+ms [^;]*var\(--d/.test(css), "home cards don't cascade in");
+});
+
+// With a few prototypes the home shows each thing once, in a block that fits a laptop screen; the
+// field only repeats once there are enough prototypes to fill it.
+test("ui: the home doesn't repeat cards to look full", async () => {
+  const home = read("home.js");
+  assert.match(home, /wrap = list\.length >= WRAP_MIN;/);
+  const { block } = await import("../ui/motion.js");
+  for (const n of [5, 8, 9, 14]) assert.ok(Math.max(...block(n).map((c) => c[0])) <= 3, `${n} cards are at most 4 across`);
+  assert.equal(block(9).length, 9);
 });

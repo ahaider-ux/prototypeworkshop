@@ -19,10 +19,10 @@ import * as G from "./gfx.js";
 import { thumbJob } from "./canvas.js";
 import { spiral, block, bezier, rubber, fitIn } from "./motion.js";
 
-const CW = 400, // one cell: a card (320 × 264) and an 80 gutter
-  CH = 344,
+const CW = 352, // one cell: a card (320 × 264) and its gutter (32 across, 40 down): four fit a laptop
+  CH = 304,
   WRAP_MIN = 7, // fewer prototypes than this and the canvas has edges instead of repeating them
-  SWELL = 1.05, // the card under the pointer
+  SWELL = 1.02, // the card under the pointer: barely
   LEAVE_MS = 340; // opening one: the field clears and it glides to the middle
 const DECAY = 325; // ms: how quickly a fling slows down (the time constant iOS scrolling uses)
 const EASE = [0.32, 0.72, 0, 1]; // glides: quick to start, long soft landing
@@ -58,7 +58,9 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
     // one sequence: the prototypes (most recent in the middle), then the placeholders and guides
     const total = list.length + actions.length;
     const idxOf = (i) => (i < list.length ? i : -(i - list.length + 1));
-    wrap = total >= WRAP_MIN;
+    // the field only repeats when there are enough prototypes to fill it; otherwise each thing is
+    // there once, in a block that fits the view
+    wrap = list.length >= WRAP_MIN;
     slotOf = new Map();
     if (wrap) {
       k = Math.ceil(Math.sqrt(total));

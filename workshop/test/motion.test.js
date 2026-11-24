@@ -75,3 +75,11 @@ test("readableZoom: zooms in only when text is too small to edit", async () => {
   assert.equal(readableZoom(0, 5), null);
   assert.equal(readableZoom(1, NaN), null);
 });
+
+test("openOn: a prototype opens on its first screen when all of them would be too small to read", async () => {
+  const { openOn } = await import("../ui/motion.js");
+  const b = [{ x: 2000, y: 0, w: 1728, h: 1117 }, { x: 0, y: 10, w: 1728, h: 1117 }, { x: 0, y: 1400, w: 1728, h: 1117 }];
+  assert.equal(openOn(b, 0.14), b[1], "the top row's leftmost");
+  assert.equal(openOn(b, 0.3), null, "readable: show them all");
+  assert.equal(openOn([], 0.1), null);
+});

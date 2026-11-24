@@ -2,7 +2,7 @@
 
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural, pageName, folderLabel } from "./state.js";
 import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented, skeleton, loadingToast, pendingButton, loadPage, apartUrl, initTips } from "./lib.js";
-import { setTool, addLink, addPicture, initCanvas, sync, fit, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
+import { setTool, addLink, addPicture, initCanvas, sync, fit, fitOpen, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
 import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff } from "./panels.js";
 import { rulesFor, loadOverrides } from "./styles.js";
 import { loadRecipes } from "./recipes.js";
@@ -217,7 +217,7 @@ function openPage(page) {
     S.compare = false;
     if (S.sel) clearSel();
     sync();
-    if (!restoreCam(page)) requestAnimationFrame(() => fit({ ms: 0 }));
+    if (!restoreCam(page)) requestAnimationFrame(() => fitOpen({ ms: 0 }));
     loadDiff(page);
     for (const e of envList()) if (e.parent === page) loadDiff(e.id);
   }
@@ -281,8 +281,9 @@ function homeItems(rs) {
     })
     .sort((a, b) => String(b.edited || "").localeCompare(String(a.edited || "")));
 }
-// the guides that sit on the home canvas, by their step in the Learn dialog
-const HOME_GUIDES = [0, 2, 3, 4, 5];
+// the guides that sit on the home canvas, by their step in the Learn dialog: the welcome and the
+// three things Atelier is for (mark it up, hand it to an agent, review and merge)
+const HOME_GUIDES = [0, 3, 4, 5];
 function renderHomeCanvas(rs) {
   const el = homeMain();
   const items = homeItems(rs);

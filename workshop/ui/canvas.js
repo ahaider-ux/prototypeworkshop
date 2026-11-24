@@ -11,7 +11,7 @@ import * as G from "./gfx.js";
 import { record, rid, remap, undo as histUndo, redo as histRedo } from "./history.js";
 import { PENS, INKS, SIZES, outline, touches } from "./ink.js";
 import { pickLayer } from "./pick.js";
-import { readableZoom } from "./motion.js";
+import { readableZoom, openOn } from "./motion.js";
 
 const B = new Map(); // board item id → {id, el, hit, frame, live, ready} — frame only while mounted live
 const NEL = new Map(); // note/box item id → element
@@ -228,6 +228,17 @@ export function fitRect(r, { ms = 320, maxZ = 1, pad = 48 } = {}) {
 }
 export function fit(opts) {
   fitRect(pageBounds(), { maxZ: 0.6, ...opts });
+}
+// the first look at a prototype: all its screens when they fit at a readable size, else its first
+// screen (Fit, ⇧1, still shows everything)
+export function fitOpen(opts) {
+  const r = pageBounds();
+  if (!r) return;
+  const v = viewRect();
+  const zAll = Math.min((v.x1 - v.x0 - 96) / (r.x1 - r.x0 || 1), (v.y1 - v.y0 - 96) / (r.y1 - r.y0 || 1));
+  const first = openOn(pageBoards(), zAll);
+  if (!first) return fit(opts);
+  fitRect({ x0: first.x, y0: first.y - 40, x1: first.x + first.w, y1: first.y + first.h }, { maxZ: 1, pad: 32, ...opts });
 }
 // Notes are counter-scaled so they stay readable when zoomed out: size them for the zoom the boards
 // alone would fit at, or a fit would cut them off.
@@ -1226,11 +1237,12 @@ export function drawHud() {
     l.style.left = s.x + "px";
     l.style.top = s.y + "px";
     l.style.width = Math.max(80, s.w) + "px";
-    // Run shows on the frame under the pointer or selected; Stop stays on the one running
+    // Run is always there, on every frame's title (nothing appears or disappears as the pointer
+    // moves); it's raised on the frame under the pointer or selected, and is Stop on the one running
     const running = S.playing === it.id;
-    const runOn = !it.ghost && s.w >= 120 && (running || hoverBoard === it.id || S.sel?.item === it.id);
     const run = l.querySelector(".brun");
-    run.classList.toggle("on", runOn);
+    run.classList.toggle("on", !it.ghost && s.w >= 120);
+    run.classList.toggle("hot", running || hoverBoard === it.id || S.sel?.item === it.id);
     run.classList.toggle("stop", running);
     run.classList.toggle("icon", s.w < 200);
     const rl = running ? "Stop" : "Run";

@@ -16,9 +16,10 @@ export function spiral(n) {
   }
   return out.slice(0, n);
 }
-// a few cells in reading order, in as few rows as reads well: up to 3 in one row, then two rows
+// a few cells in reading order, in as few rows as reads well: up to 3 in one row, then two rows,
+// and never wider than 4 (more rows instead), so the block fits a laptop screen
 export function block(n) {
-  const cols = n <= 3 ? n : Math.ceil(n / 2);
+  const cols = n <= 3 ? n : Math.min(4, Math.ceil(n / 2));
   return Array.from({ length: n }, (_, i) => [i % cols, Math.floor(i / cols)]);
 }
 // cubic-bezier easing (x → y), solved with a few Newton steps
@@ -65,4 +66,14 @@ export function fitIn(w, h, W, H) {
 export function readableZoom(z, shown, maxZ = 4) {
   if (!(z > 0) || !(shown > 0) || shown >= 11) return null;
   return Math.min(maxZ, z * (14 / shown));
+}
+
+// Opening a prototype: when every screen fits at a size you can read (30% or more) show them all;
+// otherwise start on the first screen (the top row's leftmost), so what opens is a screen, not a
+// strip of thumbnails. boards: [{ x, y, w, h }]. zAll: the zoom at which everything fits.
+export function openOn(boards, zAll) {
+  if (!boards.length || zAll >= 0.3) return null;
+  const top = Math.min(...boards.map((b) => b.y));
+  const row = boards.filter((b) => b.y <= top + b.h / 2);
+  return row.reduce((a, b) => (b.x < a.x ? b : a));
 }

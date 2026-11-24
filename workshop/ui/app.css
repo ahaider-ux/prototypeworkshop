@@ -31,7 +31,7 @@
   --bg-error:#d92d20;--bg-error-hover:#b42318;--bg-overlay:rgba(18,18,18,.22);--accent-subtle:#eef3fe;
   --tag-grey:rgba(0,0,0,.05);--tag-info-bg:#e8effe;--tag-success-bg:#e2f4ec;
   --border-subtle:rgba(0,0,0,.08);--border-crumb:rgba(0,0,0,.08);--border-default:rgba(0,0,0,.14);--border-white:rgba(255,255,255,.9);
-  --switch-off:#dcdcdc;--switch-on:#2f6df6;--ring-default:rgba(47,109,246,.5);--menu-hover:rgba(0,0,0,.045);
+  --switch-off:#dcdcdc;--switch-on:#121212;--ring-default:rgba(47,109,246,.5);--menu-hover:rgba(0,0,0,.045);
   --on-primary:#ffffff;--on-accent:#fff;--tip-bg:#121212;--tip-ink:#ffffff;--knob:#fff;
   --note-bg:#fff6d6;--note-edge:#f1e2a6;--guide:#f2482a;
   --i-paper:#fafafa;--i-ink:#121212;--i-red:#e03131;--i-orange:#f76707;--i-yellow:#ffd43b;--i-lime:#dcefb4;--i-green:#2f9e44;--i-greenl:#b9dbb0;--i-violet:#7048e8;--i-peri:#c3cffb;--i-perid:#2c3e9e;--i-lav:#e4e1fb;--i-peach:#ffd9bd;--i-sky:#d7e6f7;--i-grey:#d6d6da;--i-greyl:#ececee;--i-white:#fff;--skel:#efefef;--skel-hi:#f8f8f8;
@@ -63,7 +63,7 @@
   --bg-secondary:rgba(255,255,255,.07);--bg-secondary-hover:rgba(255,255,255,.11);--bg-primary:#f2f2f2;--bg-primary-hover:#d9d9d9;--bg-overlay:rgba(0,0,0,.6);
   --accent-subtle:rgba(107,155,255,.14);--tag-grey:rgba(255,255,255,.08);--tag-info-bg:rgba(107,155,255,.18);--tag-success-bg:rgba(79,207,152,.16);
   --border-subtle:rgba(255,255,255,.08);--border-crumb:rgba(255,255,255,.08);--border-default:rgba(255,255,255,.15);--border-white:rgba(255,255,255,.06);
-  --switch-off:#3a3a3a;--switch-on:#6b9bff;--ring-default:rgba(107,155,255,.6);
+  --switch-off:#3a3a3a;--switch-on:#f2f2f2;--ring-default:rgba(107,155,255,.6);
   --on-primary:#121212;--on-accent:#fff;--tip-bg:#f2f2f2;--tip-ink:#121212;--knob:#fff;
   --note-bg:#3a3420;--note-edge:#4d4428;--guide:#ff6b4a;
   --i-paper:#fafafa;--i-ink:#121212;--i-red:#e03131;--i-orange:#f76707;--i-yellow:#ffd43b;--i-lime:#dcefb4;--i-green:#2f9e44;--i-greenl:#b9dbb0;--i-violet:#7048e8;--i-peri:#c3cffb;--i-perid:#2c3e9e;--i-lav:#e4e1fb;--i-peach:#ffd9bd;--i-sky:#d7e6f7;--i-grey:#d6d6da;--i-greyl:#ececee;--i-white:#fff;--skel:#232323;--skel-hi:#2c2c2c;
@@ -550,16 +550,17 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .blabel.ghost{cursor:default;color:var(--text-placeholder)}
 .blabel .flash{color:var(--text-accent);opacity:0;transition:opacity 300ms ease}
 .blabel .flash.on{opacity:1}
-/* Run, at the far end of a frame's title row: on the frame under the pointer or selected; Stop (the
-   accent pill) stays on the frame that's running */
-.brun{margin-left:auto;flex-shrink:0;height:22px;display:inline-flex;align-items:center;gap:4px;padding:0 8px 0 6px;border-radius:99px;font:500 12px/1 var(--fakt);color:var(--text-primary);background:var(--raise);box-shadow:var(--sh-btn);opacity:0;pointer-events:none;transition:opacity 150ms var(--ease-smooth),background-color 120ms ease}
-.brun.on{opacity:1;pointer-events:auto}
+/* Run, at the far end of every frame's title row: quiet until its frame is under the pointer or
+   selected, then a raised pill; Stop (the ink pill) on the frame that's running */
+.brun{margin-left:auto;flex-shrink:0;height:22px;display:none;align-items:center;gap:4px;padding:0 8px 0 6px;border-radius:99px;font:500 12px/1 var(--fakt);color:var(--text-secondary);transition:background-color 120ms ease,color 120ms ease}
+.brun.on{display:inline-flex}
+.brun.hot,.brun:hover{color:var(--text-primary);background:var(--raise);box-shadow:var(--sh-btn)}
 .brun:hover{box-shadow:var(--sh-btn-hover)}
 .brun:active{transform:scale(.97)}
 .brun .ic{width:12px;height:12px}
 .brun .ic-stop,.brun.stop .ic-run{display:none}
 .brun.stop .ic-stop{display:inline-flex}
-.brun.stop{background:var(--text-accent);color:var(--on-accent);box-shadow:none}
+.brun.stop{background:var(--raise-ink);color:var(--on-primary);box-shadow:none}
 .brun.icon{padding:0;width:22px;justify-content:center}
 .brun.icon .rl{display:none}
 .brun:focus-visible{outline:2px solid var(--ring-default);outline-offset:1px}
@@ -727,27 +728,27 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .lhd .ttl b,.shd{font-weight:600}
 .lrow,.srow,.pg{font-size:12px}
 .pg .m{font:500 12px/1 var(--fakt);color:var(--text-placeholder)}
-.pg .m.ch{color:var(--text-accent)}
+.pg .m.ch{color:var(--text-secondary)}
 .banner b{font-weight:600}
 .tab{font-size:12px}
 /* labels inside fields sit on the field grey: secondary ink keeps them readable */
 .xy i,.nf .l,.nfdd .l{color:var(--text-secondary)}
 
-/* ═══ Glass — iOS 27-style chrome: content runs underneath, bars and panels float above it ═══
-   Clearer than frosted, with a darker rim for separation and a bright specular top edge.
+/* ═══ Floating chrome: bars and panels float above the canvas ═══
+   Nearly solid, with a hairline rim and a soft shadow: no bright top edge, no saturation boost.
    Appearance → Glass sets how clear (data-glass on <html>). */
 :root{
-  --glass-a:.78;--glass-blur:saturate(1.8) blur(24px);
+  --glass-a:.94;--glass-blur:blur(20px);
   --glass-bg:rgba(255,255,255,var(--glass-a));
   --glass-rim:0 0 0 .5px rgba(0,0,0,.1);
-  --glass-spec:inset 0 1px 0 rgba(255,255,255,.85),inset 0 0 0 .5px rgba(255,255,255,.5);
+  --glass-spec:0 0 0 0 transparent;
   --glass-shadow:0 8px 28px rgba(0,0,0,.07),0 1px 3px rgba(0,0,0,.05);
   --glass:var(--glass-rim),var(--glass-spec),var(--glass-shadow);
   --r-panel:20px;--gutter:8px}
 :root[data-ltheme="dark"]{
-  --glass-a:.72;--glass-bg:rgba(30,30,30,var(--glass-a));
+  --glass-a:.92;--glass-bg:rgba(30,30,30,var(--glass-a));
   --glass-rim:0 0 0 .5px rgba(0,0,0,.6);
-  --glass-spec:inset 0 1px 0 rgba(255,255,255,.12),inset 0 0 0 .5px rgba(255,255,255,.08);
+  --glass-spec:inset 0 0 0 .5px rgba(255,255,255,.08);
   --glass-shadow:0 10px 32px rgba(0,0,0,.45),0 1px 3px rgba(0,0,0,.3)}
 :root[data-glass="clear"]{--glass-a:.6}
 :root[data-glass="frosted"]{--glass-a:.92}
@@ -788,6 +789,11 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .tb .ib32,.tb .tbtx{border-radius:99px}
 .tb .ib32{width:36px;height:36px}
 .tb .tbtx{height:36px;padding:0 14px 0 10px}
+/* Run lives in each frame's title; the bar only offers Stop while a frame is running. Asking an
+   agent is the bar's one main action: the ink pill */
+.tb #interactBtn:not([aria-pressed="true"]){display:none}
+.tb #askBtn{background:var(--raise-ink);color:var(--on-primary);margin-left:4px}
+.tb #askBtn:hover{background:var(--raise-ink);opacity:.88}
 .banner .dbtn.sm,.banner .createbtn.sm,.banner .ghbtn.sm{height:32px;border-radius:99px;padding:0 12px}
 .ttabs button,.tab{border-radius:99px}
 .tab{padding:0 6px 0 12px} /* the close button sits in the right padding: 12 to the text, 6 + 20 to the edge */
@@ -1056,27 +1062,27 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .ltabs .sp{flex:1}
 .ltabs [data-t]{position:relative;z-index:1;height:32px;min-width:32px;display:inline-flex;align-items:center;justify-content:center;padding:0 8px;border-radius:99px;color:var(--text-secondary);font:500 12px/1 var(--fakt);white-space:nowrap;transition:color 250ms var(--ease-smooth),background-color 120ms ease}
 .ltabs [data-t] i{width:16px;height:16px;display:grid;place-items:center;flex-shrink:0}
-/* a label opens to its own measured width (--lbw, set by panels.js), not a max-width: opening and
-   closing then take the same path at the same speed as the pill, with no dead time and no snap */
-.ltabs{--tab-move:280ms var(--ease-io)} /* starts gently: a strong ease-out covers a third of a long move in one frame, which reads as a jump */
-.ltabs [data-t] .lb{width:0;opacity:0;overflow:hidden;margin-left:0;transition:width var(--tab-move),margin-left var(--tab-move),opacity 150ms ease-in-out}
+/* three tabs, each always showing its name, sharing the row evenly: nothing opens, closes or shifts
+   when you pick one; only the thumb moves */
+.ltabs{--tab-move:220ms var(--ease-io)}
+.ltabs [data-t]{flex:1 1 0}
+.ltabs [data-t] .lb{margin-left:6px}
 .ltabs [data-t][aria-selected="true"]{color:var(--text-primary)}
-.ltabs [data-t][aria-selected="true"] i .ic{color:var(--text-accent)}
-.ltabs [data-t][aria-selected="true"] .lb{width:var(--lbw,auto);opacity:1;margin-left:6px}
+/* a tab's sections, as a switch under the tabs */
+.lsub{flex-shrink:0;padding:8px 8px 0}
+.lsub .segds{width:100%}
 .ltabs [data-t]:not([aria-selected="true"]):hover{color:var(--text-primary);background:color-mix(in srgb,var(--bg-hover) 60%,transparent)}
 .ltabs [data-t]:active{transform:scale(.97)}
 .ltabs [data-t]:focus-visible{outline:2px solid var(--ring-default);outline-offset:1px}
-.ltabs [data-t] .tct{position:absolute;top:0;right:0;min-width:14px;height:14px;padding:0 3px;font-size:10px;line-height:14px;border-radius:99px;background:var(--text-accent);color:var(--on-accent);box-shadow:0 0 0 2px var(--glass-bg,var(--bg-layer))}
-.ltpill{position:absolute;z-index:0;top:8px;left:0;height:32px;width:0;border-radius:99px;background:var(--bg-hover);box-shadow:inset 0 0 0 .5px var(--border-subtle);pointer-events:none;transition:transform var(--tab-move),width var(--tab-move);will-change:transform,width}
-/* the content under a tab slides in from the side you moved towards, through a light blur */
-@keyframes ltab-in{from{opacity:0;transform:translateX(var(--ltab-dx,8px));filter:blur(2px)}to{opacity:1;transform:none;filter:none}}
-.pbody.ltab-in,.lhd.ltab-in{animation:ltab-in 250ms var(--ease-smooth)}
+.ltabs [data-t] .tct{position:absolute;top:0;right:0;min-width:14px;height:14px;padding:0 3px;font-size:10px;line-height:14px;border-radius:99px;background:var(--raise-ink);color:var(--on-primary);box-shadow:0 0 0 2px var(--glass-bg,var(--bg-layer))}
+.ltpill{position:absolute;z-index:0;top:8px;left:0;height:32px;width:0;border-radius:99px;background:var(--raise);box-shadow:var(--sh-btn);pointer-events:none;transition:transform var(--tab-move),width var(--tab-move);will-change:transform,width}
+/* the content under a tab fades in; it doesn't slide or blur */
+@keyframes ltab-in{from{opacity:0}to{opacity:1}}
+.pbody.ltab-in,.lhd.ltab-in{animation:ltab-in 120ms ease-out}
 @media (prefers-reduced-motion:reduce){
-  .ltpill,.ltabs [data-t],.ltabs [data-t] .lb{transition:none!important}
-  @keyframes ltab-in{from{opacity:0}to{opacity:1}}
+  .ltpill,.ltabs [data-t]{transition:none!important}
 }
-.ltabs [data-t]{flex-shrink:0}
-@media(max-width:1180px){.ltabs{padding:0 6px;gap:1px}.ltabs [data-t]{min-width:30px;padding:0 7px}.ltpill{top:8px}}
+@media(max-width:1180px){.ltabs{padding:0 6px;gap:1px}.ltabs [data-t]{padding:0 7px}.ltpill{top:8px}}
 
 /* ---------- first-run intro (ui/intro.js): flat paper, the app's own pieces, the same in both themes ---------- */
 .intro{position:fixed;inset:0;z-index:1000;overflow:hidden;background:transparent;color:var(--i-ink);font-family:var(--fakt);cursor:default;transition:opacity 400ms var(--ease-smooth),transform 400ms var(--ease-smooth)}
@@ -1089,7 +1095,6 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .intro.land{pointer-events:none}
 .tlogo.landing .pinmark,.tlogo.landing .wm{visibility:hidden}
 .tlogo.pinin .pinmark{animation:i-pinin 300ms var(--ease-spring) both}
-.tlogo.pinin .pinmark .eye{animation:i-blink 180ms ease-in-out 420ms}
 @keyframes i-pinin{from{opacity:0;transform:scale(.4)}}
 @media (prefers-reduced-motion:reduce){.tlogo.pinin .pinmark,.tlogo.pinin .pinmark .eye{animation:none}}
 /* index.html sets data-intro before first paint when the intro is due: the app stays hidden until it covers it */
@@ -1130,16 +1135,10 @@ html[data-intro] .app{visibility:hidden}
 .ip.p-cursor svg{width:26px;height:26px;fill:var(--i-orange);stroke:var(--i-white);stroke-width:1.2;stroke-linejoin:round}
 .ip.p-cursor b{margin-top:18px;padding:3px 9px;border-radius:99px;font-size:13px;font-weight:500;color:var(--i-white);background:var(--i-orange)}
 .ip.p-cursor.go{translate:-506px 36px} /* arrives at the frame's corner, beside the empty state, not on it */
-/* the mark: a comment pin with an eye; it blinks */
+/* the mark: a comment pin with an eye, in one flat colour (no gloss, rim or shadow) */
 .pinmark{display:block;width:100%;height:100%;overflow:visible;--m-b:var(--text-accent);--m-e:var(--i-white)}
 .pinmark .pb{fill:var(--m-b)}
-/* depth: light from the top-left, shade low on the right, a bright rim on the top edge, and the
-   eye set in (shaded at its top). The gradients are white and black at low opacity (index.html),
-   so they suit any colour the pin takes */
-.pinmark .pl{fill:url(#pm-light)}
-.pinmark .ps{fill:url(#pm-shade)}
-.pinmark .pr{fill:none;stroke:url(#pm-rim);stroke-width:.8}
-.pinmark .ei{fill:url(#pm-eye)}
+.pinmark .pl,.pinmark .ps,.pinmark .pr,.pinmark .ei{display:none} /* the old depth layers: the mark is flat */
 .pmdefs{position:absolute;width:0;height:0;overflow:hidden}
 .pinmark .ew{fill:var(--m-e)}
 .pinmark .eye{transform-box:fill-box;transform-origin:50% 50%}
@@ -1163,8 +1162,8 @@ html[data-intro] .app{visibility:hidden}
 .ot.red{background:var(--i-red);color:var(--i-white)}
 .ot.ink{background:var(--i-ink);color:var(--i-white)}
 .ot.white{background:var(--i-white);color:var(--i-ink);box-shadow:inset 0 0 0 1px var(--border-subtle)}
-.ibrand{display:none;place-items:center;background:linear-gradient(180deg,color-mix(in srgb,var(--text-accent) 82%,#fff) 0%,var(--text-accent) 62%);box-shadow:0 18px 48px color-mix(in srgb,var(--text-accent) 34%,transparent),inset 0 1px 0 rgba(255,255,255,.28)} /* the brand tile, lit from above, glowing in its blue */
-.ibrand .pinmark{width:56%;height:56%;--m-b:var(--i-white);--m-e:var(--text-accent);filter:drop-shadow(0 6px 9px color-mix(in srgb,color-mix(in srgb,var(--text-accent) 60%,black) 45%,transparent))} /* a white pin standing on its tile */
+.ibrand{display:none;place-items:center;background:var(--text-accent)} /* the brand tile: flat, in its blue */
+.ibrand .pinmark{width:56%;height:56%;--m-b:var(--i-white);--m-e:var(--text-accent)} /* a white pin standing on its tile */
 .itile.brand .ibrand{display:grid}
 .itile.brand>i{display:none}
 .itile.grow{width:190px;height:190px;margin:-95px 0 0 -95px;transition:width 300ms var(--ease-spring),height 300ms var(--ease-spring),margin 300ms var(--ease-spring)}
@@ -1173,12 +1172,11 @@ html[data-intro] .app{visibility:hidden}
 .itile.f1 .ibrand{background:var(--i-yellow)}.itile.f1 .pinmark{--m-b:var(--i-ink);--m-e:var(--i-white)}
 .itile.f2{width:160px;height:160px;margin:-80px 0 0 -80px}.itile.f2 .ibrand .pinmark{width:58%;height:58%}.itile.f2 .ibrand{background:var(--i-red)}.itile.f2 .pinmark{--m-b:var(--i-white);--m-e:var(--i-red)}
 .itile.f3{width:124px;height:124px;margin:-62px 0 0 -62px}.itile.f3 .ibrand .pinmark{width:62%;height:62%}.itile.f3 .ibrand{background:var(--i-ink)}.itile.f3 .pinmark{--m-b:var(--i-yellow);--m-e:var(--i-ink)}
-.itile.f4{width:96px;height:96px;margin:-48px 0 0 -48px}.itile.f4 .ibrand .pinmark{width:75%;height:75%;--m-b:var(--text-accent);--m-e:var(--i-white);filter:drop-shadow(0 8px 12px color-mix(in srgb,var(--text-accent) 30%,transparent))} /* 72px and blue: exactly the lone pin that follows, so nothing jumps */.itile.f4 .ibrand{background:var(--i-white);box-shadow:inset 0 0 0 1px var(--border-subtle)}
+.itile.f4{width:96px;height:96px;margin:-48px 0 0 -48px}.itile.f4 .ibrand .pinmark{width:75%;height:75%;--m-b:var(--text-accent);--m-e:var(--i-white)} /* 72px and blue: exactly the lone pin that follows, so nothing jumps */.itile.f4 .ibrand{background:var(--i-white);box-shadow:inset 0 0 0 1px var(--border-subtle)}
 /* the lockup: "atelıer", and the pin that becomes its dot */
 .imk{position:absolute;left:50%;top:50%;width:72px;height:72px;margin:-36px 0 0 -36px;display:none;transition:transform 340ms var(--ease-spring)}
 .intro.lock .itile{display:none}
 .intro.lock .imk{display:block}
-.imk .pinmark{filter:drop-shadow(0 8px 12px color-mix(in srgb,var(--text-accent) 30%,transparent))}
 .intro.typing .imk>i,.intro.dotted .imk>i{display:none}
 .ilock{position:absolute;left:50%;top:50%;transform:translate(-50%,-38%);display:none;align-items:baseline;font:700 136px/1 var(--display);letter-spacing:-.03em;color:var(--i-ink)} /* the header's spacing: nothing shifts when it flies there */
 .intro.lock .ilock{display:flex}
@@ -1196,9 +1194,8 @@ html[data-intro] .app{visibility:hidden}
 .intro.still .imk{display:block}
 .intro.still .imk>i{display:none}
 /* the header lockup: the pin, and the name in lowercase, heavy and tight */
-.tlogo .amark.pinmark{width:20px;height:20px;translate:0 -1px;filter:drop-shadow(0 1px 1.5px color-mix(in srgb,var(--m-b) 45%,transparent))} /* optically centred on the word: ascenders to baseline, not its line box */
+.tlogo .amark.pinmark{width:20px;height:20px;translate:0 -1px} /* optically centred on the word: ascenders to baseline, not its line box */
 .tlogo b.wm{font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:-.03em}
-.tlogo:hover .pinmark .eye{animation:i-blink 180ms ease-in-out}
 
 /* ═══ Control scale — the last word on padding, so every control in every panel matches ═══
    Pills: 32 tall → 14 each side; 28 tall → 12; 24 tall (text links, tags with words) → 8.
@@ -1260,16 +1257,14 @@ html[data-intro] .app{visibility:hidden}
 /* project cards: the picture, the name, when it was edited (size set by home.js); a card under the
    pointer swells a little (after design.cash.app), slower in than out */
 .htile{position:absolute;left:0;top:0;display:flex;flex-direction:column;gap:10px;padding:8px;border-radius:18px;background:var(--bg-layer);box-shadow:var(--sh-card);text-align:left;cursor:inherit;transition:scale 180ms var(--ease-smooth),box-shadow 180ms var(--ease-smooth),translate 180ms var(--ease-smooth)}
-.htile.hot{z-index:2;scale:1.05;translate:0 -2px;box-shadow:var(--sh-card-hi);transition-duration:240ms}
-.hcanvas:not(.grabbing) .htile.hot:active{scale:1.03;transition-duration:120ms}
+.htile.hot{z-index:2;scale:1.02;box-shadow:var(--sh-card-hi)}
+.hcanvas:not(.grabbing) .htile.hot:active{scale:1.01;transition-duration:120ms}
 .htt{position:relative;display:block;width:304px;height:190px;flex-shrink:0;border-radius:10px;overflow:hidden;background:var(--bg-secondary)}
 .htt canvas{display:block;width:100%;height:100%}
 .htt::before{content:"";position:absolute;inset:0;z-index:1;border-radius:inherit;box-shadow:inset 0 0 0 1px var(--border-subtle);pointer-events:none} /* the picture's edge, over white pages */
 .htile:focus-visible{box-shadow:0 0 0 2px var(--ring-default)}
-/* a picture on its way: a quiet pulse in the skeleton tones, under a name you can already read */
+/* a picture on its way: a still skeleton tone, under a name you can already read */
 .htile.waiting .htt{background:var(--skel)}
-.htile.waiting .htt::after{content:"";position:absolute;inset:0;background:var(--skel-hi);opacity:0;animation:hpulse 1100ms ease-in-out infinite alternate}
-@keyframes hpulse{to{opacity:.8}}
 .htile.fresh canvas{animation:hfresh 280ms ease-out}
 @keyframes hfresh{from{opacity:0}}
 .htile.noboard .htt::after{content:"No screens yet";position:absolute;inset:0;display:grid;place-items:center;font-size:12px;color:var(--text-placeholder)}
@@ -1312,20 +1307,18 @@ html[data-intro] .app{visibility:hidden}
 /* opening one: the field clears, it glides to the middle and swells, then the editor takes over */
 .hcanvas.leaving .htile:not(.chosen){opacity:0;transition:opacity 200ms ease-out}
 .htile.chosen{z-index:3}
-.htile.chosen{scale:1.12;box-shadow:0 0 0 1px var(--border-default),var(--sh-md);transition:scale 340ms var(--ease-io)}
+.htile.chosen{scale:1.04;box-shadow:var(--sh-card-hi);transition:scale 340ms var(--ease-io)}
 .hcanvas.leaving .hcur,.hcanvas.leaving .hhint{opacity:0;transition:opacity 150ms ease-out}
-/* coming back: the one you opened settles and the field gathers round it */
-.hcanvas.return .htile:not(.hback){animation:hreturn 320ms ease-out var(--d,0ms) both}
-.hcanvas.return .htile.hback{animation:hsettle 420ms var(--ease-smooth) both}
+/* coming back: the one you opened is there; the rest fade in */
+.hcanvas.return .htile:not(.hback){animation:hreturn 200ms ease-out both}
 @keyframes hreturn{from{opacity:0}}
-@keyframes hsettle{from{scale:1.12}}
 /* pointed out from the bar */
 .htile.ping{animation:hping 900ms var(--ease-smooth)}
 @keyframes hping{30%{box-shadow:0 0 0 2px var(--text-accent),0 0 0 8px var(--ring-default)}100%{box-shadow:0 0 0 1px var(--border-subtle),var(--sh-sm)}}
-/* the first look: tiles arrive from the middle out */
+/* the first look: the cards fade in together */
 .hcanvas.held .htile{opacity:0}
-.hcanvas.arrive .htile{animation:harrive 460ms var(--ease-smooth) var(--d,0ms) both}
-@keyframes harrive{from{opacity:0;scale:.94}to{opacity:1;scale:1}}
+.hcanvas.arrive .htile{animation:harrive 200ms ease-out both} /* together, a plain fade: no cascade */
+@keyframes harrive{from{opacity:0}to{opacity:1}}
 .hhint{position:absolute;left:50%;bottom:84px;transform:translateX(-50%);height:28px;display:inline-flex;align-items:center;padding:0 12px;border-radius:99px;background:var(--raise);box-shadow:var(--sh-btn);font:400 12px/1 var(--fakt);color:var(--text-secondary);pointer-events:none;transition:opacity 400ms ease}
 .hcanvas.used .hhint{opacity:0}
 
@@ -1349,9 +1342,9 @@ html[data-intro] .app{visibility:hidden}
 .cnmenu button{border-radius:10px}
 .toast{border-radius:16px}
 .md{border-radius:20px}
-/* a status light: off is a quiet grey dot, on glows in its colour */
+/* a status light: off is a quiet grey dot, on is its colour (no glow) */
 .hdot{width:7px;height:7px}
-.hdot.on{box-shadow:0 0 0 2px color-mix(in srgb,var(--text-success) 18%,transparent),0 0 8px color-mix(in srgb,var(--text-success) 70%,transparent)}
+.hdot.on{box-shadow:none}
 /* headings: Inter tightens as it grows */
 .md-h h2,.home h1,.lhd .ttl b{letter-spacing:-.02em}
 .home h1{letter-spacing:-.02em}

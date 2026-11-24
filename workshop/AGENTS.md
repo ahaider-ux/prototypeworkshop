@@ -36,8 +36,8 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   white surfaces lifted off a soft studio light (`--studio` behind the home, a plain neutral canvas),
   hairlines and soft layered shadows; fills, hovers and hairlines are translucent neutral tints;
   controls are flat: white pills with a hairline (`--raise`, `--sh-btn`) and the flat ink pill for
-  the one main action (`--raise-ink`, `--sh-ink`); no gloss, no gradients on controls; status lights glow; every control's surface, edge and shadow is set once,
-  in the Skins block at the end of `ui/app.css`; no texture or grain; fields are white with a hairline; meta tags are outlined; a tool-blue accent for selection and links only; empty states carry a
+  the one main action (`--raise-ink`, `--sh-ink`); no gloss, no gradients, no glow: the mark is one flat colour, status lights are plain dots, and nothing blinks or pulses on its own; every control's surface, edge and shadow is set once,
+  in the Skins block at the end of `ui/app.css`; no texture or grain; fields are white with a hairline; meta tags are outlined; a tool-blue accent for the mark, selection on the canvas and links only (switches and badges are ink); empty states carry a
   hand-drawn mark; shapes: what you press is a pill and icon buttons are circles, list rows are
   rounded 8, fields 10, sheets 16 and panels 20; padding follows the control scale at the end
   of `ui/app.css` (32-tall pills 14 a side, 28-tall 12, 24-tall 8, a leading icon takes 2 off the left); type in
@@ -54,8 +54,9 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   `--ease-spring`), and follows the animations.dev bar: nothing animates on keyboard or
   high-frequency actions, menus 180ms in and 120ms out from their trigger, press `scale(.97)`, no
   hover scaling (one exception: a home-canvas card swells under the pointer, after
-  design.cash.app), and reduced motion keeps colour and opacity only. Chrome is glass after iOS 27
-  (`--glass-*` tokens: floating panels, capsule toolbar and banner, glass menus and dialogs); the
+  design.cash.app), and reduced motion keeps colour and opacity only. Chrome floats over the canvas
+  (`--glass-*` tokens: floating panels, capsule toolbar and banner, menus and dialogs), nearly solid
+  with a hairline rim and a soft shadow, no bright top edge; the
   inspector's controls follow DialKit (number bars with the label and value inside, `numField` in
   `ui/panels.js`). Motion timing follows transitions.dev's tokens (250ms smooth-out
   `cubic-bezier(.22,1,.36,1)` for tabs and slides, 150ms for appear, 2px blur on content swaps).
@@ -83,9 +84,10 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   bars, in Atelier's glass: the editor's tool bar): a capsule at the bottom holding the sections as
   tabs with a raised thumb on the selected one, and Import as the one ink button. It is built once;
   the main area under it changes with the section (`#/`, `#/prototypes`, `#/learn`, `#/activity`)
-  and only the main area re-renders. Home (`#/`) is the endless canvas, edge to edge: your
-  prototypes (most recent in the middle), placeholder cards that do what they say (add a prototype,
-  connect a folder, connect your AI tool) and the guides. Your prototypes are the inverse cards
+  and only the main area re-renders. Home (`#/`) is a canvas, edge to edge: your
+  prototypes first, then placeholder cards that do what they say (add a prototype, connect a
+  folder, connect your AI tool) and four guides, each shown once in a block that fits the view; the
+  field only repeats once there are seven or more prototypes to fill it. Your prototypes are the inverse cards
   (`--raise-ink`, `--sh-card-inv`) so they never read as one of the guides. Cards are lifted off the canvas
   (`--sh-card`, `--sh-card-hi`); over one, the pointer's dot opens into a glass label saying what a
   click does ("Open", "Start", "Connect", "Learn") and trails the pointer by a hair. Prototypes
@@ -102,6 +104,14 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   pass-through wrappers are skipped. Run (at the far end of a frame's title row, on the frame under
   the pointer or selected; P for the selected one) makes the frame's prototype respond to clicks;
   it turns into Stop while it runs.
+- **What Atelier is for, and one place for each thing.** See the real prototype, edit it like a
+  design file, and hand changes to an agent that works on a branch you review and merge. The editor
+  is laid out around that: a prototype opens on its first screen at a readable size (`fitOpen`; Fit
+  shows them all); the left panel has three tabs that always show their names, each with sections
+  (`GROUPS` in `ui/panels.js`: Layers · Screens; Agent's Requests · Recipes; Activity's Updates ·
+  Notes · Versions); branches are listed once, in Layers (the bar over the canvas appears only on a
+  branch, with Compare and Review and merge); Run is in every frame's title, and the tool bar's one
+  main action is Ask agent. Don't add a second home for something that already has one.
 - **No dead ends.** Every guide step, empty state and dialog ends in something real to do on the
   person's own work (the Learn steps' `try` actions in `ui/app.js`). Connecting an AI tool shows the
   setup for each tool and a live status that turns on as soon as it connects (`openConnect`).
