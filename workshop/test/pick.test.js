@@ -40,3 +40,16 @@ test("pick: Cmd-click selects the deepest layer; outside the page selects nothin
   assert.equal(pickLayer(body, { root: body, same }), null);
   assert.equal(pickLayer(null, { root: body, same }), null);
 });
+
+// A web page nests what you see inside page-sized layout boxes (the shell, the content area). A
+// click selects the thing itself, not the page around it; the big boxes are still reachable from
+// the layer list, and an empty spot on one still selects it.
+test("pick: page-sized containers are skipped", () => {
+  const bigNames = new Set(["shell", "content"]);
+  const big = (n) => bigNames.has(n.name);
+  assert.equal(pick("button", { big }), "card", "one click reaches the card");
+  assert.equal(pick("link", { big }), "sidebar", "a narrow column is a layer of its own");
+  assert.equal(pick("button", { big, current: find(body, "card"), deeper: true }), "button");
+  assert.equal(pick("card2", { big, current: find(body, "card") }), "card2", "beside the selected card");
+  assert.equal(pick("content", { big }), "content", "nothing smaller under the pointer: the container itself");
+});

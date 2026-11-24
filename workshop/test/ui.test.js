@@ -428,7 +428,7 @@ test("ui: the editor shows each thing once", () => {
   assert.ok(!/sec\("Branches"/.test(page), "the right panel doesn't list branches again");
   assert.ok(!/Review and merge<\/button>/.test(page), "review lives in the branch's bar");
   const banner = panels.slice(panels.indexOf("export function renderBanner"), panels.indexOf("// ======================= RIGHT PANEL"));
-  assert.match(banner, /b\.hidden = true;\s*return markDirty\(\);/, "no bar over Main");
+  assert.match(banner, /\/\/ Main:[^\n]*\n\s*return done\(false\);/, "no bar over Main");
   const css = read("app.css");
   assert.match(css, /\.tb #interactBtn:not\(\[aria-pressed="true"\]\)\{display:none\}/);
   assert.match(css, /\.tb #askBtn\{background:var\(--raise-ink\)/);
@@ -459,4 +459,37 @@ test("ui: the home doesn't repeat cards to look full", async () => {
   const { block } = await import("../ui/motion.js");
   for (const n of [5, 8, 9, 14]) assert.ok(Math.max(...block(n).map((c) => c[0])) <= 3, `${n} cards are at most 4 across`);
   assert.equal(block(9).length, 9);
+});
+
+// Found by walking the workflow in a browser. A new frame first reports its empty page as loaded;
+// taking that for the real one showed, and let you select from, a half-loaded page (a prototype's
+// sign-in gate in place of the screen). Only the real page, complete, counts, and nothing is picked
+// from a frame before then.
+test("ui: a frame is live only once its real page has loaded", () => {
+  const cv = read("canvas.js");
+  assert.match(cv, /return !!d && d\.readyState === "complete" && d\.URL !== "about:blank";/);
+  assert.match(cv, /fr\.addEventListener\("load", \(\) => b\.frame === fr && pageIsIn\(fr\) && onBoardLoad\(b\)\);/);
+  assert.match(cv, /if \(!d \|\| !b \|\| !B\.get\(id\)\?\.ready\) return null;/, "nothing to pick until then");
+});
+
+// A text edit is an edit like any other: ⌘Z undoes it, the toast's Undo undoes that edit, the
+// toast names the page it was saved on, and the view goes back to where it was if it zoomed in.
+test("ui: a text edit can be undone and says where it was saved", () => {
+  const cv = read("canvas.js");
+  const edit = cv.slice(cv.indexOf("function editText"), cv.indexOf("export function editNote"));
+  assert.match(edit, /record\(entry\);/);
+  assert.match(edit, /fn: \(\) => undoEntry\(entry\)/);
+  assert.ok(!edit.includes('"Saved on this branch"'), "not 'this branch' when it's Main");
+  assert.match(edit, /`Saved on \$\{where && isBranch\(where\) \? where\.name : "Main"\}`/);
+  assert.match(edit, /if \(camBack\) camTo\(camBack, 240\);/);
+  assert.match(read("history.js"), /export async function undoEntry\(entry\)/);
+});
+
+// Comparing a branch shows one screen with the parent's version, large enough to see the change,
+// and hiding it goes back to where you were; toasts sit under the branch's bar, not over it.
+test("ui: compare is readable and toasts don't cover the branch bar", () => {
+  const app = read("app.js");
+  assert.match(app, /requestAnimationFrame\(\(\) => \(S\.compare \? fitPair\(\) : flyTo\(beforeCompare\)\)\);/);
+  assert.match(read("canvas.js"), /export function fitPair\(opts\)/);
+  assert.match(read("app.css"), /\.has-banner:not\(\.ui-off\) \.toasts\{top:84px\}/);
 });

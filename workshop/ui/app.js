@@ -2,7 +2,7 @@
 
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural, pageName, folderLabel } from "./state.js";
 import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented, skeleton, loadingToast, pendingButton, loadPage, apartUrl, initTips } from "./lib.js";
-import { setTool, addLink, addPicture, initCanvas, sync, fit, fitOpen, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
+import { setTool, addLink, addPicture, initCanvas, sync, fit, fitOpen, fitPair, camNow, flyTo, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
 import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff } from "./panels.js";
 import { rulesFor, loadOverrides } from "./styles.js";
 import { loadRecipes } from "./recipes.js";
@@ -1384,12 +1384,16 @@ async function boot() {
     setTimeout(() => (selectItem(id), it.type !== "arrow" && focusItem(id, { maxZ: 0.8 })), pg !== S.page ? 360 : 0);
   });
   on("open-proto", async (id) => (await loadWorkspace(), go(id)));
+  // Compare: one screen with the parent's version above it, at a size you can see the change;
+  // hiding it takes you back to where you were
+  let beforeCompare = null;
   on("compare", () => {
     S.compare = !S.compare;
+    if (S.compare) beforeCompare = camNow();
     sync();
     renderBanner();
     renderRight();
-    requestAnimationFrame(() => fitRect(pageBounds(), { maxZ: 0.6 }));
+    requestAnimationFrame(() => (S.compare ? fitPair() : flyTo(beforeCompare)));
   });
   on("archive", (id) => patchArchived(id, true));
   on("unarchive", (id) => patchArchived(id, false));

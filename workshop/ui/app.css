@@ -783,6 +783,7 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .banner{left:calc(var(--lw) + (100% - var(--lw) - var(--rw)) / 2);border-radius:99px;height:44px;padding:0 4px 0 16px;top:32px}
 .tb{left:calc(var(--lw) + (100% - var(--lw) - var(--rw)) / 2);border-radius:99px;padding:6px;bottom:20px}
 .toasts{right:calc(var(--rw) + 8px);top:16px}
+.has-banner:not(.ui-off) .toasts{top:84px} /* under a branch's bar, not over its Review and merge */
 .top{background:none} /* no bar: the header sits on the canvas, like the floating panels */
 
 /* capsules: the toolbar, the banner's actions, tabs */

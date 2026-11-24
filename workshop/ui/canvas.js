@@ -8,7 +8,7 @@ import { S, on, fire, itemsOf, isBranch, screenName, pageItems, pageEnv, plural 
 import { $, h, esc, clamp, frScale, api, toast, IC, menu, rmo, timeAgo, loadPage } from "./lib.js";
 import { commitRules, preview, endPreview, undoStyle, idle as stylesIdle } from "./styles.js";
 import * as G from "./gfx.js";
-import { record, rid, remap, undo as histUndo, redo as histRedo } from "./history.js";
+import { record, rid, remap, undo as histUndo, redo as histRedo, undoEntry } from "./history.js";
 import { PENS, INKS, SIZES, outline, touches } from "./ink.js";
 import { pickLayer } from "./pick.js";
 import { readableZoom, openOn } from "./motion.js";
@@ -90,7 +90,7 @@ function boardAtPoint(p) {
 function elAt(id, p) {
   const d = docOf(id),
     b = item(id);
-  if (!d || !b) return null;
+  if (!d || !b || !B.get(id)?.ready) return null; // nothing to pick until its page has loaded
   const w = toWorld(p);
   let hits = [];
   try {
@@ -126,8 +126,14 @@ function layerAt(id, node, { deeper = false, deep = false } = {}) {
       q = b.getBoundingClientRect();
     return Math.abs(r.left - q.left) < 1.5 && Math.abs(r.top - q.top) < 1.5 && Math.abs(r.width - q.width) < 1.5 && Math.abs(r.height - q.height) < 1.5;
   };
+  // a page-sized container: it covers a third or more of the screen
+  const page = (d.documentElement.clientWidth || 1) * (d.documentElement.clientHeight || 1);
+  const big = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.width * r.height >= page * 0.33;
+  };
   try {
-    return pickLayer(node, { root: d.body, current, deeper, deep, same }) || node;
+    return pickLayer(node, { root: d.body, current, deeper, deep, same, big }) || node;
   } catch {
     return node;
   }
@@ -260,6 +266,21 @@ export function focusItem(id, opts) {
   fitRect(rectsBounds([it.type === "note" ? noteRect(it) : it]), { maxZ: 1, ...opts });
 }
 const noteRect = (n) => ({ x: n.x, y: n.y, w: n.w, h: 140 });
+// Comparing a branch with its parent: show one screen and the parent's version of it, large enough
+// to see what changed (the selected screen, or the one nearest the middle of the view), not every
+// screen at thumbnail size.
+export function fitPair(opts) {
+  const own = pageItems("board");
+  if (!own.length) return;
+  const c = toWorld(viewCenter());
+  const far = (b) => Math.hypot(b.x + b.w / 2 - c.x, b.y + b.h / 2 - c.y);
+  const b = own.find((x) => x.id === S.sel?.item) || own.reduce((a, x) => (far(x) < far(a) ? x : a));
+  const g = GH.get(`cmp-${b.id}`);
+  const r = rectsBounds(g ? [g, b] : [b]);
+  fitRect({ ...r, y0: r.y0 - 40 }, { maxZ: 1, pad: 32, ...opts });
+}
+export const camNow = () => ({ ...S.cam });
+export const flyTo = (c, ms = 320) => c && [c.x, c.y, c.z].every(Number.isFinite) && camTo(c, ms);
 
 export function isVisible(id) {
   const it = item(id);
@@ -375,6 +396,14 @@ function makeBoard(it) {
 }
 
 // ---------- live pages: only where you're working ----------
+const pageIsIn = (fr) => {
+  try {
+    const d = fr.contentDocument;
+    return !!d && d.readyState === "complete" && d.URL !== "about:blank";
+  } catch {
+    return false;
+  }
+};
 function mount(id) {
   const b = B.get(id),
     it = item(id);
@@ -386,7 +415,10 @@ function mount(id) {
   b.ready = false;
   b.touched = false;
   b.src = boardSrc(it);
-  fr.addEventListener("load", () => b.frame === fr && onBoardLoad(b));
+  // Only the prototype's own page, fully loaded, counts. A new frame first reports its empty page
+  // as loaded; taking that for the real one showed (and let you select from) a half-loaded page:
+  // a prototype's loading screen or sign-in gate in place of the screen in the picture.
+  fr.addEventListener("load", () => b.frame === fr && pageIsIn(fr) && onBoardLoad(b));
   b.el.insertBefore(fr, b.hit);
   b.el.classList.add("live");
   loadPage(fr, b.src);
@@ -1916,6 +1948,7 @@ function editText(id, el) {
   const b = B.get(id),
     it = item(id);
   const before = el.textContent;
+  let camBack = null;
   b.el.classList.add("editing");
   // too small to read at this zoom: bring the text up to an editable size, centred on it
   try {
@@ -1926,6 +1959,7 @@ function editText(id, el) {
         c = viewCenter(),
         wx = it.x + r.left + r.width / 2,
         wy = it.y + r.top + r.height / 2;
+      camBack = { ...S.cam }; // where you were: you're taken back when you finish
       camTo({ z: nz, x: c.x - wx * nz, y: c.y - wy * nz }, 240);
     }
   } catch {}
@@ -1948,12 +1982,21 @@ function editText(id, el) {
     b.el.classList.remove("editing");
     el.removeEventListener("keydown", onk, true);
     el.removeEventListener("blur", onb);
+    if (camBack) camTo(camBack, 240);
     const text = el.textContent;
     if (!keep) return void (el.textContent = before);
     if (text === before) return;
     try {
-      await api(`envs/${it.env}/text`, { method: "PUT", body: { selector: info.exactSelector, text } });
-      toast("Text changed", "Saved on this branch", { label: "Undo", fn: async () => ((el.textContent = before), await api(`envs/${it.env}/text`, { method: "PUT", body: { selector: info.exactSelector, text: null } })) });
+      const put = async (v, shown) => {
+        if (el.isConnected) el.textContent = shown;
+        await api(`envs/${it.env}/text`, { method: "PUT", body: { selector: info.exactSelector, text: v } });
+      };
+      await put(text, text);
+      // undoable like any other edit (⌘Z), and from the toast
+      const entry = { label: "text change", undo: () => put(null, before), redo: () => put(text, text) };
+      record(entry);
+      const where = S.envs.get(it.env);
+      toast("Text changed", `Saved on ${where && isBranch(where) ? where.name : "Main"}`, { label: "Undo", fn: () => undoEntry(entry) });
     } catch (e) {
       el.textContent = before;
       toast("Couldn't save the text", e.message);

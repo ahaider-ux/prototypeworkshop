@@ -612,7 +612,9 @@ export function renderBanner() {
   const env = pageEnv();
   b.replaceChildren();
   b.className = "banner";
-  if (!env || S.view !== "proto") return markDirty();
+  // toasts sit below the bar when there is one, never over its buttons
+  const done = (shown) => ((b.hidden = !shown), $("frame").classList.toggle("has-banner", shown), markDirty());
+  if (!env || S.view !== "proto") return done(false);
   const parent = isBranch(env) ? S.envs.get(env.parent) : null;
   const add = (html, fn) => {
     const x = h(html);
@@ -643,10 +645,9 @@ export function renderBanner() {
     rv.disabled = !!d && !d.changes.length;
   } else {
     // Main: nothing to say that the panel beside it doesn't (its name, its branches, Create branch)
-    b.hidden = true;
-    return markDirty();
+    return done(false);
   }
-  b.hidden = false;
+  done(true);
   markDirty();
 }
 

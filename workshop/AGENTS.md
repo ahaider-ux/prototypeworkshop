@@ -101,7 +101,10 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   screen), a click then selects at the current level, a double-click
   goes one level in (and on a text leaf, edits its text, zooming in first when the text is too small
   to read: `readableZoom` in `ui/motion.js`), Cmd/Ctrl-click selects the deepest layer, and
-  pass-through wrappers are skipped. Run (at the far end of a frame's title row, on the frame under
+  pass-through wrappers and page-sized containers (a third of the screen or more: the shell, the
+  content area) are skipped, so one click selects the thing you see. A frame counts as live only
+  once its real page has fully loaded (`pageIsIn`); nothing is shown or picked from it before
+  then. Text edits go on the undo history like every other edit. Run (at the far end of a frame's title row, on the frame under
   the pointer or selected; P for the selected one) makes the frame's prototype respond to clicks;
   it turns into Stop while it runs.
 - **What Atelier is for, and one place for each thing.** See the real prototype, edit it like a

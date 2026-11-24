@@ -41,6 +41,14 @@ async function step(from, to, dir) {
   return true;
 }
 export const undo = () => step(PAST, FUTURE, "undo");
+// undo one particular entry (a toast's Undo button), wherever it now sits in the history
+export async function undoEntry(entry) {
+  const i = PAST.lastIndexOf(entry);
+  if (i < 0 || busy) return false;
+  PAST.splice(i, 1);
+  PAST.push(entry);
+  return undo();
+}
 export const redo = () => step(FUTURE, PAST, "redo");
 export const canUndo = () => PAST.length > 0;
 export const canRedo = () => FUTURE.length > 0;
