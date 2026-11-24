@@ -72,7 +72,7 @@ export const toScreen = (w) => ({ x: w.x * S.cam.z + S.cam.x, y: w.y * S.cam.z +
 
 // the part of the canvas the rulers, the page banner and the toolbar don't cover
 export function viewRect() {
-  if ($("frame").classList.contains("present")) return { x0: 0, y0: 0, x1: cv.clientWidth, y1: cv.clientHeight };
+  if ($("frame").classList.contains("present")) return { x0: 0, y0: 0, x1: cv.clientWidth, y1: cv.clientHeight - 60 }; // Prototype: the whole window, above its bar
   // the panels float over the canvas: the view is the part between them
   const st = getComputedStyle($("stage"));
   const lw = parseFloat(st.getPropertyValue("--lw")) || 0,
@@ -503,8 +503,10 @@ function gfxColors() {
 }
 function drawGfx() {
   // while a board waits for its picture, its shimmer keeps the canvas drawing
+  // in Prototype only the screen being shown is drawn: its picture stands in until its page is up
+  const list = S.presenting ? pageBoards().filter((it) => it.id === S.presenting) : pageBoards();
   gfxDirty = G.draw(
-    pageBoards().map((it) => ({ it, covered: !!B.get(it.id)?.shown })),
+    list.map((it) => ({ it, covered: !!B.get(it.id)?.shown })),
     S.cam,
     gfxColors(),
   ) > 0;
@@ -1261,7 +1263,7 @@ export function drawHud() {
       const run = l.querySelector(".brun");
       run.addEventListener("pointerdown", (e) => e.stopPropagation());
       run.addEventListener("dblclick", (e) => e.stopPropagation());
-      run.onclick = (e) => (e.stopPropagation(), S.playing === it.id ? stopPlaying() : playBoard(it.id));
+      run.onclick = (e) => (e.stopPropagation(), fire("prototype", it.id)); // Prototype: this screen, large, to click through
       hud.append(l);
       HUD.labels.set(it.id, l);
     }
@@ -3200,14 +3202,16 @@ export function initCanvas() {
     }, 0),
   );
   for (const b of document.querySelectorAll("#tb [data-tool]")) b.addEventListener("click", () => setTool(b.dataset.tool));
-  // Interact plays the selected frame (or the one in the middle of the view), or stops
+  // Prototype (P, the header's switch): the selected frame, or the one in the middle of the view,
+  // fills the window to click through; pressed again, back to Design
   $("interactBtn").onclick = () => {
+    if (S.presenting) return fire("exit-present");
     if (S.playing || S.mode === "prototype") return stopPlaying();
     const sel = S.sel?.kind === "board" || S.sel?.kind === "el" ? S.sel.item : null;
     const v = viewRect();
     const mid = toWorld({ x: (v.x0 + v.x1) / 2, y: (v.y0 + v.y1) / 2 });
     const near = pageBoards().sort((a, b) => Math.hypot(a.x + a.w / 2 - mid.x, a.y + a.h / 2 - mid.y) - Math.hypot(b.x + b.w / 2 - mid.x, b.y + b.h / 2 - mid.y))[0];
-    if (sel || near) playBoard(sel || near.id);
+    if (sel || near) fire("prototype", sel || near.id);
   };
   $("zPct").onclick = () =>
     menu($("zPct"), [

@@ -225,6 +225,7 @@ function openPage(page) {
   document.title = `${pageName(pageEnv())} · ${root.name}`;
 }
 function renderTabs() {
+  renderMode();
   const t = $("tabs");
   t.replaceChildren();
   const home = h(`<div class="tab tab-home${S.view === "home" ? " on" : ""}" role="tab" tabindex="0" aria-selected="${S.view === "home"}">${IC.home}<span class="t">Home</span></div>`);
@@ -733,42 +734,65 @@ async function restoreVersion({ id, n, label }) {
   }
 }
 
-// ---------- present: one board fills the window and runs as the app ----------
+// ---------- Prototype: one screen fills the window and you click through it ----------
+// The editor has two states. Design is the canvas: every screen side by side, with the panels and
+// tools. Prototype is one screen, as large as the window allows, running as the app; the bar under
+// it moves between the page's screens and goes back to Design (Esc, or Design in the header).
 let presenting = null;
+const screensInOrder = () => pageItems("board").slice().sort((a, b) => a.y - b.y || a.x - b.x);
 function present(bid) {
   const it = bid && S.items.get(bid);
-  if (!it) return toast("Nothing to present", "Place a screen on the canvas first");
+  if (!it) return toast("Nothing to show yet", "Place a screen on the canvas first");
+  if (presenting) return showIn(bid);
   presenting = { bid, mode: S.mode, cam: { ...S.cam } };
-  S.presenting = bid;
-  selectBoard(bid, { quiet: true });
   $("frame").classList.add("present");
-  boardOf(bid)?.el.classList.add("presenting");
   setMode("prototype");
-  const env = S.envs.get(it.env);
-  const bar = h(`<div class="prsbar" role="toolbar" aria-label="Presenting"><span style="padding:0 8px 0 12px;font-weight:500;white-space:nowrap">${esc(pageName(env))} · ${esc(screenName(it))}</span><span class="tagro">${it.w} × ${it.h}</span><span style="width:1px;height:20px;background:var(--border-subtle);margin:0 4px"></span><button type="button" class="ghbtn sm" data-a="tab">${IC.ext}New tab</button><button type="button" class="createbtn sm" data-a="exit">Exit · Esc</button></div>`);
-  bar.querySelector('[data-a="tab"]').onclick = () => window.open(`/present/${it.env}/?screen=${encodeURIComponent(it.screen || "")}`, "_blank", "noopener");
+  const bar = h(`<div class="prsbar" role="toolbar" aria-label="Prototype"><button type="button" class="ib32 flip" data-a="prev" aria-label="Previous screen" data-tip="Previous screen" data-tip-up>${IC.chevr}</button><button type="button" class="ddtrig" data-a="pick" aria-haspopup="menu"><span class="v"></span>${IC.chev}</button><button type="button" class="ib32" data-a="next" aria-label="Next screen" data-tip="Next screen" data-tip-up>${IC.chevr}</button><span class="vsep"></span><span class="tagro" data-a="size"></span><button type="button" class="ghbtn sm" data-a="tab">${IC.ext}New tab</button><button type="button" class="createbtn sm" data-a="exit">Back to design</button></div>`);
+  const step = (d) => {
+    const list = screensInOrder();
+    const i = list.findIndex((x) => x.id === presenting?.bid);
+    if (list.length > 1) showIn(list[(i + d + list.length) % list.length].id);
+  };
+  bar.querySelector('[data-a="prev"]').onclick = () => step(-1);
+  bar.querySelector('[data-a="next"]').onclick = () => step(1);
+  bar.querySelector('[data-a="pick"]').onclick = (e) => menu(e.currentTarget, screensInOrder().map((x) => ({ label: screenName(x), checked: x.id === presenting?.bid, onClick: () => showIn(x.id) })));
+  bar.querySelector('[data-a="tab"]').onclick = () => {
+    const cur = S.items.get(presenting?.bid);
+    if (cur) window.open(`/present/${cur.env}/?screen=${encodeURIComponent(cur.screen || "")}`, "_blank", "noopener");
+  };
   bar.querySelector('[data-a="exit"]').onclick = stopPresent;
   $("frame").append(bar);
-  let hideT = 0;
-  const show = () => {
-    bar.style.opacity = "1";
-    bar.style.pointerEvents = "auto";
-    clearTimeout(hideT);
-    hideT = setTimeout(() => !bar.matches(":hover") && ((bar.style.opacity = "0"), (bar.style.pointerEvents = "none")), 2200);
-  };
-  const near = (e) => presenting && e.clientY < 64 && show();
-  // the board turns live for presenting, so its page may not exist yet: listen on it once it loads
-  document.addEventListener("pointermove", near);
-  let doc = null;
-  const watch = setInterval(() => {
-    try {
-      const d = boardOf(bid)?.frame?.contentDocument;
-      if (d && d !== doc) (doc?.removeEventListener("pointermove", near), (doc = d), d.addEventListener("pointermove", near));
-    } catch {} // a cross-origin page can't be listened to: the bar still shows from the editor's edge
-  }, 250);
-  presenting.cleanup = () => (clearTimeout(hideT), clearInterval(watch), document.removeEventListener("pointermove", near), doc?.removeEventListener("pointermove", near), bar.remove());
-  show();
-  requestAnimationFrame(() => requestAnimationFrame(() => fitRect({ x0: it.x, y0: it.y, x1: it.x + it.w, y1: it.y + it.h }, { ms: 0, maxZ: 1, pad: 0 })));
+  presenting.bar = bar;
+  presenting.cleanup = () => bar.remove();
+  showIn(bid);
+  renderMode();
+}
+// put a screen in the window: the one being shown changes, the state stays
+function showIn(bid) {
+  const it = S.items.get(bid);
+  if (!it || !presenting) return;
+  boardOf(presenting.bid)?.el.classList.remove("presenting");
+  presenting.bid = bid;
+  S.presenting = bid;
+  markDirty(); // the picture drawn is this screen's
+  selectBoard(bid, { quiet: true });
+  boardOf(bid)?.el.classList.add("presenting");
+  const bar = presenting.bar,
+    many = screensInOrder().length > 1;
+  bar.querySelector(".v").textContent = screenName(it);
+  bar.querySelector('[data-a="size"]').textContent = `${it.w} × ${it.h}`;
+  for (const a of ["prev", "next"]) bar.querySelector(`[data-a="${a}"]`).disabled = !many;
+  requestAnimationFrame(() => requestAnimationFrame(() => fitRect({ x0: it.x, y0: it.y, x1: it.x + it.w, y1: it.y + it.h }, { ms: 0, maxZ: 1, pad: 12 })));
+}
+// the header's switch between the two states (only while a prototype is open)
+function renderMode() {
+  const sw = $("modeSw");
+  sw.hidden = S.view !== "proto";
+  for (const b of sw.querySelectorAll("[data-m]")) {
+    const on = (b.dataset.m === "prototype") === !!presenting;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-checked", String(on));
+  }
 }
 function stopPresent() {
   if (!presenting) return;
@@ -778,7 +802,8 @@ function stopPresent() {
   S.presenting = null;
   boardOf(p.bid)?.el.classList.remove("presenting");
   $("frame").classList.remove("present");
-  setMode(p.mode);
+  setMode(p.mode === "prototype" ? "design" : p.mode);
+  renderMode();
   Object.assign(S.cam, p.cam);
   requestAnimationFrame(() => focusItem(p.bid, { ms: 0, maxZ: 0.6 }));
 }
@@ -1040,7 +1065,7 @@ function openShortcuts() {
   const mac = navigator.platform?.startsWith("Mac");
   const K = (k) => (mac ? k : k.replace(/⌘/g, "Ctrl+").replace(/⌥/g, "Alt+").replace(/⇧/g, "Shift+"));
   const groups = [
-    ["Tools", [["Select", "V"], ["Hand", "H · Space"], ["Frame", "F"], ["Note", "N"], ["Highlight", "B"], ["Arrow", "A"], ["Comment", "C"], ["Draw", "D"], ["Run the selected frame · stop", "P"], ["Ask an agent", "Toolbar"]]],
+    ["Tools", [["Select", "V"], ["Hand", "H · Space"], ["Frame", "F"], ["Note", "N"], ["Highlight", "B"], ["Arrow", "A"], ["Comment", "C"], ["Draw", "D"], ["Prototype: click through a screen · back to Design", "P · Esc"], ["Ask an agent", "Toolbar"]]],
     ["Draw", [["Marker · pen · pencil · highlighter", "1 · 2 · 3 · 4"], ["Eraser", "E"], ["Finer · bolder", "[ · ]"], ["Straight line", "hold ⇧"], ["Stop drawing", "Esc · V"]]],
     ["Edit", [["Undo", K("⌘Z")], ["Redo", K("⌘⇧Z")], ["Copy · cut · paste", K("⌘C · ⌘X · ⌘V")], ["Duplicate", K("⌘D")], ["Delete", "Delete"], ["Select all", K("⌘A")], ["Add to the selection", "⇧ click"], ["Select by dragging", "Drag on empty canvas"]]],
     ["Elements", [["Parent · first child", "Esc · Enter"], ["Next · previous", "Tab · ⇧Tab"], ["Move or reorder", "Drag · arrows (⇧ 8 px)"], ["Bring forward · send backward", K("⌘] · ⌘[")], ["Bring to front · send to back", "] · ["], ["Go into a layer · edit its text", "Double-click"], ["Select the deepest layer", K("⌘-click")]]],
@@ -1358,7 +1383,9 @@ async function boot() {
   $("bringBtn").onclick = () => fire("bring-in");
   on("bring-in", openBringIn);
   $("shareBtn").onclick = () => openShare(S.page);
-  $("presentBtn").onclick = () => present(S.sel?.kind === "board" ? S.sel.item : pageItems("board")[0]?.id);
+  // Design and Prototype, in the header; Run (a frame's title, P) opens Prototype on that frame
+  for (const b of $("modeSw").querySelectorAll("[data-m]")) b.onclick = () => (b.dataset.m === "design" ? stopPresent() : presenting || $("interactBtn").click());
+  on("prototype", (id) => present(id));
   $("cvScreens").onclick = () => fire("left-tab", "screens");
   $("palIn").oninput = paintPal;
   $("palIn").onkeydown = (e) => {

@@ -881,7 +881,7 @@ function designBoard(body, bid) {
   } })));
   L.append(h(`<div class="xyrow"><span class="xy"><i>X</i>${b.x}</span><span class="xy"><i>Y</i>${b.y}</span><span class="xy"><i>W</i>${b.w}</span><span class="xy"><i>H</i>${b.h}</span></div>`));
   body.append(L);
-  if (ad?.screen) body.append(h(`<div class="isec"><span class="lineage">Showing ${esc(ad.screen)} now. Run it (P) to click through it.</span></div>`));
+  if (ad?.screen) body.append(h(`<div class="isec"><span class="lineage">Showing ${esc(ad.screen)} now. Open it in Prototype (P) to click through it.</span></div>`));
   const acts = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="pr">${IC.play}Present</button><button type="button" class="dbtn sm" data-a="dup">${IC.copy}Duplicate</button><button type="button" class="dbtn sm" data-a="agent">${IC.spark}Ask</button></div></div>`);
   acts.querySelector('[data-a="dup"]').onclick = () => placeScreen(b.env, b.screen, b.state).then((it) => it && selectBoard(it.id));
   acts.querySelector('[data-a="pr"]').onclick = () => fire("present", bid);
@@ -906,10 +906,10 @@ function renderProto(body) {
     }
     body.append(F);
   }
-  const I = sec("Run");
-  I.append(h(`<span class="lineage">Frames are editable as they stand: click a layer to select it, double-click to go in. Run a frame (in its title, or select it and press P) to click through its prototype on the canvas, starting on that screen.</span>`));
-  const pl = h(`<button type="button" class="${S.playing ? "dbtn" : "createbtn"} sm" style="align-self:flex-start">${S.playing ? `${IC.stop}Stop` : `${IC.play}Run the selected frame`}</button>`);
-  pl.onclick = () => ($("interactBtn").click(), renderRight());
+  const I = sec("Prototype");
+  I.append(h(`<span class="lineage">Prototype shows one screen as large as the window allows, running as the app, so you can click through it. Switch with Design and Prototype at the top, Run in a frame's title, or P.</span>`));
+  const pl = h(`<button type="button" class="createbtn sm" style="align-self:flex-start">${IC.play}Open in Prototype</button>`);
+  pl.onclick = () => $("interactBtn").click();
   I.append(pl);
   body.append(I);
   const P = sec("Present and share");

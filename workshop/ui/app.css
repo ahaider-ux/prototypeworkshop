@@ -620,9 +620,18 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .tbtx:active{transform:scale(.97)}
 .tbtx[aria-pressed="true"]{background:var(--bg-primary);color:var(--on-primary)}
 /* present: one board fills the window */
-.prsbar{position:absolute;left:50%;top:12px;transform:translateX(-50%);display:flex;align-items:center;gap:6px;padding:4px;background:var(--bg-layer);border:.5px solid var(--border-subtle);border-radius:12px;box-shadow:var(--sh-md);z-index:30;transition:opacity 150ms ease}
-.app.present .top,.app.present .rail,.app.present .lp,.app.present .rp,.app.present .tb,.app.present .banner,.app.present .ruler,.app.present .rcorner,.app.present .hud .blabel,.app.present .note,.app.present .box,.app.present .wires,.app.present .pin,.app.present .selbox,.app.present .hdl,.app.present .alabel,.app.present .sizetag{display:none!important}
-.app.present .bd:not(.presenting),.app.present .gfx{visibility:hidden}
+/* Prototype's bar: under the screen, always there (the tool bar's place and shape) */
+.prsbar{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);display:flex;align-items:center;gap:4px;padding:6px;border-radius:99px;z-index:30;white-space:nowrap}
+.prsbar .flip .ic{rotate:180deg}
+.prsbar .vsep{width:1px;height:20px;background:var(--border-subtle);margin:0 4px}
+.prsbar .ddtrig{max-width:240px}
+.prsbar .ddtrig .v{overflow:hidden;text-overflow:ellipsis}
+.prsbar .tagro{margin-right:4px}
+/* the header's switch between the two states */
+.modesw{flex-shrink:0;margin-right:8px;height:28px}
+.modesw button{font-size:12px}
+.app.present .rail,.app.present .lp,.app.present .rp,.app.present .tb,.app.present .banner,.app.present .ruler,.app.present .rcorner,.app.present .hud .blabel,.app.present .note,.app.present .box,.app.present .wires,.app.present .pin,.app.present .selbox,.app.present .hdl,.app.present .alabel,.app.present .sizetag{display:none!important}
+.app.present .bd:not(.presenting){visibility:hidden} /* the shown screen keeps its picture until its page is up: never a blank window */
 .app.present .cv{background:var(--bg-shell)}
 
 /* ═══ Home: your prototypes ═══ */
@@ -782,8 +791,8 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .ruler,.rcorner{background:color-mix(in srgb,var(--bg-layer) 86%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
 .banner{left:calc(var(--lw) + (100% - var(--lw) - var(--rw)) / 2);border-radius:99px;height:44px;padding:0 4px 0 16px;top:32px}
 .tb{left:calc(var(--lw) + (100% - var(--lw) - var(--rw)) / 2);border-radius:99px;padding:6px;bottom:20px}
-.toasts{right:calc(var(--rw) + 8px);top:16px}
-.has-banner:not(.ui-off) .toasts{top:84px} /* under a branch's bar, not over its Review and merge */
+.toasts{right:calc(var(--rw) + 8px);top:52px} /* under the header: never over its Design and Prototype switch */
+.has-banner:not(.ui-off) .toasts{top:128px} /* under a branch's bar, not over its Review and merge */
 .top{background:none} /* no bar: the header sits on the canvas, like the floating panels */
 
 /* capsules: the toolbar, the banner's actions, tabs */

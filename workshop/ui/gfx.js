@@ -96,7 +96,7 @@ async function loadSaved(k, w, h) {
 function save(k, svg) {
   if (!saved(k) || !svg) return;
   hashOf(k)
-    .then((hx) => fetch(`/api/snapshots/${hx}`, { method: "PUT", headers: { "x-workshop": "1", "content-type": "image/svg+xml" }, body: svg }))
+    .then((hx) => fetch(`/api/snapshots/${hx}?k=${encodeURIComponent(k)}`, { method: "PUT", headers: { "x-workshop": "1", "content-type": "image/svg+xml" }, body: svg }))
     .catch(() => {});
 }
 // Decoding a drawing lays out a whole page on the main thread (100–300 ms): one at a time, and only

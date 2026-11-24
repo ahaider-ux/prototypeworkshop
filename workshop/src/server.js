@@ -439,7 +439,7 @@ export async function startServer({ workspace, port = 4600, host = "127.0.0.1", 
       return json(res, 200, await listFolder(url.searchParams.get("path")));
     }
     if (a === "snapshots" && b) {
-      if (m === "PUT") return json(res, 201, await store.writeSnapshot(b, await raw(req, 24 * 1024 * 1024)));
+      if (m === "PUT") return json(res, 201, await store.writeSnapshot(b, await raw(req, 24 * 1024 * 1024), url.searchParams.get("k")));
       if (m === "GET") {
         // 204 when there's none yet, so a miss isn't an error in the console; named by what's in it,
         // so the browser may keep it as long as it likes

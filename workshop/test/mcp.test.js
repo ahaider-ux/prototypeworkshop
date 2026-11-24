@@ -163,3 +163,32 @@ test("MCP: read_frame gives an agent a frame as HTML", async () => {
   assert.match(await read({ board: f.id }), /"source":"file"[\s\S]*<main>Step two<\/main>/);
   await assert.rejects(callTool(store, "read_frame", { board: "b-nope" }), /No frame b-nope/);
 });
+
+// A screen whose look has just changed (an edit, a new branch with a change) has no drawing of the
+// new look until the canvas draws it. An agent asking then gets the last drawing of that screen —
+// its own, or the one for the page it branched from — and is told it's older.
+test("MCP: read_frame falls back to the last drawing of a screen, and says so", async () => {
+  const { callTool } = await import("../src/mcp.js");
+  const { drawKey } = await import("../ui/drawkey.js");
+  const crypto = await import("node:crypto");
+  const store = await Store.open(await fsp.mkdtemp(path.join(os.tmpdir(), "workshop-")));
+  const main = await store.createEnv({ html: HTML });
+  const board = (await store.items()).find((i) => i.type === "board" && i.env === main.id);
+  const what = drawKey(await store.fingerprint(main.id), board);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><foreignObject width="10" height="10"><html xmlns="http://www.w3.org/1999/xhtml"><body><p class="t">Hi</p></body></html></foreignObject></svg>`;
+  await store.writeSnapshot(crypto.createHash("sha1").update(what).digest("hex"), Buffer.from(svg), what);
+  const read = async (id) => (await callTool(store, "read_frame", { board: id })).content[0].text;
+  assert.ok(!/"note"/.test(await read(board.id)), "the current look: no caveat");
+  // the look changes; nothing has drawn the new one yet
+  await store.setStyle(main.id, ".t", { color: "red" });
+  const after = await read(board.id);
+  assert.match(after, /"note":"Drawn before the latest change to this page/);
+  assert.match(after, /<p class="t">Hi<\/p>/);
+  // a branch that then changes: its screen falls back to what was drawn for the page it came from
+  const br = await store.branchEnv(main.id, { name: "Try" });
+  await store.setStyle(br.id, ".t", { color: "blue" });
+  const bb = (await store.items()).find((i) => i.type === "board" && i.env === br.id);
+  const onBranch = await read(bb.id);
+  assert.match(onBranch, new RegExp(`"note":"Drawn for ${main.id}, which this page branched from`));
+  assert.match(onBranch, /<p class="t">Hi<\/p>/);
+});

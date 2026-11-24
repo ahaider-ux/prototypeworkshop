@@ -322,13 +322,23 @@ test("ui: the Home tab doesn't share the home page's class", () => {
   assert.ok(!/\.tab\.home\b/.test(read("app.css")));
 });
 
-// Present read the board's live page before it existed (boards are pictures until they're played),
-// so it threw. It now listens on the page once it loads.
-test("ui: Present waits for the board's live page", () => {
+// The editor has two states, switched in the header: Design (the canvas) and Prototype (one screen
+// as large as the window allows, running as the app, with a bar to move between screens and go
+// back). Run in a frame's title and P open Prototype on that frame; there is no separate Present.
+test("ui: Design and Prototype are the editor's two states", () => {
+  const html = read("index.html");
+  assert.match(html, /id="modeSw" role="radiogroup"[^>]*hidden>.*data-m="design"[^>]*>Design<\/button>.*data-m="prototype"[^>]*>Prototype<\/button>/);
+  assert.ok(!/id="presentBtn"/.test(html), "one way in, not two");
   const app = read("app.js");
   const fn = app.slice(app.indexOf("function present("), app.indexOf("function stopPresent"));
-  assert.ok(!/boardOf\(bid\)\?\.frame\.contentDocument/.test(fn), "no unguarded frame access");
-  assert.match(fn, /boardOf\(bid\)\?\.frame\?\.contentDocument/);
+  assert.match(fn, /data-a="prev"[\s\S]*data-a="pick"[\s\S]*data-a="next"[\s\S]*Back to design/);
+  assert.ok(!/hideT|opacity = "0"/.test(fn), "the bar stays put: nothing appears and disappears");
+  assert.match(app, /on\("prototype", \(id\) => present\(id\)\);/);
+  const cv = read("canvas.js");
+  assert.match(cv, /run\.onclick = \(e\) => \(e\.stopPropagation\(\), fire\("prototype", it\.id\)\);/);
+  assert.match(cv, /if \(S\.presenting\) return fire\("exit-present"\);/);
+  const css = read("app.css");
+  assert.ok(!/\.app\.present \.top[,{]/.test(css), "the header, with the switch, stays in Prototype");
 });
 
 // A guide that explains something and offers nothing to do is a dead end: every step after the intro
@@ -491,5 +501,15 @@ test("ui: compare is readable and toasts don't cover the branch bar", () => {
   const app = read("app.js");
   assert.match(app, /requestAnimationFrame\(\(\) => \(S\.compare \? fitPair\(\) : flyTo\(beforeCompare\)\)\);/);
   assert.match(read("canvas.js"), /export function fitPair\(opts\)/);
-  assert.match(read("app.css"), /\.has-banner:not\(\.ui-off\) \.toasts\{top:84px\}/);
+  const css = read("app.css");
+  assert.match(css, /\.has-banner:not\(\.ui-off\) \.toasts\{top:128px\}/);
+  assert.match(css, /\.toasts\{right:calc\(var\(--rw\) \+ 8px\);top:52px\}/, "and under the header's switch");
+});
+
+// Entering Prototype never shows a blank window: the screen's picture stays up until its page is,
+// and only that screen is drawn.
+test("ui: Prototype shows the screen's picture while its page loads", () => {
+  const css = read("app.css");
+  assert.ok(!/\.app\.present \.gfx\{visibility:hidden\}/.test(css) && !/\.app\.present [^{]*,\.app\.present \.gfx\{visibility:hidden/.test(css));
+  assert.match(read("canvas.js"), /const list = S\.presenting \? pageBoards\(\)\.filter\(\(it\) => it\.id === S\.presenting\) : pageBoards\(\);/);
 });

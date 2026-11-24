@@ -353,10 +353,13 @@ export class Store {
   async readSnapshot(key) {
     return fsp.readFile(this.snapPath(key)).catch(() => null);
   }
-  async writeSnapshot(key, buf) {
+  // what: the drawing's key before hashing (ui/drawkey.js: look|file|screen|state|size|…), when the
+  // canvas sends it, so the latest drawing of each screen can be found again by environment.
+  async writeSnapshot(key, buf, what = null) {
     // Guard: only an SVG drawing, and not a huge one (a 5 MB prototype draws to ~1-3 MB)
     if (!Buffer.isBuffer(buf) || buf.length > LIMITS.snapshotBytes || !/^\s*<svg[\s>]/.test(buf.toString("utf8", 0, 200))) throw new StoreError("bad_snapshot", "That isn't a board snapshot");
     await writeAtomic(this.snapPath(key), zlib.gzipSync(buf, { level: 6 }));
+    if (what) await this.noteSnapshot(key, what).catch(() => {});
     // keep the folder bounded: the least recently written go first
     const names = (await fsp.readdir(this.snapDir).catch(() => [])).filter((n) => n.endsWith(".svg.gz"));
     if (names.length > LIMITS.snapshots) {
@@ -365,6 +368,26 @@ export class Store {
       for (const [n] of st.slice(0, names.length - LIMITS.snapshots)) await fsp.rm(path.join(this.snapDir, n), { force: true });
     }
     return { key, bytes: buf.length };
+  }
+
+  // The latest drawing of each screen, by environment: "env|file|screen|state|size" → key. A screen
+  // whose look has just changed (an edit, a new branch) has no drawing of the new look until the
+  // canvas draws it; the last one drawn is still the best picture of it an agent can read.
+  async snapIndex() {
+    if (!this.snapIdx) this.snapIdx = await readJson(path.join(this.snapDir, "index.json"), {});
+    return this.snapIdx;
+  }
+  async noteSnapshot(key, what) {
+    // Guard: a key string is short and has the shape the canvas makes; anything else is ignored
+    const parts = String(what).split("|");
+    if (String(what).length > 400 || parts.length < 5 || !/^[0-9a-f]{20}$/.test(parts[0])) return;
+    const rest = parts.slice(1, 5).join("|");
+    const idx = await this.snapIndex();
+    for (const e of await this.listEnvs()) if ((await this.fingerprint(e.id).catch(() => null)) === parts[0]) idx[`${e.id}|${rest}`] = key;
+    // Guard: bounded like the drawings themselves; the oldest entries go first
+    const names = Object.keys(idx);
+    for (const n of names.slice(0, Math.max(0, names.length - LIMITS.snapshots * 2))) delete idx[n];
+    await writeAtomic(path.join(this.snapDir, "index.json"), JSON.stringify(idx));
   }
 
   // ----- a frame as HTML, for agents -----
@@ -378,8 +401,22 @@ export class Store {
     if (!b) throw new StoreError("not_found", `No frame ${boardId} on the canvas. list_canvas lists them.`);
     if (b.file) return { board: b.id, env: b.env, frame: b.name || "Frame", file: b.file, source: "file", html: (await this.readFile(b.env, b.file)).toString("utf8") };
     const key = crypto.createHash("sha1").update(drawKey(await this.fingerprint(b.env), b)).digest("hex");
-    const gz = await this.readSnapshot(key);
+    let gz = await this.readSnapshot(key);
     const base = { board: b.id, env: b.env, screen: b.screen || "start screen", state: b.state || "Default", source: "drawing", edit: "index.html (structure) and overrides.css (visual tweaks)" };
+    if (!gz) {
+      // not drawn in its current look yet: the last drawing of this screen, here or on the page it
+      // branched from, said to be older so the agent checks before relying on a detail
+      const idx = await this.snapIndex();
+      const rest = drawKey("", b).split("|").slice(1, 5).join("|");
+      for (let id = b.env, hops = 0; id && hops < 8 && !gz; hops++) {
+        const k = idx[`${id}|${rest}`];
+        if (k) {
+          gz = await this.readSnapshot(k);
+          if (gz) base.note = id === b.env ? "Drawn before the latest change to this page; changes since may be missing." : `Drawn for ${id}, which this page branched from; this branch's own changes may be missing.`;
+        }
+        id = gz ? null : (await readJson(path.join(this.envDir(id), "env.json"), {})).parent || null;
+      }
+    }
     if (!gz) return { ...base, html: null };
     // Guard: a drawing is at most snapshotBytes before it's zipped; never unzip past that
     const svg = zlib.gunzipSync(gz, { maxOutputLength: LIMITS.snapshotBytes }).toString("utf8");
