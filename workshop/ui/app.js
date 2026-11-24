@@ -1,14 +1,14 @@
 // Atelier — boot, Home and tabs, pages, live updates, branches, review and merge, dialogs.
 
-import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural, pageName, folderLabel } from "./state.js";
-import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented, skeleton, loadingToast, pendingButton, loadPage, apartUrl, initTips } from "./lib.js";
+import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural, pageName } from "./state.js";
+import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented, skeleton, loadingToast, pendingButton, initTips } from "./lib.js";
 import { setTool, addLink, addPicture, initCanvas, sync, fit, fitOpen, fitPair, camNow, flyTo, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
 import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff } from "./panels.js";
 import { rulesFor, loadOverrides } from "./styles.js";
 import { loadRecipes } from "./recipes.js";
 import { playIntro } from "./intro.js";
-import { mountHomeCanvas } from "./home.js";
-import { FEATURES, featureCard, artEl, openLearn } from "./visuals.js";
+import { renderBoard } from "./board.js";
+import { FEATURES, featureCard, openLearn } from "./visuals.js";
 
 const store = {
   get(k, d) {
@@ -269,33 +269,13 @@ function lastEdit(rootId) {
   for (const tk of S.tasks) if (fam.has(tk.env)) see(tk.updatedAt);
   return t ? new Date(t).toISOString() : null;
 }
-// Home is a canvas of everything (home.js): your prototypes, what to do next, and the guides. The
-// Prototypes section lists them as cards.
-let homeCv = null;
-function homeItems(rs) {
-  return rs
-    .map((e) => {
-      const open = familyOf(e.id).filter((x) => isBranch(x.env) && !x.env.archived).length;
-      const edited = lastEdit(e.id);
-      const n = boardsOf(e.id).length;
-      return { id: e.id, name: e.name, edited, board: boardsOf(e.id)[0] || null, meta: [plural(n, "screen"), open ? plural(open, "open branch", "open branches") : "", edited ? `edited ${timeAgo(edited)}`.replace(/ /g, "\u00a0") : ""].filter(Boolean).join(" · ") }; // "edited 4 d ago" wraps as a whole
-    })
-    .sort((a, b) => String(b.edited || "").localeCompare(String(a.edited || "")));
-}
-// the guides that sit on the home canvas, by their step in the Learn dialog: the welcome and the
-// three things Atelier is for (mark it up, hand it to an agent, review and merge)
-const HOME_GUIDES = [0, 3, 4, 5];
-function renderHomeCanvas(rs) {
+// Home is the team's board (ui/board.js): every prototype with its branches beside it.
+let homeBoard = null;
+function renderHomeBoard(rs) {
   const el = homeMain();
-  const items = homeItems(rs);
-  const openItem = (it) => go(S.envs.has(lastPage.get(it.id)) ? lastPage.get(it.id) : it.id);
-  const actions = [...nextActions(), ...HOME_GUIDES.map((i) => ({ title: FEATURES[i].title, desc: FEATURES[i].text, cue: "Learn", art: () => artEl(FEATURES[i].id), run: () => learn(i) }))];
-  if (!homeCv || !el.querySelector(".hcanvas")) {
-    homeCv?.destroy();
-    el.replaceChildren();
-    el.classList.add("hc");
-    homeCv = mountHomeCanvas(el, items, { open: openItem, actions, key: S.ws.home || S.ws.name });
-  } else homeCv.update(items, actions); // nothing floats over it: adding things is cards on the field
+  el.classList.remove("hc");
+  homeBoard?.destroy();
+  homeBoard = renderBoard(el, rs, { go, branch: createBranch, importHtml: openImport, connect: () => openSpaces(), section: goSection, lastEdit, loadDiff, spaces: !!S.ws.spaces });
 }
 // The home: one floating utility over the work (after Libra's floating utility bars, in Atelier's
 // glass: the editor's tool bar), holding the sections and Import, and a main area under it that
@@ -306,7 +286,7 @@ function homeShell() {
   const tab = (sec, icon, label) => `<button type="button" role="tab" data-s="${sec}" aria-selected="false"><i>${icon}</i><span class="lb">${label}</span></button>`;
   home.replaceChildren(
     h(`<div class="hmain" id="homeMain"></div>`),
-    h(`<nav class="hdock" aria-label="Home"><div class="hdtabs" role="tablist" aria-label="Sections"><span class="hdpill" aria-hidden="true"></span>${tab("home", IC.home, "Home")}${tab("prototypes", IC.board, "Prototypes")}${tab("learn", IC.spark, "Learn")}${tab("activity", IC.version, "Activity")}</div><span class="vsep"></span><button type="button" class="hdadd" data-a="im" aria-label="Import HTML" data-tip="Import HTML" data-tip-up>${IC.plus}</button></nav>`),
+    h(`<nav class="hdock" aria-label="Home"><div class="hdtabs" role="tablist" aria-label="Sections"><span class="hdpill" aria-hidden="true"></span>${tab("home", IC.home, "Prototypes")}${tab("learn", IC.spark, "Learn")}${tab("activity", IC.version, "Activity")}</div><span class="vsep"></span><button type="button" class="hdadd" data-a="im" aria-label="Import HTML" data-tip="Import HTML" data-tip-up>${IC.plus}</button></nav>`),
   );
   const dock = home.querySelector(".hdock");
   dock.querySelector('[data-a="im"]').onclick = openImport;
@@ -315,8 +295,9 @@ function homeShell() {
   dock.querySelector(".hdtabs").addEventListener("keydown", (e) => {
     const d = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
     if (!d) return;
-    const i = SECTIONS.indexOf(S.homeSection);
-    const next = SECTIONS[(i + d + SECTIONS.length) % SECTIONS.length];
+    const tabs = [...dock.querySelectorAll("[data-s]")].map((t) => t.dataset.s);
+    const i = Math.max(0, tabs.indexOf(S.homeSection));
+    const next = tabs[(i + d + tabs.length) % tabs.length];
     e.preventDefault();
     goSection(next);
     dock.querySelector(`[data-s="${next}"]`)?.focus();
@@ -358,7 +339,7 @@ function renderDock() {
   const dock = homeShell().querySelector(".hdock");
   let sel = null;
   for (const b of dock.querySelectorAll("[data-s]")) {
-    const on = b.dataset.s === S.homeSection;
+    const on = b.dataset.s === (S.homeSection === "prototypes" ? "home" : S.homeSection); // #/prototypes is the board too
     b.setAttribute("aria-selected", String(on));
     b.tabIndex = on ? 0 : -1;
     if (on) sel = b;
@@ -377,24 +358,18 @@ function renderDock() {
 function renderHome(moved = false) {
   if (S.view !== "home") return;
   const rs = roots();
-  const key = JSON.stringify([S.homeSection, S.ws.name, S.ws.home, S.ws.spaces, S.ws.harnesses?.length || 0, rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen, lastEdit(e.id)])]);
+  const key = JSON.stringify([S.homeSection, S.ws.name, S.ws.home, S.ws.spaces, S.ws.harnesses?.length || 0, S.comments.length, S.tasks.map((t) => t.status).join(), S.activity?.length || 0, [...S.diffs].map(([k, d]) => [k, d.changes.length, d.conflicts]), rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen, lastEdit(e.id)])]);
   if (key === homeKey) return;
   homeKey = key;
   renderDock();
   const main = homeMain();
   if (moved && !matchMedia("(prefers-reduced-motion: reduce)").matches) main.animate([{ opacity: 0, filter: "blur(2px)" }, { opacity: 1, filter: "blur(0)" }], { duration: 180, easing: "ease-out" });
-  if (S.homeSection !== "home") (homeCv?.destroy(), (homeCv = null), main.classList.remove("hc"));
-  if (S.homeSection === "home") return renderHomeCanvas(rs);
+  homeBoard?.destroy();
+  homeBoard = null;
   if (S.homeSection === "learn") return renderLearnPage(main);
   if (S.homeSection === "activity") return renderActivityPage(main);
-  renderHomeList(rs);
+  renderHomeBoard(rs); // #/ and #/prototypes
 }
-// what this space can do next, as empty-state cards (never made-up prototypes)
-const nextActions = () => [
-  { title: "Add a prototype", desc: "Import an HTML file or a whole folder", icon: IC.upload, cue: "Start", run: openImport },
-  ...(S.ws.spaces ? [{ title: "Connect a folder", desc: "Edit prototypes where they live", icon: IC.folder, cue: "Connect", run: () => openSpaces() }] : []),
-  ...(S.ws.harnesses?.length ? [] : [{ title: "Connect your AI tool", desc: "It works on branches; you review", icon: IC.agent, cue: "Connect", run: openConnect }]),
-];
 function renderLearnPage(main) {
   const page = h(`<div class="hl"><header class="hl-h"><h1>Learn</h1><p>Short guides to everything you can do in Atelier.</p></header><div class="hl-learn all"></div></div>`);
   const lc = page.querySelector(".hl-learn");
@@ -433,72 +408,6 @@ async function renderActivityPage(main) {
     list.append(r);
   }
 }
-function renderHomeList(rs) {
-  const el = homeMain();
-  el.classList.remove("hc");
-  const inner = h(`<div class="in"></div>`);
-  const linked = rs.some((e) => e.linked);
-  const hh = h(`<div class="hh"><div class="tt"><h1>Prototypes</h1><p>${S.ws.home ? `<span class="hpath" title="${esc(S.ws.home)}">${IC.folder}${esc(S.ws.home)}</span>` : ""}${linked ? "Edited in place, in their own folders." : "Every prototype in this space."}</p></div><div class="hacts">${S.ws.spaces ? `<button type="button" class="dbtn" data-a="sp">${IC.folder}Connect a folder</button>` : ""}<button type="button" class="createbtn" data-a="im">${IC.upload}Import HTML</button></div></div>`);
-  hh.querySelector('[data-a="im"]').onclick = openImport;
-  const spb = hh.querySelector('[data-a="sp"]');
-  if (spb) spb.onclick = () => openSpaces();
-  inner.append(hh);
-  const sec = h(`<div class="hsec"><div class="shd"><span>Prototypes</span><span class="n">${rs.length || ""}</span></div><div class="cards"></div></div>`);
-  const cards = sec.querySelector(".cards");
-  for (const e of rs) {
-    const fam = familyOf(e.id);
-    const open = fam.filter((x) => isBranch(x.env) && !x.env.archived).map((x) => x.env);
-    const edited = lastEdit(e.id);
-    const first = boardsOf(e.id)[0];
-    const c = h(`<div class="card" role="button" tabindex="0" aria-label="Open ${esc(e.name)}"><div class="th"><span class="ph">${IC.board}</span></div><div class="bd2"><b>${esc(e.name)}</b>${e.linked ? `<span class="m hfolder" title="${esc(e.folder)}">${IC.folder}${esc(folderLabel(e))}</span>` : ""}<span class="m">${plural(boardsOf(e.id).length, "screen")} · ${plural(open.length, "open branch", "open branches")}${edited ? ` · edited ${esc(timeAgo(edited))}` : ""}</span><div class="brs"></div></div></div>`);
-    const brs = c.querySelector(".brs");
-    for (const b of open.slice(0, 4)) {
-      const tag = h(`<span class="brtag" role="link" tabindex="0">${IC.fork}${esc(b.name)} <span class="n"></span></span>`);
-      tag.onclick = (ev) => (ev.stopPropagation(), go(b.id));
-      tag.onkeydown = (ev) => ev.key === "Enter" && (ev.stopPropagation(), go(b.id));
-      brs.append(tag);
-      // change counts fill in as they arrive, without reloading the previews
-      const count = () => (tag.querySelector(".n").textContent = S.diffs.get(b.id)?.changes.length || "");
-      if (S.diffs.has(b.id)) count();
-      else loadDiff(b.id).then(count);
-    }
-    if (open.length > 4) brs.append(h(`<span class="brtag">+${open.length - 4}</span>`));
-    if (!open.length) brs.hidden = true;
-    c.onclick = () => go(S.envs.has(lastPage.get(e.id)) ? lastPage.get(e.id) : e.id);
-    c.onkeydown = (ev) => ev.key === "Enter" && c.click();
-    // a live thumbnail of its first screen
-    const th = c.querySelector(".th");
-    th.classList.add("skel"); // until its first screen has drawn
-    const fr = document.createElement("iframe");
-    fr.title = `${e.name} preview`;
-    fr.loading = "lazy";
-    fr.tabIndex = -1;
-    fr.setAttribute("aria-hidden", "true");
-    const q = new URLSearchParams({ "ws-board": `thumb-${e.id}`, "ws-embed": "1" });
-    if (first?.screen) q.set("ws-screen", first.screen);
-    loadPage(fr, apartUrl(`/env/${encodeURIComponent(e.id)}/?${q}`));
-    const w = e.device?.w || 1440,
-      ht = e.device?.h || 900;
-    fr.style.width = w + "px";
-    fr.style.height = ht + "px";
-    const scale = () => (fr.style.transform = `scale(${th.clientWidth / w})`);
-    new ResizeObserver(scale).observe(th);
-    fr.onload = () => (th.querySelector(".ph")?.remove(), th.classList.remove("skel"), scale());
-    th.append(fr);
-    cards.append(c);
-  }
-  if (!rs.length)
-    inner.append(
-      h(`<div class="hempty"><b>No prototypes in this space yet</b><span>Add a folder with an index.html (or any .html page) to ${esc(S.ws.home || "this folder")} and look again, connect another project folder, or import an HTML file.</span></div>`),
-    );
-  const nw = h(`<div class="card new" role="button" tabindex="0">${IC.plus}<b>Import a prototype</b><span>An HTML file, or a whole document you paste</span></div>`);
-  nw.onclick = openImport;
-  nw.onkeydown = (ev) => ev.key === "Enter" && openImport();
-  cards.append(nw);
-  inner.append(sec);
-  el.replaceChildren(inner);
-}
-
 // ---------- branches ----------
 function copyStorage(from, to) {
   try {

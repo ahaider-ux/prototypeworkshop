@@ -179,11 +179,10 @@ test("ui: the intro's pin steps aside while the word lands", () => {
 // only real prototypes; a spare place is an empty-state card whose click does the real thing, and
 // the intro's screen is Atelier's own empty state, not a fake design.
 test("ui: nothing made up stands in for a prototype", () => {
-  const app = read("app.js");
-  const homeCanvas = app.slice(app.indexOf("function renderHomeCanvas"), app.indexOf("function renderHome()"));
-  for (const run of ["run: openImport", "run: () => openSpaces()", "run: openConnect"]) assert.ok(homeCanvas.includes(run), `the home's empty-state cards do something real: ${run}`);
-  const home = read("home.js");
-  assert.match(home, /if \(idx < 0\) return actions\[-idx - 1\]\?\.run\?\.\(\)/);
+  const board = read("board.js");
+  assert.match(board, /nb\.onclick = \(\) => ctx\.branch\(root\.id\);/, "the board's spare place starts a real branch");
+  assert.match(board, /em\.querySelector\("button"\)\.onclick = ctx\.importHtml;/, "an empty space offers Import");
+  assert.ok(!/artEl|FEATURES|guide/i.test(board), "no guide or picture cards among the prototypes");
   const intro = read("intro.js");
   const page = intro.slice(intro.indexOf("const PAGE"), intro.indexOf("\n", intro.indexOf("const PAGE")));
   assert.match(page, /class="pempty/, "the intro's screen is the empty state");
@@ -232,8 +231,8 @@ test("ui: the home's floating utility stays while its sections swap", () => {
   const app = read("app.js");
   assert.match(app, /const SECTIONS = \["home", "prototypes", "learn", "activity"\]/);
   assert.match(app, /function homeShell\(\) \{[\s\S]*?if \(home\.querySelector\("\.hdock"\)\) return home;/, "built once");
-  const canvas = app.slice(app.indexOf("function renderHomeCanvas"), app.indexOf("\n}\n", app.indexOf("function renderHomeCanvas")));
-  assert.ok(canvas.includes("homeMain()") && !/\$\("home"\)\.replaceChildren/.test(canvas), "the home canvas fills only the main area");
+  const board = app.slice(app.indexOf("function renderHomeBoard"), app.indexOf("\n}\n", app.indexOf("function renderHomeBoard")));
+  assert.ok(board.includes("homeMain()") && !/\$\("home"\)\.replaceChildren/.test(board), "the board fills only the main area");
   for (const f of ["renderLearnPage", "renderActivityPage"]) {
     const body = app.slice(app.indexOf(`function ${f}`), app.indexOf("\n}\n", app.indexOf(`function ${f}`)));
     assert.ok(body.includes("main.replaceChildren"), `${f} replaces only the main area`);
@@ -382,28 +381,23 @@ test("ui: the header asks you to connect your AI tool with a real button", () =>
   assert.match(read("app.js"), /\$\("agentBtn"\)\.className = on \? "dbtn sm agst" : "createbtn sm agst cta"/);
 });
 
-// Home is one endless field of real things: your prototypes, placeholders that do what they say, and
-// the guides; over each the pointer says what a click does.
-test("ui: the home canvas holds prototypes, placeholders and guides, and names each click", () => {
+// Home is the team's board, not an abstract canvas: every prototype with Main and its open branches
+// beside it (who started each, its changes and comments, where it stands), a place to start a new
+// branch, and what happened lately. The same board answers #/ and #/prototypes.
+test("ui: the home is a board of prototypes and their branches", () => {
   const app = read("app.js");
-  assert.match(app, /if \(S\.homeSection === "home"\) return renderHomeCanvas\(rs\);/);
-  const canvas = app.slice(app.indexOf("function renderHomeCanvas"), app.indexOf("\n}\n", app.indexOf("function renderHomeCanvas")));
-  assert.match(canvas, /nextActions\(\)/);
-  assert.match(canvas, /cue: "Learn", art: \(\) => artEl/);
-  for (const cue of ['cue: "Start"', 'cue: "Connect"']) assert.ok(app.includes(cue), cue);
-  const home = read("home.js");
-  assert.match(home, /const cueOf = \(idx\) => \(idx >= 0 \? "Open"/);
-  assert.match(home, /el\.className = "htile hguide"/);
-  assert.match(read("app.css"), /\.hcur\.on \.hcl\{[^}]*background:var\(--glass-bg\)/, "the label is glass");
-});
-
-// Your own prototypes never read as one of the guides around them: they're on the inverse surface.
-test("ui: prototype cards on the home are inverse, unlike guides and placeholders", () => {
-  assert.match(read("home.js"), /el\.className = "htile hproj"/);
+  assert.match(app, /renderHomeBoard\(rs\); \/\/ #\/ and #\/prototypes/);
+  assert.match(app, /renderBoard\(el, rs, \{ go, branch: createBranch, importHtml: openImport/);
+  assert.ok(!/mountHomeCanvas|renderHomeCanvas|renderHomeList/.test(app), "one home, not three");
+  assert.match(app, /\$\{tab\("home", IC\.home, "Prototypes"\)\}\$\{tab\("learn"/, "the dock names what's there");
+  const board = read("board.js");
+  for (const piece of ['class="hb-card main"', "<b>Main</b>", "for (const b of open)", 'class="hb-card new"', "branchStatus(facts)", "branchCounts(facts)", "commentsOn(b.id)", "Latest"]) assert.ok(board.includes(piece), piece);
+  assert.match(board, /c\.onclick = \(\) => ctx\.go\(b\.id\);/, "a branch card opens that branch");
   const css = read("app.css");
-  assert.match(css, /\.htile\.hproj\{background:var\(--raise-ink\);box-shadow:var\(--sh-card-inv\)\}/);
-  assert.match(css, /\.htile\.hproj \.hcap b\{color:var\(--on-primary\)\}/);
+  assert.match(css, /\.hb-card\.main\{background:var\(--raise-ink\);box-shadow:var\(--sh-card-inv\)\}/, "Main is the inverse card");
   for (const t of ["--sh-card-inv:", "--sh-card-inv-hi:"]) assert.equal(css.split(t).length - 1, 2, `${t} has a dark-mode pair`);
+  // on Main, the inspector offers the branch instead of only warning
+  assert.match(read("panels.js"), /You're editing Main[^`]*`\);\s*const br = h\(`<button[^`]*Create a branch<\/button>`\);\s*br\.onclick = \(\) => fire\("branch", env\.id\);/);
 });
 
 // A frame is editable as it stands, as in Figma: the frame under the pointer and the selected one are

@@ -54,7 +54,7 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   pair for every token. Motion uses four curves and nothing else (`--ease-out`, `--ease-smooth`, `--ease-io`,
   `--ease-spring`), and follows the animations.dev bar: nothing animates on keyboard or
   high-frequency actions, menus 180ms in and 120ms out from their trigger, press `scale(.97)`, no
-  hover scaling (one exception: a home-canvas card swells under the pointer, after
+  hover scaling (one exception, no longer loaded: a home-canvas card swelled under the pointer, after
   design.cash.app), and reduced motion keeps colour and opacity only. Chrome floats over the canvas
   (`--glass-*` tokens: floating panels, capsule toolbar and banner, menus and dialogs), nearly solid
   with a hairline rim and a soft shadow, no bright top edge; the
@@ -75,25 +75,25 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   drawings carry only what's shown: hidden parts emptied, CSS trimmed to what matches, each picture
   once. They decode one at a time when idle. Bump `DRAWING` in `ui/drawkey.js` when what goes into a
   drawing changes. `ui/snap.js` takes no imports: it runs inside any prototype.
-  The home canvas (`ui/home.js`) follows the same rules: one transform on one layer for the camera,
-  only tiles in view exist, thumbnails come from that pipeline (`thumbJob`, `onBitmap`), and decodes
-  wait while someone drags (`setBusy`). What the pointer is over comes from the cell maths, not
-  hit-testing, so it stays right while the field coasts. Its pure maths lives in `ui/motion.js`,
-  tested in Node. Nothing made up stands in for a prototype, on the home or in the intro: a slot
-  without a real one is an empty state (`.pempty`, or the home's placeholder cards) that does something real.
+  The home board (`ui/board.js`) takes its pictures from that pipeline too (`thumbJob`, `onBitmap`).
+  Nothing made up stands in for a prototype, on the home or in the intro: a slot without a real one
+  is an empty state (`.pempty`, or the board's "New branch" slot) that does something real.
   The home's navigation is a floating utility, not a docked sidebar (after Libra's floating utility
   bars, in Atelier's glass: the editor's tool bar): a capsule at the bottom holding the sections as
   tabs with a raised thumb on the selected one, and Import as the one ink button. It is built once;
   the main area under it changes with the section (`#/`, `#/prototypes`, `#/learn`, `#/activity`)
-  and only the main area re-renders. Home (`#/`) is a canvas, edge to edge: your
-  prototypes first, then placeholder cards that do what they say (add a prototype, connect a
-  folder, connect your AI tool) and four guides, each shown once in a block that fits the view; the
-  field only repeats once there are seven or more prototypes to fill it. Your prototypes are the inverse cards
-  (`--raise-ink`, `--sh-card-inv`) so they never read as one of the guides. Cards are lifted off the canvas
-  (`--sh-card`, `--sh-card-hi`); over one, the pointer's dot opens into a glass label saying what a
-  click does ("Open", "Start", "Connect", "Learn") and trails the pointer by a hair. Prototypes
-  (`#/prototypes`) lists them as cards. The header's one call to action is "Connect your AI tool"
-  until a tool is connected. Product pictures (the home's guide cards, the Learn cards and the Learn dialog) live in
+  and only the main area re-renders (`#/`, `#/learn`, `#/activity`; `#/prototypes` is the board too).
+- **Home is the team's board, and it is concrete.** Atelier is a place to branch off prototypes
+  and for a team to see the attempts, comment on them and merge what works. So Home shows the
+  work itself: each prototype as a row with Main (the agreed version, the inverse card) and every
+  open branch beside it, joined by a line from Main. A branch's card says who started it and when,
+  its changes and comments (`branchCounts`), and where it stands (`branchStatus` in
+  `ui/boardfacts.js`, tested in Node: conflicts, an agent working or waited for, ready to review,
+  nothing yet), with a "New branch" slot at the end and the latest activity under the rows. No
+  guide cards, taglines or abstract canvases there: guides live in Learn. In the editor, the
+  inspector on Main offers "Create a branch" where it warns that edits change Main. `ui/home.js`
+  (the earlier pannable home canvas) is no longer loaded. The header's one call to action is "Connect your AI tool"
+  until a tool is connected. Product pictures (the Learn cards and the Learn dialog) live in
   `ui/visuals.js`, built from Atelier's own classes: each is a short plain headline and one real
   piece of Atelier on a flat dotted canvas (no pastel blooms); follow the `product-visuals` skill
   (`.claude/skills/product-visuals/SKILL.md`) for any new one.

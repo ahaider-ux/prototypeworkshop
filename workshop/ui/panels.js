@@ -1130,7 +1130,13 @@ function designEl(body, s) {
     t.querySelector(".crumbs").append(b);
   }
   if (i.matches > 1) t.append(segmented([{ label: "This element", value: "exact" }, { label: `All ${i.matches} like it`, value: "class" }], S.scope, (v) => ((S.scope = v), renderDesign(), fire("scope")), { full: true, label: "Apply changes to" }));
-  if (env && !isBranch(env)) t.append(h(`<span class="lineage">Changes go straight to main. Create a branch to try them first.</span>`));
+  if (env && !isBranch(env)) {
+    // on Main, an edit changes the agreed version: the way to try something first is one press away
+    const note = h(`<span class="lineage">You're editing Main, the version everyone sees. To try an idea first, work on a branch.</span>`);
+    const br = h(`<button type="button" class="dbtn sm" style="align-self:flex-start">${IC.fork}Create a branch</button>`);
+    br.onclick = () => fire("branch", env.id);
+    t.append(note, br);
+  }
   body.append(t);
 
   const r = i.rect || {};
