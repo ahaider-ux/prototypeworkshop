@@ -546,8 +546,11 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .wires path.draft{stroke-dasharray:6 4}
 .hud{position:absolute;inset:0;pointer-events:none;z-index:5;overflow:hidden}
 /* frame titles, as in a design tool: the screen's name above its top-left corner */
-.blabel{position:absolute;height:28px;display:flex;align-items:center;gap:6px;font-size:12px;line-height:1;color:var(--text-secondary);white-space:nowrap;pointer-events:auto;cursor:default;transform:translateY(-100%);padding-bottom:4px;overflow:hidden}
-.blabel .n{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.blabel{position:absolute;height:28px;display:flex;align-items:center;gap:6px;font-size:12px;line-height:1;color:var(--text-secondary);white-space:nowrap;pointer-events:none;cursor:default;transform:translateY(-100%);padding-bottom:4px;overflow:hidden}
+/* A frame's title takes the pointer only on its name and Run, not along its whole row: the row
+   lies over the outside of the frame's top edge, which is for resizing */
+.blabel .n,.blabel .g,.blabel .brun{pointer-events:auto}
+.blabel .n{min-width:0;overflow:hidden;text-overflow:ellipsis;line-height:18px}
 .blabel .g{font:500 12px/1 var(--fakt);color:var(--text-placeholder)}
 .blabel.on .n{color:var(--text-accent)}
 .blabel.ghost{cursor:default;color:var(--text-placeholder)}
@@ -581,7 +584,10 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .rz{position:absolute;pointer-events:auto;touch-action:none}
 .rz.e,.rz.w{cursor:ew-resize}.rz.n,.rz.s{cursor:ns-resize}.rz.se,.rz.nw{cursor:nwse-resize}.rz.ne,.rz.sw{cursor:nesw-resize}
 .rz[hidden]{display:none}
-.hud .blabel,.hud .srow{z-index:1} /* a frame's title and Run stay clickable beside its top edge */
+.rz{z-index:1} /* over the frame titles: where a corner's area meets the end of a title, the corner wins */
+.hud .pin{z-index:2}
+/* a corner's area is rounded off on the outside, so its far tip is no further out than its sides */
+.rz.nw{border-top-left-radius:10px}.rz.ne{border-top-right-radius:10px}.rz.se{border-bottom-right-radius:10px}.rz.sw{border-bottom-left-radius:10px}
 .app.present .rz{display:none}
 .insline{position:absolute;background:var(--text-accent);border-radius:1px;pointer-events:none}
 .guide{position:absolute;background:var(--text-error);pointer-events:none}

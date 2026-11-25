@@ -90,3 +90,24 @@ test("hit areas: resizing from a side keeps the opposite side in place", () => {
   assert.deepEqual(resizeFrom({ x: 0, y: 0, w: 400, h: 200 }, "e", 100, 0, { lo: 16, ratio: true }), { x: 0, y: 0, w: 500, h: 200 });
   assert.deepEqual(resizeFrom(s, "e", NaN, 0, o), s);
 });
+
+// Two faults a review of design tools' hover areas marks down: areas that overlap (which one you
+// get there is an accident), and a corner that is harder to hit than an edge.
+test("hit areas: no two areas overlap, and a corner is never smaller than an edge is thick", () => {
+  for (const [w, h] of [[400, 300], [60, 40], [20, 20], [10, 10], [24, 6], [3, 40], [1, 1]]) {
+    const a = resizeAreas({ x: 50, y: 50, w, h });
+    for (let i = 0; i < a.length; i++)
+      for (let j = i + 1; j < a.length; j++) {
+        const ox = Math.min(a[i].x + a[i].w, a[j].x + a[j].w) - Math.max(a[i].x, a[j].x);
+        const oy = Math.min(a[i].y + a[i].h, a[j].y + a[j].h) - Math.max(a[i].y, a[j].y);
+        assert.ok(!(ox > 1e-9 && oy > 1e-9), `${w}×${h}: ${a[i].k} overlaps ${a[j].k}`);
+      }
+    const m = by(a);
+    for (const c of ["nw", "ne", "se", "sw"]) assert.ok(m[c].w >= m.e.w && m[c].h >= m.n.h, `${w}×${h}: ${c} is at least as big as an edge is thick`);
+    // the four edges are alike, and so are the four corners
+    assert.equal(m.n.h, m.s.h);
+    assert.equal(m.e.w, m.w.w);
+    assert.deepEqual([m.nw.w, m.nw.h], [m.se.w, m.se.h]);
+    assert.deepEqual([m.ne.w, m.ne.h], [m.sw.w, m.sw.h]);
+  }
+});

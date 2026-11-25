@@ -643,7 +643,12 @@ test("ui: a selection is resized by its areas, not its drawn squares", () => {
   assert.match(css, /\.hdl\{[^}]*pointer-events:none/);
   assert.match(css, /\.rz\{position:absolute;pointer-events:auto/);
   assert.match(css, /\.rz\.e,\.rz\.w\{cursor:ew-resize\}\.rz\.n,\.rz\.s\{cursor:ns-resize\}\.rz\.se,\.rz\.nw\{cursor:nwse-resize\}\.rz\.ne,\.rz\.sw\{cursor:nesw-resize\}/);
-  assert.match(css, /\.hud \.blabel,\.hud \.srow\{z-index:1\}/, "a frame's title and Run stay clickable beside its top edge");
+  // the title row lies over the outside of the top edge: only its name and Run take the pointer,
+  // so the top edge resizes from both sides like the other three
+  assert.match(css, /\.blabel\{[^}]*pointer-events:none/);
+  assert.match(css, /\.blabel \.n,\.blabel \.g,\.blabel \.brun\{pointer-events:auto\}/);
+  assert.match(css, /\.rz\{z-index:1\}/);
+  assert.match(css, /\.rz\.nw\{border-top-left-radius:10px\}\.rz\.ne\{border-top-right-radius:10px\}\.rz\.se\{border-bottom-right-radius:10px\}\.rz\.sw\{border-bottom-left-radius:10px\}/, "a corner's area is rounded off on the outside");
   const cv = read("canvas.js");
   assert.match(cv, /for \(const k of SIDES\) \{\n\s*const d = h\(`<div class="rz \$\{k\}" data-h="\$\{k\}"><\/div>`\);/);
   assert.match(cv, /const rzOf = S\.tool === "move" && !S\.presenting \? eh \|\| br : null;/, "only with Select, for a layer or a frame");
