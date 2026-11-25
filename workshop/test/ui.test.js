@@ -224,19 +224,18 @@ test("ui: every panel section lives under one of the three tabs", () => {
   assert.ok(!/measureLabels/.test(js));
 });
 
-// The home is a floating utility that stays and a main area that changes: picking a section
-// re-renders only the main area (the utility is built once and updated in place), and every section
-// has a route.
-test("ui: the home's floating utility stays while its sections swap", () => {
+// The home is one main area that changes with the section: picking a section re-renders only that
+// area, and every section has a route.
+test("ui: the home's sections swap in one main area", () => {
   const app = read("app.js");
   assert.match(app, /const SECTIONS = \["home", "prototypes", "learn", "activity"\]/);
-  assert.match(app, /function homeShell\(\) \{[\s\S]*?if \(home\.querySelector\("\.hdock"\)\) return home;/, "built once");
+  assert.match(app, /if \(!home\.querySelector\("\.hmain"\)\) home\.replaceChildren\(/, "built once");
   const board = app.slice(app.indexOf("function renderHomeBoard"), app.indexOf("\n}\n", app.indexOf("function renderHomeBoard")));
   assert.ok(board.includes("homeMain()") && !/\$\("home"\)\.replaceChildren/.test(board), "the board fills only the main area");
   for (const f of ["renderLearnPage", "renderActivityPage"]) {
     const body = app.slice(app.indexOf(`function ${f}`), app.indexOf("\n}\n", app.indexOf(`function ${f}`)));
     assert.ok(body.includes("main.replaceChildren"), `${f} replaces only the main area`);
-    assert.ok(!/\$\("home"\)\.replaceChildren/.test(body), `${f} leaves the utility alone`);
+    assert.ok(!/\$\("home"\)\.replaceChildren/.test(body), `${f} leaves the rest alone`);
   }
 });
 
@@ -296,20 +295,23 @@ test("ui: a canvas that fits stays centred; a bigger one returns to what you ope
   assert.match(home, /if \(fitsView\(\)\) Object\.assign\(cam, middle\(\)\);/, "on update");
 });
 
-// The home's navigation floats over the work like everything else that floats in Atelier (after
-// Libra's floating utility bars): the editor's glass tool bar, its tab thumb, its ink action; no
-// docked sidebar beside the canvas, no second agent status (the header has it).
-test("ui: the home's navigation is a floating utility, not a docked sidebar", () => {
+// Navigation was in three places (a Home tab, a floating bar that called the same place Prototypes,
+// and a sidebar before that), which was confusing. It is one row in the header, always there: the
+// space's three places, then the prototypes you have open. Nothing else navigates, and the row
+// shows where you are.
+test("ui: one row of navigation, in the header", () => {
   const app = read("app.js");
+  const tabs = app.slice(app.indexOf("function renderTabs()"), app.indexOf("function closeTab"));
+  assert.match(tabs, /\[\["home", IC\.board, "Prototypes"\], \["learn", IC\.spark, "Learn"\], \["activity", IC\.version, "Activity"\]\]/);
+  assert.match(tabs, /tab\.onclick = \(\) => goSection\(sec\);/);
+  assert.ok(!/>Home</.test(tabs), "no Home tab beside a Prototypes one");
   const shell = app.slice(app.indexOf("function homeShell()"), app.indexOf("const homeMain"));
-  assert.ok(shell.includes('class="hdock"') && shell.includes('role="tablist"') && shell.includes('class="vsep"'));
-  assert.ok(!/hside|hagent|What's new/.test(shell), "no sidebar, footer links or agent card");
+  assert.ok(!/hdock|hside|tablist/.test(shell), "no second navigation on the home");
+  const show = app.slice(app.indexOf("function showHome()"), app.indexOf("const goSection"));
+  assert.ok(show.indexOf("S.homeSection = sec;") < show.indexOf("renderTabs();"), "the row is drawn once the section is known");
   const css = read("app.css");
-  assert.ok(!/\.hside/.test(css), "no sidebar styles left");
+  assert.ok(!/\.hside|\.hdock|\.hdpill/.test(css), "no sidebar or floating bar styles left");
   assert.match(css, /\.home\{[^}]*background:var\(--bg-canvas\)/);
-  assert.match(css, /\.hdock\{[^}]*border-radius:99px;background:var\(--glass-bg\)/, "glass capsule, like the tool bar");
-  assert.match(css, /\.hdpill\{[^}]*background:var\(--raise\)/, "a raised thumb on the selected section");
-  assert.match(css, /\.hmain\.hc\{position:absolute;inset:0;/, "the canvas runs edge to edge under it");
   assert.ok(!/\.pv-tag\.agent\{[^}]*--i-orange/.test(css), "agents are ink, as in the app");
 });
 
@@ -389,7 +391,8 @@ test("ui: the home is a board of prototypes and their branches", () => {
   assert.match(app, /renderHomeBoard\(rs\); \/\/ #\/ and #\/prototypes/);
   assert.match(app, /renderBoard\(el, rs, \{ go, branch: createBranch, importHtml: openImport/);
   assert.ok(!/mountHomeCanvas|renderHomeCanvas|renderHomeList/.test(app), "one home, not three");
-  assert.match(app, /\$\{tab\("home", IC\.home, "Prototypes"\)\}\$\{tab\("learn"/, "the dock names what's there");
+  assert.ok(!/data-a="br"/.test(read("board.js")), "New branch is offered once per prototype, as its last card");
+  assert.match(read("app.css"), /\.hb-row\{display:grid;grid-template-columns:repeat\(auto-fill,minmax\(248px,1fr\)\);gap:24px\}/, "rows wrap: nothing scrolls sideways");
   const board = read("board.js");
   for (const piece of ['class="hb-card main"', "<b>Main</b>", "for (const b of open)", 'class="hb-card new"', "branchStatus(facts)", "branchCounts(facts)", "commentsOn(b.id)", "Latest"]) assert.ok(board.includes(piece), piece);
   assert.match(board, /c\.onclick = \(\) => ctx\.go\(b\.id\);/, "a branch card opens that branch");

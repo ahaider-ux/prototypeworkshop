@@ -343,6 +343,7 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .tab:hover .ib24,.tab.on .ib24,.tab .ib24:focus-visible{opacity:1}
 .tab .ib24 .ic{width:12px;height:12px}
 .tab.tab-home{flex-shrink:0}
+.tsep{flex-shrink:0;width:1px;height:16px;background:var(--border-default);margin:0 6px} /* between the space's places and the open prototypes */
 /* the agent in the header: a visible call to action until a tool is connected, then a status pill */
 .agst{flex-shrink:0;gap:6px;font-size:12px;margin-right:2px}
 .agst b{font-weight:500}
@@ -637,7 +638,7 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 
 /* ═══ Home: your prototypes ═══ */
 .home{flex:1;min-height:0;display:flex;overflow:hidden;background:var(--bg-canvas)} /* the editor's canvas: one surface for the whole app */
-.home .in{max-width:1120px;margin:0 auto;padding:40px 32px 112px;display:flex;flex-direction:column;gap:32px}
+.home .in{max-width:1120px;margin:0 auto;padding:40px 32px 64px;display:flex;flex-direction:column;gap:32px}
 .home .hh{display:flex;align-items:flex-end;gap:16px}
 .home .hh .tt{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
 .home h1{font:600 20px/1.2 var(--fakt)}
@@ -1243,24 +1244,6 @@ html[data-intro] .app{visibility:hidden}
 /* the home canvas is one endless field, edge to edge; it fades out under the header, never cut */
 .home{position:relative}
 .hmain.hc{position:absolute;inset:0;overflow:hidden;-webkit-mask:linear-gradient(to bottom,transparent,black 28px);mask:linear-gradient(to bottom,transparent,black 28px)}
-/* the home's floating utility (after Libra's floating utility bars, in Atelier's glass): the editor's
-   tool bar, holding the sections and Import; a raised white thumb slides to the selected section */
-.hdock{position:absolute;left:50%;bottom:20px;z-index:6;transform:translateX(-50%);display:flex;align-items:center;gap:2px;padding:6px;border-radius:99px;background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass-rim),var(--glass-spec),var(--sh-md)}
-.hdock .vsep{width:1px;height:20px;background:var(--border-subtle);margin:0 4px}
-.hdtabs{position:relative;display:flex;align-items:center;gap:2px}
-.hdtabs [data-s]{position:relative;z-index:1;height:36px;display:inline-flex;align-items:center;gap:6px;padding:0 14px 0 10px;border-radius:99px;color:var(--text-secondary);font:500 14px/1 var(--fakt);white-space:nowrap;transition:color 250ms var(--ease-smooth),background-color 120ms ease}
-.hdtabs [data-s] i{width:16px;height:16px;display:grid;place-items:center}
-.hdtabs [data-s][aria-selected="true"]{color:var(--text-primary)}
-.hdtabs [data-s][aria-selected="true"] i .ic{color:var(--text-accent)}
-.hdtabs [data-s]:not([aria-selected="true"]):hover{color:var(--text-primary);background:color-mix(in srgb,var(--bg-hover) 60%,transparent)}
-.hdtabs [data-s]:active,.hdadd:active{transform:scale(.97)}
-.hdtabs [data-s]:focus-visible,.hdadd:focus-visible{outline:2px solid var(--ring-default);outline-offset:1px}
-.hdpill{position:absolute;z-index:0;left:0;top:0;height:36px;width:0;border-radius:99px;background:var(--raise);box-shadow:var(--sh-btn);pointer-events:none;transition:transform 280ms var(--ease-io),width 280ms var(--ease-io)}
-.hdadd{width:36px;height:36px;display:grid;place-items:center;border-radius:50%;background:var(--raise-ink);color:var(--on-primary);box-shadow:var(--sh-ink)}
-.hdadd .ic{width:18px;height:18px}
-.hleaving~.hdock{opacity:0;transition:opacity 150ms ease-out}
-@media (max-width:640px){.hdtabs [data-s]:not([aria-selected="true"]) .lb{display:none}.hdtabs [data-s]:not([aria-selected="true"]){padding:0 10px}}
-@media (prefers-reduced-motion:reduce){.hdpill{transition:none}.hdtabs [data-s]:active,.hdadd:active{transform:none}}
 .hcanvas{position:absolute;inset:0;overflow:clip;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
 .hcanvas.grabbing{cursor:grabbing}
 .hcanvas.grabbing .htile{pointer-events:none}
@@ -1375,8 +1358,8 @@ html[data-intro] .app{visibility:hidden}
 .hb-ph b{font:600 16px/1.3 var(--fakt);letter-spacing:-.015em}
 .hb-ph .m{font-size:12px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hb-ph .sp{flex:1}
-.hb-row{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:4px 4px 12px;margin:-4px;scrollbar-width:thin}
-.hb-card{flex:0 0 272px;display:flex;flex-direction:column;gap:10px;padding:8px;border-radius:16px;background:var(--bg-layer);box-shadow:var(--sh-card);text-align:left;transition:box-shadow 150ms var(--ease-smooth)}
+.hb-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:24px}
+.hb-card{min-width:0;display:flex;flex-direction:column;gap:10px;padding:8px;border-radius:16px;background:var(--bg-layer);box-shadow:var(--sh-card);text-align:left;transition:box-shadow 150ms var(--ease-smooth)}
 .hb-card:hover{box-shadow:var(--sh-card-hi)}
 .hb-card:active{transform:scale(.99)}
 .hb-card:focus-visible{outline:2px solid var(--ring-default);outline-offset:2px}
@@ -1404,14 +1387,12 @@ html[data-intro] .app{visibility:hidden}
 .hb-card.new{background:none;box-shadow:none;outline:1.5px dashed var(--border-default);outline-offset:-1.5px}
 .hb-card.new:hover{background:var(--bg-layer);box-shadow:var(--sh-card)}
 .hb-card.new .hb-th{background:none;box-shadow:none}
-/* the line from Main to each branch */
-.hb-fork{flex:0 0 28px;align-self:center;height:1.5px;background:var(--border-default);margin-bottom:64px}
 .hb-feed{display:flex;flex-direction:column;gap:2px;max-width:720px}
 .hb-feed .av{width:28px;height:28px;border:0;flex-shrink:0}
-@media (max-width:700px){.hb-h{flex-direction:column;align-items:flex-start}.hb-card{flex-basis:232px}}
+@media (max-width:700px){.hb-h{flex-direction:column;align-items:flex-start}}
 @media (prefers-reduced-motion:reduce){.hb-card:active{transform:none}}
 /* the sections: a two-tone title (a grey lead-in, then the point), and generous air */
-.hl{max-width:1120px;margin:0 auto;padding:32px 40px 112px;display:flex;flex-direction:column;gap:32px}
+.hl{max-width:1120px;margin:0 auto;padding:32px 40px 64px;display:flex;flex-direction:column;gap:32px}
 .hl-h{display:flex;flex-direction:column;gap:4px}
 .hl-h h1{font:600 20px/1.2 var(--fakt);letter-spacing:-.02em;color:var(--text-primary)}
 .hl-h p{font-size:14px;color:var(--text-secondary)}
@@ -1434,7 +1415,7 @@ html[data-intro] .app{visibility:hidden}
 .hact-t .m{font-size:12px;color:var(--text-secondary)}
 .hact-w{font-size:12px;color:var(--text-placeholder);flex-shrink:0;font-variant-numeric:tabular-nums}
 @media (max-width:1100px){.hl-learn{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:860px){.hl{padding:32px 20px 112px}}
+@media (max-width:860px){.hl{padding:32px 20px 48px}}
 
 /* ═══ Product pictures (ui/visuals.js): real pieces of Atelier, in depth, on the studio light ═══ */
 .pv{position:relative;display:block;overflow:hidden;background:radial-gradient(circle at 1px 1px,var(--pv-dot) 1px,transparent 1.4px) 0 0/16px 16px,var(--pv-base);isolation:isolate} /* the canvas Atelier works on: flat, with a faint dot grid */

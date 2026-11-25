@@ -185,10 +185,10 @@ function showHome() {
   $("work").hidden = true;
   $("frame").classList.add("home-on");
   sync();
-  renderTabs();
   const sec = parseHash().section || "home";
   const moved = S.homeSection && S.homeSection !== sec;
   S.homeSection = sec;
+  renderTabs(); // after the section is known: the row shows where you are
   homeKey = "";
   renderHome(moved);
   document.title = `${sec === "home" ? S.ws.name : sec[0].toUpperCase() + sec.slice(1)} · Atelier`;
@@ -228,10 +228,17 @@ function renderTabs() {
   renderMode();
   const t = $("tabs");
   t.replaceChildren();
-  const home = h(`<div class="tab tab-home${S.view === "home" ? " on" : ""}" role="tab" tabindex="0" aria-selected="${S.view === "home"}">${IC.home}<span class="t">Home</span></div>`);
-  home.onclick = () => go("home");
-  home.onkeydown = (e) => e.key === "Enter" && go("home");
-  t.append(home);
+  // One row of navigation, always here: the space's three places (Prototypes is the board), then
+  // the prototypes you have open. Nothing else navigates.
+  const cur = S.view === "home" ? (S.homeSection === "prototypes" ? "home" : S.homeSection || "home") : null;
+  for (const [sec, icon, label] of [["home", IC.board, "Prototypes"], ["learn", IC.spark, "Learn"], ["activity", IC.version, "Activity"]]) {
+    const on = cur === sec;
+    const tab = h(`<div class="tab tab-home${on ? " on" : ""}" role="tab" tabindex="0" data-s="${sec}" aria-selected="${on}">${icon}<span class="t">${label}</span></div>`);
+    tab.onclick = () => goSection(sec);
+    tab.onkeydown = (e) => e.key === "Enter" && goSection(sec);
+    t.append(tab);
+  }
+  if (S.tabs.some((id) => S.envs.has(id))) t.append(h(`<span class="tsep" aria-hidden="true"></span>`));
   for (const id of S.tabs) {
     const e = S.envs.get(id);
     if (!e) continue;
@@ -277,31 +284,10 @@ function renderHomeBoard(rs) {
   homeBoard?.destroy();
   homeBoard = renderBoard(el, rs, { go, branch: createBranch, importHtml: openImport, connect: () => openSpaces(), section: goSection, lastEdit, loadDiff, spaces: !!S.ws.spaces });
 }
-// The home: one floating utility over the work (after Libra's floating utility bars, in Atelier's
-// glass: the editor's tool bar), holding the sections and Import, and a main area under it that
-// changes with the section. The utility is built once; picking a section swaps only the main area.
+// The home is one main area that changes with the section; the header's row navigates between them.
 function homeShell() {
   const home = $("home");
-  if (home.querySelector(".hdock")) return home;
-  const tab = (sec, icon, label) => `<button type="button" role="tab" data-s="${sec}" aria-selected="false"><i>${icon}</i><span class="lb">${label}</span></button>`;
-  home.replaceChildren(
-    h(`<div class="hmain" id="homeMain"></div>`),
-    h(`<nav class="hdock" aria-label="Home"><div class="hdtabs" role="tablist" aria-label="Sections"><span class="hdpill" aria-hidden="true"></span>${tab("home", IC.home, "Prototypes")}${tab("learn", IC.spark, "Learn")}${tab("activity", IC.version, "Activity")}</div><span class="vsep"></span><button type="button" class="hdadd" data-a="im" aria-label="Import HTML" data-tip="Import HTML" data-tip-up>${IC.plus}</button></nav>`),
-  );
-  const dock = home.querySelector(".hdock");
-  dock.querySelector('[data-a="im"]').onclick = openImport;
-  for (const b of dock.querySelectorAll("[data-s]")) b.onclick = () => goSection(b.dataset.s);
-  // arrows move between the sections, as in any tab list
-  dock.querySelector(".hdtabs").addEventListener("keydown", (e) => {
-    const d = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
-    if (!d) return;
-    const tabs = [...dock.querySelectorAll("[data-s]")].map((t) => t.dataset.s);
-    const i = Math.max(0, tabs.indexOf(S.homeSection));
-    const next = tabs[(i + d + tabs.length) % tabs.length];
-    e.preventDefault();
-    goSection(next);
-    dock.querySelector(`[data-s="${next}"]`)?.focus();
-  });
+  if (!home.querySelector(".hmain")) home.replaceChildren(h(`<div class="hmain" id="homeMain"></div>`));
   return home;
 }
 const homeMain = () => homeShell().querySelector(".hmain");
@@ -333,35 +319,12 @@ function learnActions() {
   };
 }
 const learn = (i) => openLearn(i, learnActions());
-// the selected section, with the thumb sliding to it (placed at once the first time it's seen)
-let dockAt = "";
-function renderDock() {
-  const dock = homeShell().querySelector(".hdock");
-  let sel = null;
-  for (const b of dock.querySelectorAll("[data-s]")) {
-    const on = b.dataset.s === (S.homeSection === "prototypes" ? "home" : S.homeSection); // #/prototypes is the board too
-    b.setAttribute("aria-selected", String(on));
-    b.tabIndex = on ? 0 : -1;
-    if (on) sel = b;
-  }
-  const pill = dock.querySelector(".hdpill");
-  if (!sel || !sel.offsetWidth) return requestAnimationFrame(() => S.view === "home" && renderDock());
-  const at = `${sel.offsetLeft}|${sel.offsetWidth}`;
-  if (at === dockAt) return;
-  const first = !dockAt;
-  dockAt = at;
-  if (first) pill.style.transition = "none";
-  pill.style.transform = `translateX(${sel.offsetLeft}px)`;
-  pill.style.width = `${sel.offsetWidth}px`;
-  if (first) void pill.offsetWidth, (pill.style.transition = "");
-}
 function renderHome(moved = false) {
   if (S.view !== "home") return;
   const rs = roots();
   const key = JSON.stringify([S.homeSection, S.ws.name, S.ws.home, S.ws.spaces, S.ws.harnesses?.length || 0, S.comments.length, S.tasks.map((t) => t.status).join(), S.activity?.length || 0, [...S.diffs].map(([k, d]) => [k, d.changes.length, d.conflicts]), rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen, lastEdit(e.id)])]);
   if (key === homeKey) return;
   homeKey = key;
-  renderDock();
   const main = homeMain();
   if (moved && !matchMedia("(prefers-reduced-motion: reduce)").matches) main.animate([{ opacity: 0, filter: "blur(2px)" }, { opacity: 1, filter: "blur(0)" }], { duration: 180, easing: "ease-out" });
   homeBoard?.destroy();

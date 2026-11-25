@@ -1,4 +1,5 @@
-// Home: the team's board. Every prototype with its branches laid out beside it, so what's being
+// Home: the team's board. Every prototype with its branches laid out beside it (a grid that wraps:
+// nothing scrolls sideways or hides off the edge), so what's being
 // tried, by whom, and where each attempt stands is visible at a glance: Main (the agreed version),
 // then each open branch (who started it, how many changes and comments, whether it's ready to
 // review), then a place to start a new one. Under them, what happened lately.
@@ -59,10 +60,9 @@ export function renderBoard(main, roots, ctx) {
     const open = fam.filter((e) => isBranch(e) && !e.archived).sort((a, b) => String(b.branch?.at || b.created || "").localeCompare(String(a.branch?.at || a.created || "")));
     const merged = fam.filter((e) => isBranch(e) && e.archived && e.mergedAt).length;
     const edited = ctx.lastEdit(root.id);
-    const sec = h(`<section class="hb-p"><div class="hb-ph"><b></b><span class="m"></span><span class="sp"></span><button type="button" class="dbtn sm" data-a="br">${IC.fork}New branch</button></div><div class="hb-row"></div></section>`);
+    const sec = h(`<section class="hb-p"><div class="hb-ph"><b></b><span class="m"></span></div><div class="hb-row"></div></section>`);
     sec.querySelector("b").textContent = root.name;
     sec.querySelector(".m").textContent = [plural(boardsOf(root.id).length, "screen"), open.length ? plural(open.length, "open branch", "open branches") : "", merged ? `${merged} merged` : "", edited ? `edited ${timeAgo(edited)}` : ""].filter(Boolean).join(" · ");
-    sec.querySelector('[data-a="br"]').onclick = () => ctx.branch(root.id);
     const row = sec.querySelector(".hb-row");
 
     // Main: the agreed version
@@ -76,7 +76,6 @@ export function renderBoard(main, roots, ctx) {
 
     // its branches: each attempt, newest first
     for (const b of open) {
-      row.append(h(`<span class="hb-fork" aria-hidden="true"></span>`));
       const by = b.author || "Someone";
       const c = h(`<button type="button" class="hb-card"><span class="hb-cap"><span class="hb-k">${IC.fork}<b></b></span><span class="hb-m"></span><span class="hb-s"><span class="av${AGENT(by) ? " agent" : ""}"></span><span class="who"></span><span class="tagro"></span></span></span></button>`);
       c.prepend(pic(firstBoard(b.id)));
@@ -101,7 +100,6 @@ export function renderBoard(main, roots, ctx) {
     }
 
     // a new attempt
-    row.append(h(`<span class="hb-fork" aria-hidden="true"></span>`));
     const nb = h(`<button type="button" class="hb-card new"><span class="hb-th none"><span class="hplus">${IC.fork}</span></span><span class="hb-cap"><span class="hb-k"><b>New branch</b></span><span class="hb-m">Try an idea without touching Main</span></span></button>`);
     nb.onclick = () => ctx.branch(root.id);
     row.append(nb);

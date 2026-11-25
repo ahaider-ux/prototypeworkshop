@@ -78,15 +78,15 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   The home board (`ui/board.js`) takes its pictures from that pipeline too (`thumbJob`, `onBitmap`).
   Nothing made up stands in for a prototype, on the home or in the intro: a slot without a real one
   is an empty state (`.pempty`, or the board's "New branch" slot) that does something real.
-  The home's navigation is a floating utility, not a docked sidebar (after Libra's floating utility
-  bars, in Atelier's glass: the editor's tool bar): a capsule at the bottom holding the sections as
-  tabs with a raised thumb on the selected one, and Import as the one ink button. It is built once;
-  the main area under it changes with the section (`#/`, `#/prototypes`, `#/learn`, `#/activity`)
-  and only the main area re-renders (`#/`, `#/learn`, `#/activity`; `#/prototypes` is the board too).
+- **One row of navigation, in the header.** The space's three places (Prototypes, which is the
+  board; Learn; Activity), then the prototypes you have open, as tabs. It is always there, on the
+  home and in the editor, and it shows where you are. Nothing else navigates: no sidebar, no
+  floating bar, no Home tab beside a Prototypes one. The main area under it changes with the
+  section and only it re-renders (`#/`, `#/learn`, `#/activity`; `#/prototypes` is the board too).
 - **Home is the team's board, and it is concrete.** Atelier is a place to branch off prototypes
   and for a team to see the attempts, comment on them and merge what works. So Home shows the
   work itself: each prototype as a row with Main (the agreed version, the inverse card) and every
-  open branch beside it, joined by a line from Main. A branch's card says who started it and when,
+  open branch beside it, in a grid that wraps (nothing scrolls sideways). A branch's card says who started it and when,
   its changes and comments (`branchCounts`), and where it stands (`branchStatus` in
   `ui/boardfacts.js`, tested in Node: conflicts, an agent working or waited for, ready to review,
   nothing yet), with a "New branch" slot at the end and the latest activity under the rows. No
