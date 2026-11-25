@@ -77,11 +77,11 @@ const ART = {
 
 // what each guide says, in plain words: what you do, and what you get
 export const FEATURES = [
-  { id: "intro", title: "Welcome to Atelier", text: "Prototype in HTML with your team and AI agents on one canvas. Learn the basics in two minutes." },
+  { id: "intro", title: "Welcome to Atelier", text: "A studio for your HTML prototype. Main is the original, every idea is a branch beside it, made by you or an agent, and the team keeps what works. Learn the basics in two minutes." },
   { id: "import", title: "Import a prototype", text: "Bring in an HTML file or a whole folder. Each screen becomes a frame on the canvas.", try: "import" },
-  { id: "branch", title: "Try an idea on a branch", text: "Change anything on a branch while Main stays as it is. Nothing lands until you merge it.", try: "branch" },
+  { id: "branch", title: "Try an idea on a branch", text: "Change anything on a branch while Main stays as it is. Side by side hangs every branch under Main to compare. Nothing lands until you merge it.", try: "branch" },
   { id: "markup", title: "Mark up a screen", text: "Leave notes, highlights, arrows and drawings on any screen. Agents read them as feedback.", try: "markup" },
-  { id: "agent", title: "Ask an agent", text: "Describe a change in plain words. Claude makes it on its own branch and tells you when it's ready.", try: "agent" },
+  { id: "agent", title: "Ask an agent", text: "Describe a change in plain words. The agent makes it on its own branch and tells you when it's ready. Ask for 2 or 3 versions to see them side by side.", try: "agent" },
   { id: "merge", title: "Review and merge", text: "See every change side by side, keep what works and note why. The reason goes in the decision log.", try: "merge" },
   { id: "recipes", title: "Save a recipe", text: "Turn work you repeat into a recipe that anyone, or any agent, can run again.", try: "recipes" },
 ];

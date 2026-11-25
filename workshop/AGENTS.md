@@ -142,13 +142,27 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   Prototype on that frame; Esc or Back to design returns to where you were. The screen's picture
   stays up until its page has loaded, so the window is never blank. There is no separate Present,
   and no running a frame in place on the canvas.
-- **What Atelier is for, and one place for each thing.** See the real prototype, edit it like a
+- **What makes Atelier itself: the studio loop.** The design is not made here. The real prototype
+  is the original (Main); every idea is a branch beside it; people and agents make the branches;
+  the team reviews and merges what works. Other tools are a canvas you design on and then export
+  from. Work that makes the loop more visible (a branch seen beside the original, who is working on
+  what, what is ready, keeping one) comes before more canvas tools. Two pieces carry it on the
+  canvas. **Side by side** (the banner of any page with open branches; `S.studies`, `studyRows` in
+  `ui/boardfacts.js`, the read-only rows in `buildGhosts` and their titles in `drawRowTitles`,
+  `ui/canvas.js`) hangs each branch's screens in a row under the page's, newest first, each row
+  with the branch's name, where it stands, Open and Review and merge; it opens on one screen and the
+  newest branch's version of it, and stays on when you come back from a branch. **Versions** (the
+  Agent composer on Main; `versionRequests`) sends one request per version, each on its own
+  numbered branch, and shows them side by side instead of leaving for one. Words: the thing is a
+  branch, the original is Main, the view is Side by side; do not add a second name for any of them.
+- **One place for each thing.** See the real prototype, edit it like a
   design file, and hand changes to an agent that works on a branch you review and merge. The editor
   is laid out around that: a prototype opens on its first screen at a readable size (`fitOpen`; Fit
   shows them all); the left panel has three tabs that always show their names, each with sections
   (`GROUPS` in `ui/panels.js`: Layers · Screens; Agent's Requests · Recipes; Activity's Updates ·
-  Notes · Versions); the right panel is Design (the inspector) and Settings (theme, variants, flows, sharing); branches are listed once, in Layers (the bar over the canvas appears only on a
-  branch, with Compare and Review and merge); Run is in every frame's title, and the tool bar's one
+  Notes · Versions); the right panel is Design (the inspector) and Settings (theme, variants, flows, sharing); branches are listed once, in Layers (the bar over the canvas appears on a
+  branch, with Compare and Review and merge, and on a page with open branches, with Side by side;
+  Main with no branches has no bar); Run is in every frame's title, and the tool bar's one
   main action is Ask agent. Don't add a second home for something that already has one.
 - **No dead ends.** Every guide step, empty state and dialog ends in something real to do on the
   person's own work (the Learn steps' `try` actions in `ui/app.js`). Connecting an AI tool shows the

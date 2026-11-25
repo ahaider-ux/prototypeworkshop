@@ -817,6 +817,20 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .tbtool:focus-visible{outline:2px solid var(--ring-default);outline-offset:1px}
 #tb[data-g="edit"] .tbrow [data-g="mark"],#tb[data-g="mark"] .tbrow [data-g="edit"]{display:none}
 @media (prefers-reduced-motion:reduce){.tbtool:active{transform:none}}
+/* the Agent composer's choice of how many versions to make */
+.cvers{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);margin-left:4px;white-space:nowrap}
+.acomp .ctog{white-space:nowrap}
+.cvers .segds{height:28px}
+.cvers .segds button{min-width:24px;height:24px;padding:0 6px;font-size:12px}
+/* Side by side: a branch's row has a title above its screens' names: the branch, where it stands,
+   and Open / Review and merge. It keeps its size at any zoom, like the frame titles. */
+.srow{position:absolute;transform:translateY(-100%);height:36px;display:flex;align-items:center;gap:8px;padding:0 4px 0 12px;border-radius:99px;background:var(--bg-layer);border:.5px solid var(--border-subtle);box-shadow:var(--sh-sm);white-space:nowrap;pointer-events:auto;font-size:12px}
+.srow>.ic{color:var(--text-accent);width:14px;height:14px;flex-shrink:0}
+.srow b{font-weight:600;font-size:13px;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.srow .ghbtn.sm,.srow .createbtn.sm{height:28px;border-radius:99px;padding:0 12px}
+.srow [hidden]{display:none}
+.app.present .srow{display:none}
+.banner .bside[aria-pressed="true"]{background:var(--bg-hover);color:var(--text-primary);box-shadow:none}
 /* Run lives in each frame's title; the bar only offers Stop while a frame is running. Asking an
    agent is the bar's one main action: the ink pill */
 .tb #interactBtn:not([aria-pressed="true"]){display:none}

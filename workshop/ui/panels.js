@@ -5,7 +5,8 @@
 // Right: Design (whatever is selected, or the page) and Prototype (how the page runs). The banner
 // across the canvas says which page this is and what to do with it.
 
-import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, familyOf, pageEnv, protoId, pageItems, pageOf, nearestBoard, screenName, plural, pageName, folderLabel } from "./state.js";
+import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, familyOf, pageEnv, protoId, pageItems, pageOf, nearestBoard, screenName, plural, pageName, folderLabel, branchesOf, factsOf } from "./state.js";
+import { branchStatus, branchesLine, versionRequests } from "./boardfacts.js";
 import { $, h, esc, api, toast, IC, dropdown, segmented, copyText, timeAgo, clamp, skeleton } from "./lib.js";
 import { isUnread, isFigma, embedLabel, addFrame, rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, setMode, docOf, winOf, flowOf, parseTranslate, exactSel, removeEl, selIds, toggleSel, alignSel, distributeSel, duplicateSel, removeItems } from "./canvas.js";
 import { PENS, INKS, SIZES as INK_SIZES } from "./ink.js";
@@ -622,6 +623,15 @@ export function renderBanner() {
     b.querySelector(".acts").append(x);
     return x;
   };
+  // Side by side: this page's open branches, a row each under its screens. On every page that has
+  // branches off it, because seeing an idea beside the original is what a branch is for.
+  const kids = env.archived ? [] : branchesOf(env.id);
+  const side = () => {
+    if (!kids.length) return;
+    const label = S.studies ? "Hide branches" : "Side by side";
+    const x = add(`<button type="button" class="${isBranch(env) ? "ghbtn" : "createbtn"} sm bside" aria-pressed="${S.studies}" aria-label="${S.studies ? "Hide the branches" : `Show ${esc(pageName(env))} and its branches side by side`}" data-tip="${S.studies ? "Back to this page's screens alone" : "Every branch's screens in a row under this page's"}">${IC.compare}<span class="bl">${label}</span></button>`, () => fire("studies"));
+    return x;
+  };
   if (env.archived) {
     b.classList.add("branch");
     b.append(h(IC.fork), h(`<b>${esc(env.name)}</b>`), h(`<span class="meta">${env.mergedAt ? `Merged into ${esc(S.envs.get(env.mergedInto)?.name ? pageName(S.envs.get(env.mergedInto)) : "its parent")} · ${esc(timeAgo(env.mergedAt))}` : "Archived"}</span>`), h(`<span class="vsep"></span>`), h(`<span class="acts"></span>`));
@@ -640,12 +650,18 @@ export function renderBanner() {
     const cmpLabel = S.compare ? "Hide compare" : `Compare with ${pageName(parent)}`;
     const cmp = add(`<button type="button" class="ghbtn sm bcmp" aria-pressed="${S.compare}" aria-label="${esc(cmpLabel)}" data-tip="${esc(cmpLabel)}">${IC.compare}<span class="bl">${esc(cmpLabel)}</span></button>`, () => fire("compare"));
     cmp.title = `Show ${pageName(parent)}'s screens above this branch's`;
+    side();
     if (d?.behind) add(`<button type="button" class="dbtn sm">Update from ${esc(pageName(parent))}</button>`, () => fire("update-from-main", env.id));
     const rv = add(`<button type="button" class="createbtn sm">Review and merge</button>`, () => fire("review", env.id));
     rv.disabled = !!d && !d.changes.length;
   } else {
-    // Main: nothing to say that the panel beside it doesn't (its name, its branches, Create branch)
-    return done(false);
+    // Main with nothing branched off it: nothing to say that the panel beside it doesn't
+    if (!kids.length) return done(false);
+    // Main with branches: how they stand, and the way to see them beside it
+    const st = kids.map((k) => branchStatus(factsOf(k.id)));
+    const line = branchesLine({ open: kids.length, ready: st.filter((x) => x.tone === "ok").length, working: kids.reduce((n, k) => n + factsOf(k.id).working, 0) });
+    b.append(h(IC.board), h(`<b>Main</b>`), h(`<span class="meta">${esc(line)}</span>`), h(`<span class="vsep"></span>`), h(`<span class="acts"></span>`));
+    side();
   }
   done(true);
   markDirty();
@@ -1501,6 +1517,7 @@ function designAnnotation(body, id) {
 
 // ----- agents: Claude-style turns; from main, a request opens a branch for the agent -----
 let draft = "";
+let versions = 1; // how many versions the next request asks for (from Main): one branch each
 const STATUS = { queued: ["Queued", ""], working: ["Working", "info"], done: ["Done", "ok"], failed: ["Failed", "err"], cancelled: ["Stopped", ""] };
 const openLogs = new Set();
 function renderChat(body, foot, env) {
@@ -1514,7 +1531,7 @@ function renderChat(body, foot, env) {
   const tasks = S.tasks.filter((t) => fam.has(t.env)).slice(-30);
   const onMain = !isBranch(env);
   if (!tasks.length) {
-    const sug = h(`<div class="asug"><span class="h">Ask for a change to ${esc(pageName(env))}. ${onMain ? "It happens on a new branch, so main only changes when you merge." : "It happens on this branch."} Select a board or an element first to point at it.</span></div>`);
+    const sug = h(`<div class="asug"><span class="h">Ask for a change to ${esc(pageName(env))}. ${onMain ? "It happens on a new branch, so Main only changes when you merge. Ask for 2 or 3 versions and each gets its own branch, side by side under Main." : "It happens on this branch."} Select a frame or a layer first to point at it.</span></div>`);
     for (const p of ["Make the sidebar rows denser", "Try a warmer surface for the content card", "Add an empty state to this screen"]) {
       const b = h(`<button type="button">${esc(p)}</button>`);
       b.onclick = () => {
@@ -1530,7 +1547,7 @@ function renderChat(body, foot, env) {
   body.append(thread);
   // composer
   const s = S.sel;
-  const comp = h(`<div class="acomp"><div class="abar chips"></div><textarea rows="2" aria-label="Request" placeholder="Ask for a change to ${esc(pageName(env))}"></textarea><div class="abar">${onMain ? `<label class="ctog"><button type="button" class="sw" role="switch" aria-checked="${S.chatOnBranch}" aria-label="Work on a new branch"><i></i></button>On a new branch</label>` : ""}<span class="sp"></span><button type="button" class="sendb" aria-label="Send request" disabled>${IC.send}</button></div></div>`);
+  const comp = h(`<div class="acomp"><div class="abar chips"></div><textarea rows="2" aria-label="Request" placeholder="Ask for a change to ${esc(pageName(env))}"></textarea><div class="abar">${onMain ? `<label class="ctog"><button type="button" class="sw" role="switch" aria-checked="${S.chatOnBranch || versions > 1}" aria-label="Work on a new branch"><i></i></button>New branch</label><span class="cvers" data-tip="How many versions to make. Each is its own branch, shown side by side under Main."><span class="k">Versions</span></span>` : ""}<span class="sp"></span><button type="button" class="sendb" aria-label="Send request" disabled>${IC.send}</button></div></div>`);
   const chips = comp.querySelector(".chips");
   chips.append(h(`<span class="chip"><span class="l">${onMain ? "Main" : `⑂ ${esc(env.name)}`}</span></span>`));
   if (s?.kind === "board" || s?.kind === "el") chips.append(h(`<span class="chip"><span class="l">${esc(screenName(S.items.get(s.item)))}</span></span>`));
@@ -1540,7 +1557,9 @@ function renderChat(body, foot, env) {
     chips.append(c);
   }
   const sw = comp.querySelector(".sw");
-  if (sw) sw.onclick = () => ((S.chatOnBranch = !S.chatOnBranch), sw.setAttribute("aria-checked", String(S.chatOnBranch)));
+  // several versions are several branches, so asking for more than one turns "New branch" on
+  if (sw) sw.onclick = () => ((S.chatOnBranch = !(S.chatOnBranch || versions > 1)), (versions = 1), renderLeft());
+  comp.querySelector(".cvers")?.append(segmented([1, 2, 3].map((n) => ({ value: n, label: String(n) })), versions, (v) => ((versions = v), renderLeft()), { label: "Versions" }));
   const ta = comp.querySelector("textarea");
   const send = comp.querySelector(".sendb");
   ta.value = draft;
@@ -1558,7 +1577,19 @@ function renderChat(body, foot, env) {
     busy = true;
     send.disabled = true;
     const selection = s?.kind === "el" && S.draftSel && s.info ? { selector: S.scope === "exact" ? s.info.exactSelector : s.info.selector, label: s.info.label, html: s.info.html, text: s.info.text, styles: s.info.styles } : null;
+    const n = onMain ? versions : 1;
     try {
+      if (n > 1) {
+        // one request per version, each on its own branch; stay on Main, where they hang side by side
+        // made last to first: branches hang newest first, so version 1 ends up nearest Main
+        for (const r of versionRequests(prompt, n).reverse()) await api("tasks", { method: "POST", body: { env: env.id, prompt: r.prompt, selection, branch: true, branchName: r.name } });
+        draft = "";
+        versions = 1;
+        S.draftSel = true;
+        fire("tasks-changed", {});
+        fire("versions-started", n);
+        return;
+      }
       const t = await api("tasks", { method: "POST", body: { env: env.id, prompt, selection, branch: !!(onMain && S.chatOnBranch) } });
       draft = "";
       S.draftSel = true;
@@ -1678,7 +1709,7 @@ export function initPanels() {
     markDirty();
   });
   on("diff", (id) => {
-    if (id === S.page) renderBanner();
+    if (id === S.page || S.envs.get(id)?.parent === S.page) renderBanner(); // a branch off this page changed: the banner's line and its row's title
     if (S.leftTab === "file" || S.leftTab === "agents") renderLeft();
     if (!S.sel && (id === S.page || S.envs.get(id)?.parent === S.page)) renderRight();
   });

@@ -1,7 +1,7 @@
 {
   "name": "libra-workshop",
   "version": "0.1.0",
-  "description": "A canvas for HTML prototypes: fork environments, iterate, share and present them, and let coding agents work on the same files.",
+  "description": "A studio for HTML prototypes: the real prototype is the original, every idea is a branch beside it, made by people or coding agents, and the team reviews and merges what works.",
   "type": "module",
   "private": true,
   "license": "MIT OR Apache-2.0",

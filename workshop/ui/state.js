@@ -19,6 +19,7 @@ export const S = {
   tabs: [], // open prototypes (root env ids), in tab order
   page: null, // the env shown on the canvas: a prototype's main or one of its branches
   compare: false, // show main's screens above the branch's
+  studies: false, // show this page's open branches side by side with it, a row each under its screens
   // what's selected: {kind:"board", item, env} | {kind:"el", item, env, el, info} | {kind:"note"|"box"|"arrow", item}
   sel: null,
   hover: null, // {item, el}
@@ -80,13 +81,22 @@ export function familyOf(rootId) {
   const out = [];
   const add = (e, depth) => {
     out.push({ env: e, depth });
-    for (const k of all.filter((x) => x.parent === e.id)) add(k, depth + 1);
+    for (const k of all.filter((x) => x.parent === e.id).reverse()) add(k, depth + 1); // newest first, as on Home and side by side
   };
   const r = S.envs.get(rootId);
   if (r) add(r, 0);
   return out;
 }
 export const pageEnv = () => S.envs.get(S.page) || null;
+// the open branches made straight off a page, newest first (the order they hang in, side by side:
+// the latest work is nearest the page)
+export const branchesOf = (id) => envList().filter((e) => e.parent === id && isBranch(e) && !e.archived).reverse();
+// where a branch stands, for boardfacts.branchStatus: what's known now, without asking the server
+export function factsOf(id) {
+  const d = S.diffs.get(id);
+  const ts = S.tasks.filter((t) => t.env === id);
+  return { changes: d?.changes.length || 0, conflicts: d?.conflicts || 0, working: ts.filter((t) => t.status === "working").length, queued: ts.filter((t) => t.status === "queued").length };
+}
 export const protoId = () => rootOf(S.page)?.id || null;
 export const selEnvId = () => S.sel?.env || (S.sel?.item && S.items.get(S.sel.item)?.env) || S.page || null;
 export const selEnv = () => S.envs.get(selEnvId()) || null;

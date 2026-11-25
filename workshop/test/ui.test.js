@@ -489,7 +489,9 @@ test("ui: the editor shows each thing once", () => {
   assert.ok(!/sec\("Branches"/.test(page), "the right panel doesn't list branches again");
   assert.ok(!/Review and merge<\/button>/.test(page), "review lives in the branch's bar");
   const banner = panels.slice(panels.indexOf("export function renderBanner"), panels.indexOf("// ======================= RIGHT PANEL"));
-  assert.match(banner, /\/\/ Main:[^\n]*\n\s*return done\(false\);/, "no bar over Main");
+  assert.match(banner, /\/\/ Main with nothing branched off it:[^\n]*\n\s*if \(!kids\.length\) return done\(false\);/, "no bar over Main until there are branches to see beside it");
+  const mainBar = banner.slice(banner.indexOf("// Main with branches"));
+  assert.ok(!/fire\("branch"/.test(mainBar), "creating a branch stays in the Branches list");
   const css = read("app.css");
   assert.match(css, /\.tb #interactBtn:not\(\[aria-pressed="true"\]\)\{display:none\}/);
   assert.match(css, /\.tb #askBtn\{background:var\(--raise-ink\)/);
@@ -585,4 +587,50 @@ test("ui: the app is warm, light and a little analogue", () => {
   assert.match(greet, /waitingLine\(\{ ready, working, projects: rs\.length \}\)/, "it says what's waiting on you");
   assert.match(greet, /matchMedia\("\(prefers-reduced-motion: reduce\)"\)\.matches\) return;/, "the eye stays still under reduced motion");
   assert.match(app, /const SCRIBBLE = outline\(/, "the line under the greeting is drawn by Atelier's own pen");
+});
+
+// What makes Atelier itself: an idea is a branch, and a branch is seen beside the original. Any
+// page with open branches offers Side by side: each branch's screens in a row under the page's own,
+// with the branch's name, where it stands, and Open / Review and merge on the row.
+test("ui: a page shows its branches side by side with it", () => {
+  const panels = read("panels.js");
+  const banner = panels.slice(panels.indexOf("export function renderBanner"), panels.indexOf("// ======================= RIGHT PANEL"));
+  assert.match(banner, /const kids = env\.archived \? \[\] : branchesOf\(env\.id\);/);
+  assert.match(banner, /class="\$\{isBranch\(env\) \? "ghbtn" : "createbtn"\} sm bside" aria-pressed="\$\{S\.studies\}"/);
+  assert.equal((banner.match(/\bside\(\);/g) || []).length, 2, "on Main and on a branch that has branches of its own");
+  assert.match(banner, /branchesLine\(\{ open: kids\.length,/);
+  const cv = read("canvas.js");
+  assert.match(cv, /if \(S\.studies\) for \(const g of studyRows\(pageItems\("board"\), branchesOf\(env\.id\)\.map\(\(k\) => \(\{ id: k\.id, boards: pageItems\("board", k\.id\) \}\)\)\)\) GH\.set\(g\.id, \{ \.\.\.g, type: "board", ghost: true, study: true \}\);/);
+  const rows = cv.slice(cv.indexOf("function drawRowTitles"), cv.indexOf("const screenRect"));
+  assert.match(rows, /data-a="open">Open<\/button>.*data-a="review">Review and merge<\/button>/);
+  assert.match(rows, /fire\("go", id\)/);
+  assert.match(rows, /fire\("review", id\)/);
+  assert.match(rows, /branchStatus\(f\)/);
+  assert.match(rows, /\.hidden = !f\.changes;/, "nothing to review until the branch has changes");
+  assert.match(cv, /if \(std\?\.study\) return fire\("go", std\.env\);/, "a double-click on a branch's screen opens the branch");
+  const fit = cv.slice(cv.indexOf("export function fitStudies"), cv.indexOf("export const camNow"));
+  assert.match(fit, /const r = rectsBounds\(\[b, g\]\);/, "it opens on one screen and the first branch's version of it, not every screen at thumbnail size");
+  assert.match(cv, /l\.hidden = s\.w < 64 \|\| !!it\.study;/, "a row has one title, not one per screen");
+  const app = read("app.js");
+  assert.match(app, /on\("studies", \(show\) => \{/);
+  assert.match(app, /S\.studies = sideOn === page;/, "open a branch from its row, come back, and the rows are still there");
+  assert.match(app, /S\.studies = false;\n  sideOn = null;/, "going Home puts it away");
+  assert.match(read("state.js"), /export const branchesOf = \(id\) => envList\(\)\.filter\(\(e\) => e\.parent === id && isBranch\(e\) && !e\.archived\)\.reverse\(\);/);
+});
+
+// Trying an idea several ways is one request: from Main, the Agent composer asks for 1, 2 or 3
+// versions. More than one makes a request per version, each on its own branch, and shows the
+// branches side by side under Main instead of leaving for one of them.
+test("ui: asking for several versions puts each on its own branch, side by side", () => {
+  const panels = read("panels.js");
+  const chat = panels.slice(panels.indexOf("function renderChat"), panels.indexOf("function turnView"));
+  assert.match(chat, /segmented\(\[1, 2, 3\]\.map\(\(n\) => \(\{ value: n, label: String\(n\) \}\)\), versions,/);
+  assert.match(chat, /\$\{onMain \? `<label class="ctog">.*<span class="cvers"/, "only from Main: a branch's request stays on the branch");
+  assert.match(chat, /const n = onMain \? versions : 1;/);
+  assert.match(chat, /for \(const r of versionRequests\(prompt, n\)\.reverse\(\)\) await api\("tasks", \{ method: "POST", body: \{ env: env\.id, prompt: r\.prompt, selection, branch: true, branchName: r\.name \} \}\);/);
+  assert.match(chat, /fire\("tasks-changed", \{\}\);\n\s*fire\("versions-started", n\);/, "it stays on Main: no branch is opened in its place");
+  assert.match(chat, /aria-checked="\$\{S\.chatOnBranch \|\| versions > 1\}"/, "several versions are several branches");
+  const app = read("app.js");
+  const on = app.slice(app.indexOf('on("versions-started"'), app.indexOf('on("diff", () => S.view === "home"'));
+  assert.match(on, /await loadWorkspace\(\);[\s\S]*fire\("studies", true\);/);
 });

@@ -1,12 +1,16 @@
 # Atelier
 
-Atelier is a canvas for HTML prototypes where branching and annotating come first. It is laid out like a
-design tool: **Home** lists your prototypes, each opens in a **tab**, and inside a prototype every
-**branch is a page**, with **main** as the first one. A page shows the prototype's screens as live
-boards, each running exactly like the app it imitates. Try an idea on a branch, mark it up with
-notes, highlights, arrows and comments, **compare** it with main, then **review and merge** it.
-Coding agents (Claude Code or your own harness) work on the same files, read your annotations, and
-do their work on branches you merge.
+Atelier is a studio for an HTML prototype. The design is not made here: your real prototype is the
+original (**Main**), every idea is a **branch** beside it, people and coding agents make the
+branches, and the team **reviews and merges** what works.
+
+It is laid out like a design tool: **Home** lists your prototypes, each opens in a **tab**, and
+inside a prototype every **branch is a page**, with Main as the first one. A page shows the
+prototype's screens as frames, each the real page of the app. Try an idea on a branch, mark it up
+with notes, highlights, arrows and comments, see it **side by side** with Main and the other
+branches, then review and merge it. Coding agents (Claude Code or your own harness) work on the same
+files, read your annotations, and do their work on branches you merge. Ask for two or three
+**versions** of a change and each agent works on its own branch, hung in a row under Main.
 
 Bring your own projects: **connect any folder** on your computer as a **space** and Atelier finds
 the prototypes in it and works on them where they are. The repository's own workspace, with
@@ -120,7 +124,7 @@ files — from the canvas, an editor or an agent — reaches every open canvas.
 | **Agents** (left) | Ask for a change. From main it happens on a new branch, so main only changes when you merge. **Ask agent** in the canvas bar opens it. |
 | **Notes** (left) | Every note, highlight and comment on this page, or on all of the prototype's pages. |
 | **History** (left) | Versions of this page (restore one, or copy it as a new prototype) and the branches merged so far. |
-| **Page banner** | Across the top of the canvas: which page this is. On a branch: how many changes and conflicts, **Compare with main** (main's screens above the branch's, both live), **Update from main** and **Review and merge**. |
+| **Page banner** | Across the top of the canvas: which page this is. On a page with open branches (Main, usually): how they stand, and **Side by side** (each branch's screens in a row under the page's, with the branch's name, where it stands, Open, and Review and merge). On a branch: how many changes and conflicts, **Compare with main** (main's screens above the branch's, both live), **Update from main** and **Review and merge**. |
 | **Design** (right) | Whatever is selected: the page (its changes, or its branches when it's main), a frame (screen, state, size), an element (see below) or an annotation. |
 | **Settings** (right) | How this page runs: theme and variants, its flows (place one or play it in a new tab), Run and Share. The zoom is next to the tabs. |
 | **Review and merge** | Every change — settings, design overrides, files — with main's value and the branch's. Where main changed the same thing since the branch was made, pick which side wins. Merging saves main as a version first and archives the branch. |
@@ -131,6 +135,20 @@ The canvas bar has two rows: what you're doing, then that mode's tools, each wit
 about), **C** comment on a board, **D** draw. **Prototype** (**P**) runs the selected screen as the
 app, as large as the window allows. Pressing a tool's key switches to its mode. **Ask agent** is
 always on the right of the bar.
+
+## Side by side, and several versions at once
+
+**Side by side** (the page banner, on any page with open branches) hangs each branch's screens in a
+row under the page's own, newest first. Each row has the branch's name, where it stands (agent
+working, waiting for an agent, ready to review, conflicts), **Open** and, once it has changes,
+**Review and merge**. It opens on one screen with the newest branch's version under it, at a size you
+can compare; the rest is a pan away. Double-click a branch's screen to open the branch; come back
+and the rows are still there.
+
+From Main, the Agent composer has **Versions** (1, 2, 3). With more than one, the request goes to
+that many agents, each on its own branch named after the request and its number, and the branches
+show side by side at once. Each agent is told it is one of several and to take a different
+direction; they see each other's updates in Activity.
 
 ## Working on the canvas
 

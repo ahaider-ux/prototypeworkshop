@@ -2,7 +2,7 @@
 
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural, pageName } from "./state.js";
 import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented, dropdown, skeleton, loadingToast, pendingButton, initTips } from "./lib.js";
-import { setTool, addLink, addPicture, initCanvas, sync, fit, fitOpen, fitPair, camNow, flyTo, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
+import { setTool, addLink, addPicture, initCanvas, sync, fit, fitOpen, fitPair, fitStudies, camNow, flyTo, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
 import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff } from "./panels.js";
 import { rulesFor, loadOverrides } from "./styles.js";
 import { loadRecipes } from "./recipes.js";
@@ -102,7 +102,7 @@ async function loadTasks() {
   if (list.length !== lastStatus.size || list.some((t) => lastStatus.get(t.id) !== t.status)) loadRecipes();
   lastStatus = new Map(list.map((t) => [t.id, t.status]));
   S.tasks = list;
-  if (S.view === "proto") renderLeft();
+  if (S.view === "proto") (renderLeft(), renderBanner()); // the banner counts agents at work on this page's branches
 }
 function renderAll() {
   renderTabs();
@@ -186,6 +186,8 @@ function showHome() {
   S.view = "home";
   S.page = null;
   S.compare = false;
+  S.studies = false;
+  sideOn = null;
   if (S.sel) clearSel();
   $("home").hidden = false;
   $("work").hidden = true;
@@ -209,6 +211,7 @@ const goSection = (sec) => {
   if (location.hash === want || (want === "#/" && !location.hash)) showHome();
   else location.hash = want;
 };
+let sideOn = null; // the page whose branches are shown side by side with it
 function openPage(page) {
   const changed = S.page !== page || S.view !== "proto";
   const root = rootOf(page);
@@ -225,6 +228,7 @@ function openPage(page) {
     if (presenting) stopPresent();
     S.page = page;
     S.compare = false;
+    S.studies = sideOn === page; // open a branch from its row, come back, and the rows are still there
     if (S.sel) clearSel();
     sync();
     if (!restoreCam(page)) requestAnimationFrame(() => fitOpen({ ms: 0 }));
@@ -317,7 +321,7 @@ function homeLevelOf(rs) {
       }),
     ];
     const actions = [{ title: "New branch", desc: "Try an idea without touching Main", icon: IC.fork, cue: "Branch", run: () => createBranch(root.id) }];
-    return { key: `in:${root.id}`, title: root.name, sub: [plural(boardsOf(root.id).length, "screen"), brs.length ? plural(brs.length, "open branch", "open branches") : "no branches yet"].join(" · "), items, actions, open: (it) => go(it.id) };
+    return { key: `in:${root.id}`, title: root.name, sub: brs.length ? `Main is the original. ${plural(brs.length, "idea is", "ideas are")} on ${brs.length === 1 ? "a branch" : "branches"} beside it.` : "Main is the original. Try an idea on a branch beside it, yourself or with an agent.", items, actions, open: (it) => go(it.id) };
   }
   if (S.homeIn === "guides") {
     const actions = FEATURES.map((f, i) => ({ title: f.title, desc: f.text, cue: "Learn", art: () => artEl(f.id), run: () => learn(i) }));
@@ -1529,6 +1533,27 @@ async function boot() {
     renderBanner();
     renderRight();
     requestAnimationFrame(() => (S.compare ? fitPair() : flyTo(beforeCompare)));
+  });
+  // Side by side: this page's open branches in rows under its screens, all in view; hiding it
+  // takes you back to where you were. `show` sets it; without it, it toggles.
+  let beforeStudies = null;
+  on("studies", (show) => {
+    const next = typeof show === "boolean" ? show : !S.studies;
+    if (next && !S.studies) beforeStudies = camNow();
+    const was = S.studies;
+    S.studies = next;
+    sideOn = next ? S.page : null;
+    sync();
+    renderBanner();
+    requestAnimationFrame(() => (S.studies ? fitStudies() : was && flyTo(beforeStudies)));
+  });
+  // Several versions were asked for: their branches exist now, so show them beside this page
+  on("versions-started", async (n) => {
+    await loadWorkspace();
+    for (const e of envList()) if (e.parent === S.page) loadDiff(e.id);
+    fire("studies", true);
+    const hs = S.ws?.harnesses || [];
+    toast(`${n} versions started`, S.ws?.agent || hs.length ? "Each is on its own branch, side by side under this page" : "Each has its own branch under this page. They wait until an agent is connected", S.ws?.agent || hs.length ? undefined : { label: "Connect", fn: () => fire("connect") });
   });
   on("diff", () => S.view === "home" && renderHome()); // a branch's counts on the home canvas
   on("archive", (id) => patchArchived(id, true));

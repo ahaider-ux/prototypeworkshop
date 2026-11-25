@@ -4,7 +4,8 @@
 // screens above the branch's, live. Design mode puts a hit layer over each board to select elements
 // inside it; Interact hands the pointer to the page.
 
-import { S, on, fire, itemsOf, isBranch, screenName, pageItems, pageEnv, plural } from "./state.js";
+import { S, on, fire, itemsOf, isBranch, screenName, pageItems, pageEnv, plural, branchesOf, factsOf, pageName } from "./state.js";
+import { studyRows, branchStatus } from "./boardfacts.js";
 import { $, h, esc, clamp, frScale, api, toast, IC, menu, rmo, timeAgo, loadPage } from "./lib.js";
 import { commitRules, preview, endPreview, undoStyle, idle as stylesIdle } from "./styles.js";
 import * as G from "./gfx.js";
@@ -15,8 +16,8 @@ import { readableZoom, openOn } from "./motion.js";
 
 const B = new Map(); // board item id → {id, el, hit, frame, live, ready} — frame only while mounted live
 const NEL = new Map(); // note/box item id → element
-const GH = new Map(); // compare boards: main's screens above a branch's, not saved anywhere
-const HUD = { play: null, stop: null, labels: new Map(), alabels: new Map(), pins: new Map(), sel: null, hover: null, size: null, handles: [], ehandles: [], ins: null, draft: null, multi: [], guides: [] };
+const GH = new Map(); // boards shown but not saved: compare's (the parent's screens above a branch's) and side by side's (each branch's screens in a row under the page's)
+const HUD = { play: null, stop: null, rows: new Map(), labels: new Map(), alabels: new Map(), pins: new Map(), sel: null, hover: null, size: null, handles: [], ehandles: [], ins: null, draft: null, multi: [], guides: [] };
 let cv, world, hud, wires, boardLayer, noteLayer, inkLayer, inkRoot, wiresRoot, rulerH, rulerV;
 const INK = new Map(); // ink item id → {g, path, key}
 const RULER = 20;
@@ -279,6 +280,22 @@ export function fitPair(opts) {
   const r = rectsBounds(g ? [g, b] : [b]);
   fitRect({ ...r, y0: r.y0 - 40 }, { maxZ: 1, pad: 32, ...opts });
 }
+// Side by side opens like Compare: one screen (the selected one, or the one nearest the middle of
+// the view) with the first branch's version under it, large enough to see what changed. The other
+// screens and branches are a pan away, not every one at thumbnail size.
+export function fitStudies(opts) {
+  const own = pageItems("board");
+  const rows = [...GH.values()].filter((g) => g.study);
+  if (!rows.length) return;
+  if (!own.length) return fitRect(rectsBounds(rows.filter((g) => g.row === 0)), { maxZ: 1, pad: 32, ...opts });
+  const c = toWorld(viewCenter());
+  const far = (b) => Math.hypot(b.x + b.w / 2 - c.x, b.y + b.h / 2 - c.y);
+  const b = own.find((x) => x.id === S.sel?.item) || own.reduce((a, x) => (far(x) < far(a) ? x : a));
+  const first = rows.filter((g) => g.row === 0);
+  const g = first.find((x) => x.screen === b.screen && (x.state || "") === (b.state || "")) || first.reduce((a, x) => (Math.abs(x.x - b.x) < Math.abs(a.x - b.x) ? x : a));
+  const r = rectsBounds([b, g]);
+  fitRect({ ...r, y0: r.y0 - 40 }, { maxZ: 1, pad: 32, ...opts });
+}
 export const camNow = () => ({ ...S.cam });
 export const flyTo = (c, ms = 320) => c && [c.x, c.y, c.z].every(Number.isFinite) && camTo(c, ms);
 
@@ -294,6 +311,9 @@ export function isVisible(id) {
 function buildGhosts() {
   GH.clear();
   const env = pageEnv();
+  if (!env) return;
+  // side by side: every open branch off this page, a row each, in the order they were made
+  if (S.studies) for (const g of studyRows(pageItems("board"), branchesOf(env.id).map((k) => ({ id: k.id, boards: pageItems("board", k.id) })))) GH.set(g.id, { ...g, type: "board", ghost: true, study: true });
   if (!S.compare || !isBranch(env)) return;
   for (const b of pageItems("board")) GH.set(`cmp-${b.id}`, { id: `cmp-${b.id}`, type: "board", env: env.parent, screen: b.screen, state: b.state, x: b.x, y: b.y - b.h - 240, w: b.w, h: b.h, ghost: true, of: b.id });
 }
@@ -1102,6 +1122,41 @@ function elScreenRect(id, el) {
   const a = toScreen({ x: it.x + r.left, y: it.y + r.top });
   return { x: a.x, y: a.y, w: r.width * S.cam.z, h: r.height * S.cam.z, rw: Math.round(r.width), rh: Math.round(r.height) };
 }
+// Side by side: each branch's row has a title above its screens' names: the branch, where it
+// stands, and the two things you do with it (open it, or review and merge it).
+function drawRowTitles() {
+  const rows = new Map(); // branch id → its first screen (top-left of the row)
+  for (const g of GH.values()) {
+    if (!g.study) continue;
+    const a = rows.get(g.env);
+    if (!a || g.y < a.y || (g.y === a.y && g.x < a.x)) rows.set(g.env, g);
+  }
+  for (const [id, g] of rows) {
+    const env = S.envs.get(id);
+    if (!env) continue;
+    let t = HUD.rows.get(id);
+    if (!t) {
+      t = h(`<div class="srow" data-env="${esc(id)}">${IC.fork}<b></b><span class="tagro"></span><button type="button" class="ghbtn sm" data-a="open">Open</button><button type="button" class="createbtn sm" data-a="review">Review and merge</button></div>`);
+      t.addEventListener("pointerdown", (e) => e.stopPropagation());
+      t.querySelector('[data-a="open"]').onclick = () => fire("go", id);
+      t.querySelector('[data-a="review"]').onclick = () => fire("review", id);
+      hud.append(t);
+      HUD.rows.set(id, t);
+    }
+    const s = screenRect(g);
+    t.style.left = s.x + "px";
+    t.style.top = s.y - 8 + "px";
+    const f = factsOf(id);
+    const st = branchStatus(f);
+    const name = t.querySelector("b"),
+      tag = t.querySelector(".tagro");
+    if (name.textContent !== env.name) name.textContent = env.name;
+    if (tag.textContent !== st.label) tag.textContent = st.label;
+    tag.className = `tagro${st.tone === "ok" ? " ok" : st.tone === "warn" ? " warn" : st.tone === "busy" ? " info" : ""}`;
+    t.querySelector('[data-a="review"]').hidden = !f.changes;
+  }
+  for (const [id, t] of HUD.rows) if (!rows.has(id)) (t.remove(), HUD.rows.delete(id));
+}
 const screenRect = (r) => {
   const a = toScreen(r);
   return { x: a.x, y: a.y, w: r.w * S.cam.z, h: r.h * S.cam.z };
@@ -1297,15 +1352,16 @@ export function drawHud() {
     run.classList.toggle("icon", s.w < 200);
     const rl = running ? "Stop" : "Run";
     if (run.querySelector(".rl").textContent !== rl) (run.querySelector(".rl").textContent = rl), run.setAttribute("aria-label", running ? "Stop running this frame" : "Run this frame");
-    const g = it.ghost ? parentName.slice(0, 32) : GH.size ? "This branch" : "";
+    const g = it.study ? "" : it.ghost ? parentName.slice(0, 32) : S.compare && GH.size ? "This branch" : "";
     if (l.querySelector(".g").textContent !== g) l.querySelector(".g").textContent = g;
     const n = `${screenName(it)}${it.state && it.state !== "Default" ? ` · ${it.state}` : ""}`;
     if (l.querySelector(".n").textContent !== n) l.querySelector(".n").textContent = n;
     l.classList.toggle("on", S.sel?.item === it.id);
     l.classList.toggle("ghost", !!it.ghost);
-    l.hidden = s.w < 64;
+    l.hidden = s.w < 64 || !!it.study; // a branch's row has one title; its screens sit under the page's, which are named
   }
   for (const [id, l] of HUD.labels) if (!live.has(id)) (l.remove(), HUD.labels.delete(id));
+  drawRowTitles();
   // selection
   if (!HUD.sel) {
     HUD.sel = h(`<div class="selbox"><span class="tag"></span></div>`);
@@ -2505,7 +2561,10 @@ function onDown(e) {
       drawDraft(drag);
     }
   } else if (S.tool === "comment") {
-    if (ghost) return toast("That's main's screen", "Comment on it from main's page, or on this branch's screen below");
+    if (ghost) {
+      const of = S.envs.get(item(ghost.dataset.item)?.env);
+      return toast(`That's ${of ? pageName(of) : "another page"}'s screen`, "Open that page to comment on it");
+    }
     const b = onBoard ? item(onBoard.dataset.item) : boardAtPoint(p);
     if (!b) return toast("Comments go on a board", "Click a screen to pin a comment to it");
     const el = elAt(b.id, p);
@@ -2786,6 +2845,9 @@ function onDbl(e) {
   if (e.target.closest(".box,.alabel,g[data-item]")) return fire("focus-label");
   const label = e.target.closest(".blabel:not(.ghost)");
   if (label) return focusItem(label.dataset.item, { maxZ: 0.8 });
+  // side by side: a branch's screen opens the branch
+  const std = item(e.target.closest(".bd.ghost")?.dataset.item);
+  if (std?.study) return fire("go", std.env);
   if (S.mode !== "design" || S.tool !== "move") return;
   // the screen under the pointer, even when the selection's outline is on top of it
   const onBoard = e.target.closest(".bd:not(.ghost)");
