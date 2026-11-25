@@ -744,7 +744,7 @@ function envMenu({ anchor, env: id }) {
     { label: br ? "Create a branch of this" : "Create branch", icon: IC.fork, onClick: () => createBranch(id) },
     ...(br && !e.archived ? [{ label: "Review and merge", icon: IC.check, onClick: () => openReview(id) }, { label: `Update from ${pageName(S.envs.get(e.parent))}`, icon: IC.restore, onClick: () => updateFromMain(id) }] : []),
     "-",
-    { label: "Present", icon: IC.play, disabled: !boardsOf(id).length, onClick: () => (go(id), setTimeout(() => present(boardsOf(id)[0]?.id), 120)) },
+    { label: "Run", icon: IC.play, disabled: !boardsOf(id).length, onClick: () => (go(id), setTimeout(() => present(boardsOf(id)[0]?.id), 120)) },
     { label: "Share", icon: IC.share, onClick: () => openShare(id) },
     { label: "Rename", icon: IC.board, onClick: () => rename(id) },
     { label: "Copy folder path", icon: IC.folder, onClick: () => copyText(e.folder || "") },

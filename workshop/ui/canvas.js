@@ -2968,7 +2968,7 @@ function onContext(e) {
             { label: "Distribute vertically", kbd: K("⌥⇧V"), onClick: () => distributeSel("v") },
           ]
         : one?.type === "board"
-          ? ["-", { label: "Present", onClick: () => fire("present", one.id) }, { label: "Open in a new tab", onClick: () => window.open(`/env/${one.env}/?ws-screen=${encodeURIComponent(one.screen || "")}`, "_blank", "noopener") }, { label: "Zoom to it", kbd: "⇧2", onClick: () => focusItem(one.id) }]
+          ? ["-", { label: "Run", onClick: () => fire("present", one.id) }, { label: "Open in a new tab", onClick: () => window.open(`/env/${one.env}/?ws-screen=${encodeURIComponent(one.screen || "")}`, "_blank", "noopener") }, { label: "Zoom to it", kbd: "⇧2", onClick: () => focusItem(one.id) }]
           : []),
       "-",
       { label: "Delete", kbd: "Delete", danger: true, onClick: () => removeItems(selIds()) },

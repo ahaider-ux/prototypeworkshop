@@ -122,7 +122,7 @@ files — from the canvas, an editor or an agent — reaches every open canvas.
 | **History** (left) | Versions of this page (restore one, or copy it as a new prototype) and the branches merged so far. |
 | **Page banner** | Across the top of the canvas: which page this is. On a branch: how many changes and conflicts, **Compare with main** (main's screens above the branch's, both live), **Update from main** and **Review and merge**. |
 | **Design** (right) | Whatever is selected: the page (its changes, or its branches when it's main), a frame (screen, state, size), an element (see below) or an annotation. |
-| **Prototype** (right) | How this page runs: theme and variants, its flows (place one or play it in a new tab), Interact, Present and Share. The zoom is next to the tabs. |
+| **Settings** (right) | How this page runs: theme and variants, its flows (place one or play it in a new tab), Run and Share. The zoom is next to the tabs. |
 | **Review and merge** | Every change — settings, design overrides, files — with main's value and the branch's. Where main changed the same thing since the branch was made, pick which side wins. Merging saves main as a version first and archives the branch. |
 
 The canvas bar has two rows: what you're doing, then that mode's tools, each with its name.
@@ -235,7 +235,7 @@ and `list_canvas` lists the frames on each page.
 
 Elements inside a board are edited like frames in a design tool, and every edit is saved as CSS in
 the page's `overrides.css`, so the prototype shows it everywhere it runs: on every board, in
-Present, in a new tab and in share links. On a branch it is one of the changes you review and merge.
+Prototype, in a new tab and in share links. On a branch it is one of the changes you review and merge.
 
 - **Select**: click inside a board to select the element under the pointer; **Esc** selects its
   parent, **Enter** on a frame its first child. Layers shows where it sits.

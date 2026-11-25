@@ -882,7 +882,7 @@ function designBoard(body, bid) {
   L.append(h(`<div class="xyrow"><span class="xy"><i>X</i>${b.x}</span><span class="xy"><i>Y</i>${b.y}</span><span class="xy"><i>W</i>${b.w}</span><span class="xy"><i>H</i>${b.h}</span></div>`));
   body.append(L);
   if (ad?.screen) body.append(h(`<div class="isec"><span class="lineage">Showing ${esc(ad.screen)} now. Open it in Prototype (P) to click through it.</span></div>`));
-  const acts = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="pr">${IC.play}Present</button><button type="button" class="dbtn sm" data-a="dup">${IC.copy}Duplicate</button><button type="button" class="dbtn sm" data-a="agent">${IC.spark}Ask</button></div></div>`);
+  const acts = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="pr">${IC.play}Run</button><button type="button" class="dbtn sm" data-a="dup">${IC.copy}Duplicate</button><button type="button" class="dbtn sm" data-a="agent">${IC.spark}Ask</button></div></div>`);
   acts.querySelector('[data-a="dup"]').onclick = () => placeScreen(b.env, b.screen, b.state).then((it) => it && selectBoard(it.id));
   acts.querySelector('[data-a="pr"]').onclick = () => fire("present", bid);
   acts.querySelector('[data-a="agent"]').onclick = () => fire("ask-agent", {});
@@ -912,8 +912,8 @@ function renderProto(body) {
   pl.onclick = () => $("interactBtn").click();
   I.append(pl);
   body.append(I);
-  const P = sec("Present and share");
-  const acts = h(`<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="pr">${IC.play}Present</button><button type="button" class="dbtn sm" data-a="sh">${IC.share}Share</button><button type="button" class="dbtn sm" data-a="tab">${IC.ext}New tab</button></div>`);
+  const P = sec("Run and share");
+  const acts = h(`<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="pr">${IC.play}Run</button><button type="button" class="dbtn sm" data-a="sh">${IC.share}Share</button><button type="button" class="dbtn sm" data-a="tab">${IC.ext}New tab</button></div>`);
   acts.querySelector('[data-a="pr"]').onclick = () => fire("present", S.sel?.kind === "board" ? S.sel.item : pageItems("board")[0]?.id);
   acts.querySelector('[data-a="sh"]').onclick = () => fire("share", env.id);
   acts.querySelector('[data-a="tab"]').onclick = () => window.open(`/present/${env.id}/`, "_blank", "noopener");

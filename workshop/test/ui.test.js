@@ -359,6 +359,8 @@ test("ui: Design and Prototype are the editor's two states", () => {
   assert.match(cv, /run\.onclick = \(e\) => \(e\.stopPropagation\(\), fire\("prototype", it\.id\)\);/);
   assert.match(cv, /if \(S\.presenting\) return fire\("exit-present"\);/);
   assert.match(cv, /m\.dataset\.m === "proto" \? \$\("interactBtn"\)\.click\(\)/, "the Prototype mode runs the same way in");
+  // one name for the action (Run) and one for the state (Prototype): nothing is still called Present
+  for (const f of ["panels.js", "canvas.js", "app.js", "index.html"]) assert.ok(!/[>"]Present[<" ]/.test(read(f)), `${f} still offers "Present"`);
   const css = read("app.css");
   assert.ok(!/\.app\.present \.top[,{]/.test(css), "the header stays in Prototype");
 });
