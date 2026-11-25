@@ -348,8 +348,8 @@ test("ui: the Home tab doesn't share the home page's class", () => {
 // back). Run in a frame's title and P open Prototype on that frame; there is no separate Present.
 test("ui: Design and Prototype are the editor's two states", () => {
   const html = read("index.html");
-  assert.match(html, /id="modeSw" role="radiogroup"[^>]*hidden>.*data-m="design"[^>]*>Design<\/button>.*data-m="prototype"[^>]*>Prototype<\/button>/);
-  assert.ok(!/id="presentBtn"/.test(html), "one way in, not two");
+  assert.ok(!/id="modeSw"/.test(html) && !/id="presentBtn"/.test(html), "one way in: the canvas bar's Prototype mode");
+  assert.match(html, /class="tbmodes" role="tablist"[^>]*>.*data-m="edit"[^>]*>.*Edit<\/button>.*data-m="mark"[^>]*>.*Mark up<\/button>.*data-m="proto"[^>]*>.*Prototype<\/button>/);
   const app = read("app.js");
   const fn = app.slice(app.indexOf("function present("), app.indexOf("function stopPresent"));
   assert.match(fn, /data-a="prev"[\s\S]*data-a="pick"[\s\S]*data-a="next"[\s\S]*Back to design/);
@@ -358,8 +358,30 @@ test("ui: Design and Prototype are the editor's two states", () => {
   const cv = read("canvas.js");
   assert.match(cv, /run\.onclick = \(e\) => \(e\.stopPropagation\(\), fire\("prototype", it\.id\)\);/);
   assert.match(cv, /if \(S\.presenting\) return fire\("exit-present"\);/);
+  assert.match(cv, /m\.dataset\.m === "proto" \? \$\("interactBtn"\)\.click\(\)/, "the Prototype mode runs the same way in");
   const css = read("app.css");
-  assert.ok(!/\.app\.present \.top[,{]/.test(css), "the header, with the switch, stays in Prototype");
+  assert.ok(!/\.app\.present \.top[,{]/.test(css), "the header stays in Prototype");
+});
+
+// The canvas bar is in two rows: what you're doing, then only that mode's tools, each with its name.
+// Picking a tool (a click or its key) puts the bar in the tool's mode, so the two never disagree.
+test("ui: the canvas bar shows one mode's labelled tools at a time", () => {
+  const html = read("index.html");
+  const bar = html.slice(html.indexOf('id="tb"'), html.indexOf('<aside class="rp"'));
+  const tools = [...bar.matchAll(/<button type="button" class="tbtool[^"]*" data-tool="(\w+)" data-g="(\w+)"[^>]*>.*?<span class="tl">([^<]+)<\/span><\/button>/g)].map((m) => `${m[1]}:${m[2]}:${m[3]}`);
+  assert.deepEqual(tools, ["move:edit:Select", "hand:edit:Hand", "frame:edit:Frame", "note:mark:Note", "box:mark:Highlight", "arrow:mark:Arrow", "comment:mark:Comment", "draw:mark:Draw"]);
+  assert.equal((bar.match(/data-tool="/g) || []).length, tools.length, "no tool without a name and a mode");
+  assert.match(bar, /id="bringBtn"[^>]*data-g="edit"/);
+  assert.match(bar, /id="askBtn"/);
+  const cv = read("canvas.js");
+  assert.match(cv, /const MARK = new Set\(\["note", "box", "arrow", "comment", "draw"\]\);/);
+  const fn = cv.slice(cv.indexOf("export function setTool("), cv.indexOf("export function setTool(") + 700);
+  assert.match(fn, /const g = MARK\.has\(t\) \? "mark" : "edit";/);
+  assert.match(fn, /tb\.dataset\.g = g;/);
+  assert.match(fn, /m\.setAttribute\("aria-selected", String\(on\)\)/);
+  assert.match(cv, /setTool\(m\.dataset\.m === "mark" \? lastMark : "move"\)/, "Mark up comes back to the tool you last marked with");
+  const css = read("app.css");
+  assert.match(css, /#tb\[data-g="edit"\] \.tbrow \[data-g="mark"\],#tb\[data-g="mark"\] \.tbrow \[data-g="edit"\]\{display:none\}/);
 });
 
 // A guide that explains something and offers nothing to do is a dead end: every step after the intro

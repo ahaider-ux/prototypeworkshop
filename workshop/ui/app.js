@@ -901,16 +901,8 @@ function showIn(bid) {
   for (const a of ["prev", "next"]) bar.querySelector(`[data-a="${a}"]`).disabled = !many;
   requestAnimationFrame(() => requestAnimationFrame(() => fitRect({ x0: it.x, y0: it.y, x1: it.x + it.w, y1: it.y + it.h }, { ms: 0, maxZ: 1, pad: 12 })));
 }
-// the header's switch between the two states (only while a prototype is open)
-function renderMode() {
-  const sw = $("modeSw");
-  sw.hidden = S.view !== "proto";
-  for (const b of sw.querySelectorAll("[data-m]")) {
-    const on = (b.dataset.m === "prototype") === !!presenting;
-    b.classList.toggle("on", on);
-    b.setAttribute("aria-checked", String(on));
-  }
-}
+// (Prototype is one of the canvas bar's modes; in it, the bar under the screen goes back to design)
+function renderMode() {}
 function stopPresent() {
   if (!presenting) return;
   const p = presenting;
@@ -1500,8 +1492,7 @@ async function boot() {
   $("bringBtn").onclick = () => fire("bring-in");
   on("bring-in", openBringIn);
   $("shareBtn").onclick = () => openShare(S.page);
-  // Design and Prototype, in the header; Run (a frame's title, P) opens Prototype on that frame
-  for (const b of $("modeSw").querySelectorAll("[data-m]")) b.onclick = () => (b.dataset.m === "design" ? stopPresent() : presenting || $("interactBtn").click());
+  // Prototype is a mode on the canvas bar; Run (a frame's title, P) opens it on that frame
   on("prototype", (id) => present(id));
   $("cvScreens").onclick = () => fire("left-tab", "screens");
   $("palIn").oninput = paintPal;

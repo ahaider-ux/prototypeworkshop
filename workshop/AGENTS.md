@@ -128,13 +128,20 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   content area) are skipped, so one click selects the thing you see. A frame counts as live only
   once its real page has fully loaded (`pageIsIn`); nothing is shown or picked from it before
   then. Text edits go on the undo history like every other edit.
-- **Two states: Design and Prototype** (the switch in the header, while a prototype is open).
-  Design is the canvas: every screen side by side, with the panels and tools. Prototype is one
-  screen as large as the window allows, running as the app, to click through; its bar moves
-  between the page's screens and goes back (`present` / `showIn` / `stopPresent` in `ui/app.js`).
-  Run in a frame's title and P open Prototype on that frame; Esc or Design returns to where you
-  were. The screen's picture stays up until its page has loaded, so the window is never blank.
-  There is no separate Present, and no running a frame in place on the canvas.
+- **The canvas bar is in two rows: what you're doing, then that mode's tools** (`#tb` in
+  `ui/index.html`, `setTool` in `ui/canvas.js`). The modes are Edit (Select, Hand, Frame, Bring
+  in), Mark up (Note, Highlight, Arrow, Comment, Draw) and Prototype. Only the current mode's
+  tools show, each with its name; Ask agent is the bar's one main action and is always there. A
+  tool carries its mode in `data-g`, and picking a tool by click or key puts the bar in that mode,
+  so the two never disagree. Mark up returns to the tool you last marked with. A new tool goes in
+  one mode, with a label; do not add a row of bare icons or a second switch elsewhere.
+- **Two states: Design and Prototype.** Design is the canvas: every screen side by side, with the
+  panels and tools. Prototype is one screen as large as the window allows, running as the app, to
+  click through; its bar moves between the page's screens and goes back (`present` / `showIn` /
+  `stopPresent` in `ui/app.js`). The bar's Prototype mode, Run in a frame's title and P open
+  Prototype on that frame; Esc or Back to design returns to where you were. The screen's picture
+  stays up until its page has loaded, so the window is never blank. There is no separate Present,
+  and no running a frame in place on the canvas.
 - **What Atelier is for, and one place for each thing.** See the real prototype, edit it like a
   design file, and hand changes to an agent that works on a branch you review and merge. The editor
   is laid out around that: a prototype opens on its first screen at a readable size (`fitOpen`; Fit

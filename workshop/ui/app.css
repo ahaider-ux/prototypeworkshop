@@ -630,9 +630,6 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .prsbar .ddtrig{max-width:240px}
 .prsbar .ddtrig .v{overflow:hidden;text-overflow:ellipsis}
 .prsbar .tagro{margin-right:4px}
-/* the header's switch between the two states */
-.modesw{flex-shrink:0;margin-right:8px;height:28px}
-.modesw button{font-size:12px}
 .app.present .rail,.app.present .lp,.app.present .rp,.app.present .tb,.app.present .banner,.app.present .ruler,.app.present .rcorner,.app.present .hud .blabel,.app.present .note,.app.present .box,.app.present .wires,.app.present .pin,.app.present .selbox,.app.present .hdl,.app.present .alabel,.app.present .sizetag{display:none!important}
 .app.present .bd:not(.presenting){visibility:hidden} /* the shown screen keeps its picture until its page is up: never a blank window */
 .app.present .cv{background:var(--bg-shell)}
@@ -802,6 +799,24 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .tb .ib32,.tb .tbtx{border-radius:99px}
 .tb .ib32{width:36px;height:36px}
 .tb .tbtx{height:36px;padding:0 14px 0 10px}
+/* The canvas bar, in two rows: what you're doing (Edit, Mark up, Prototype), then that mode's
+   tools, each with its name, and Ask agent as the one main action */
+#tb{flex-direction:column;align-items:stretch;gap:6px;border-radius:24px;padding:6px}
+#tb .tbmodes{align-self:center;display:flex;gap:2px;padding:2px;border-radius:99px;background:var(--bg-secondary)}
+#tb .tbmodes button{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 12px 0 10px;border-radius:99px;font-size:12px;font-weight:500;color:var(--text-secondary);white-space:nowrap;transition:color 120ms ease}
+#tb .tbmodes button:hover{color:var(--text-primary)}
+#tb .tbmodes button.on{background:var(--raise);box-shadow:var(--sh-btn);color:var(--text-primary)}
+#tb .tbmodes .ic{width:14px;height:14px}
+#tb .tbrow{display:flex;align-items:center;gap:2px}
+#tb .tbrow .sp{flex:1;min-width:8px}
+.tbtool{height:36px;display:inline-flex;align-items:center;gap:6px;padding:0 12px 0 10px;border-radius:99px;font-size:12px;font-weight:500;color:var(--text-secondary);white-space:nowrap;transition:background-color 120ms ease,color 120ms ease}
+.tbtool:hover{background:var(--bg-hover);color:var(--text-primary)}
+.tbtool.on{background:var(--bg-hover);color:var(--text-primary)}
+.tbtool.on .ic{color:var(--text-accent)}
+.tbtool:active{transform:scale(.97)}
+.tbtool:focus-visible{outline:2px solid var(--ring-default);outline-offset:1px}
+#tb[data-g="edit"] .tbrow [data-g="mark"],#tb[data-g="mark"] .tbrow [data-g="edit"]{display:none}
+@media (prefers-reduced-motion:reduce){.tbtool:active{transform:none}}
 /* Run lives in each frame's title; the bar only offers Stop while a frame is running. Asking an
    agent is the bar's one main action: the ink pill */
 .tb #interactBtn:not([aria-pressed="true"]){display:none}
@@ -877,7 +892,7 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .cv.mode-prototype .inks{opacity:.7}
 .app.present .inks{display:none}
 /* the pen tray: a glass capsule above the toolbar while drawing */
-.inktray{position:absolute;z-index:25;left:calc(var(--lw) + (100% - var(--lw) - var(--rw)) / 2);bottom:76px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;padding:6px;background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass)}
+.inktray{position:absolute;z-index:25;left:calc(var(--lw) + (100% - var(--lw) - var(--rw)) / 2);bottom:118px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;padding:6px;background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass)}
 .inktray .ib32{width:34px;height:34px;border-radius:99px}
 .inktray .vsep{width:1px;height:20px;background:var(--border-subtle);margin:0 6px}
 .inkdot{width:22px;height:22px;border-radius:99px;background:var(--ink);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text-primary) 14%,transparent);margin:0 2px;transition:box-shadow 120ms ease}

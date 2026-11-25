@@ -79,7 +79,7 @@ export function viewRect() {
     rw = parseFloat(st.getPropertyValue("--rw")) || 0;
   const r = S.rulers === false ? 0 : RULER;
   const banner = $("banner").childElementCount ? 84 : r;
-  return { x0: lw + r, y0: banner, x1: cv.clientWidth - rw, y1: cv.clientHeight - 76 };
+  return { x0: lw + r, y0: banner, x1: cv.clientWidth - rw, y1: cv.clientHeight - 124 }; // above the canvas bar (its modes and their tools)
 }
 
 function boardAtPoint(p) {
@@ -778,8 +778,24 @@ export function setHover(itemId, el) {
 }
 
 // ---------- tools & modes ----------
+// The canvas bar is in modes: Edit (select, hand, frame, bring in) and Mark up (note, highlight,
+// arrow, comment, draw). The tool decides the mode, so a shortcut for a tool brings its mode with it.
+const MARK = new Set(["note", "box", "arrow", "comment", "draw"]);
+let lastMark = "comment";
+export const markTool = () => lastMark;
 export function setTool(t) {
   S.tool = t;
+  if (MARK.has(t)) lastMark = t;
+  const g = MARK.has(t) ? "mark" : "edit";
+  const tb = $("tb");
+  if (tb) {
+    tb.dataset.g = g;
+    for (const m of tb.querySelectorAll(".tbmodes [data-m]")) {
+      const on = m.dataset.m === g;
+      m.classList.toggle("on", on);
+      m.setAttribute("aria-selected", String(on));
+    }
+  }
   cv.className = cv.className.replace(/\btool-\w+/g, "").trim() + ` tool-${t}`;
   for (const b of document.querySelectorAll("#tb [data-tool]")) b.classList.toggle("on", b.dataset.tool === t);
   if (t !== "move") setHover(null, null);
@@ -3202,6 +3218,8 @@ export function initCanvas() {
     }, 0),
   );
   for (const b of document.querySelectorAll("#tb [data-tool]")) b.addEventListener("click", () => setTool(b.dataset.tool));
+  // the modes: Edit and Mark up choose a tool of that kind; Prototype shows the screen to click through
+  for (const m of document.querySelectorAll("#tb .tbmodes [data-m]")) m.addEventListener("click", () => (m.dataset.m === "proto" ? $("interactBtn").click() : setTool(m.dataset.m === "mark" ? lastMark : "move")));
   // Prototype (P, the header's switch): the selected frame, or the one in the middle of the view,
   // fills the window to click through; pressed again, back to Design
   $("interactBtn").onclick = () => {

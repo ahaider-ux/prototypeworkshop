@@ -117,7 +117,7 @@ files — from the canvas, an editor or an agent — reaches every open canvas.
 | **Branches** (File, left) | Main and every branch of the open prototype, like pages, with how many changes each has. Click one to go to its page; **+** creates a branch of the page you're on. |
 | **Layers** (File, left) | This page's frames — one per screen — and its notes, highlights and arrows. Open a frame to reach the live page's landmarks: sidebar, content, panels. |
 | **Screens** (left) | Every screen, state and flow the prototype offers. Click to place it on this page or drag it onto the canvas; **Place all** fills a row. Fourth Age lists its screens through its own prototype tools. |
-| **Agents** (left) | Ask for a change. From main it happens on a new branch, so main only changes when you merge. **Ask** in the toolbar opens it. |
+| **Agents** (left) | Ask for a change. From main it happens on a new branch, so main only changes when you merge. **Ask agent** in the canvas bar opens it. |
 | **Notes** (left) | Every note, highlight and comment on this page, or on all of the prototype's pages. |
 | **History** (left) | Versions of this page (restore one, or copy it as a new prototype) and the branches merged so far. |
 | **Page banner** | Across the top of the canvas: which page this is. On a branch: how many changes and conflicts, **Compare with main** (main's screens above the branch's, both live), **Update from main** and **Review and merge**. |
@@ -125,9 +125,12 @@ files — from the canvas, an editor or an agent — reaches every open canvas.
 | **Prototype** (right) | How this page runs: theme and variants, its flows (place one or play it in a new tab), Interact, Present and Share. The zoom is next to the tabs. |
 | **Review and merge** | Every change — settings, design overrides, files — with main's value and the branch's. Where main changed the same thing since the branch was made, pick which side wins. Merging saves main as a version first and archives the branch. |
 
-The toolbar: **V** select, **H** hand, **N** note, **B** highlight (drag a box), **A** arrow (drag
-from a note, box or board to what it's about), **C** comment on a board, **P** Interact (the pointer
-goes to the page: use it like the app).
+The canvas bar has two rows: what you're doing, then that mode's tools, each with its name.
+**Edit**: **V** select, **H** hand, **F** frame, **L** bring in a link or picture. **Mark up**:
+**N** note, **B** highlight (drag a box), **A** arrow (drag from a note, box or board to what it's
+about), **C** comment on a board, **D** draw. **Prototype** (**P**) runs the selected screen as the
+app, as large as the window allows. Pressing a tool's key switches to its mode. **Ask agent** is
+always on the right of the bar.
 
 ## Working on the canvas
 
