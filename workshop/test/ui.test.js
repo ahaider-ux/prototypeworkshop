@@ -228,7 +228,8 @@ test("ui: every panel section lives under one of the three tabs", () => {
 // each has a route.
 test("ui: the home renders into one main area", () => {
   const app = read("app.js");
-  assert.match(app, /if \(!home\.querySelector\("\.hmain"\)\) home\.replaceChildren\(/, "built once");
+  assert.match(app, /if \(home\.querySelector\("\.hside"\)\) return home;/, "the shell is built once");
+  assert.match(app, /const homeMain = \(\) => homeShell\(\)\.querySelector\("\.hview"\);/, "views render into the view, under the bar");
   const canvas = app.slice(app.indexOf("function renderHomeCanvas"), app.indexOf("// Esc goes up a level"));
   assert.ok(canvas.includes("homeMain()") && !/\$\("home"\)\.replaceChildren/.test(canvas), "the canvas fills only the main area");
   const act = app.slice(app.indexOf("function renderActivityPage"), app.indexOf("\n}\n", app.indexOf("function renderActivityPage")));
@@ -291,23 +292,47 @@ test("ui: a canvas that fits stays centred; a bigger one returns to what you ope
   assert.match(home, /if \(fitsView\(\)\) Object\.assign\(cam, middle\(\)\);/, "on update");
 });
 
-// Navigation was in three places (a Home tab, a floating bar that called the same place Prototypes,
-// and a sidebar before that), which was confusing. It is one row in the header, always there: the
-// space's three places, then the prototypes you have open. Nothing else navigates, and the row
-// shows where you are.
-test("ui: one row of navigation, in the header", () => {
+// Navigation works the way a file browser's does. The header's row is Home and the prototypes you
+// have open (files as tabs). The home's sidebar stays and holds the places: search (the command
+// palette), Home, Guides, Activity, what you opened last, and every project with its branches one
+// click away. It is the editor's own floating panel, so home and editor read as one app.
+test("ui: the home is an app shell: a sidebar that stays, files as tabs", () => {
   const app = read("app.js");
   const tabs = app.slice(app.indexOf("function renderTabs()"), app.indexOf("function closeTab"));
-  assert.match(tabs, /\[\["home", IC\.home, "Home"\], \["activity", IC\.version, "Activity"\]\]/, "Home (every level of the canvas) and Activity");
-  assert.match(tabs, /tab\.onclick = \(\) => goSection\(sec\);/);
+  assert.match(tabs, /\[\["home", IC\.home, "Home"\]\]/, "Home, then the open prototypes");
   const shell = app.slice(app.indexOf("function homeShell()"), app.indexOf("const homeMain"));
-  assert.ok(!/hdock|hside|tablist/.test(shell), "no second navigation on the home");
+  for (const piece of ['class="hside"', 'class="lhd"', 'class="hsearch"', 'class="pgs hnav"', 'class="pgs hrecent"', 'class="pgs htree"', 'class="htop"', 'class="hview"']) assert.ok(shell.includes(piece), piece);
+  assert.match(shell, /\[data-a="search"\]'\)\.onclick = openPal;/, "search opens the command palette");
+  const side = app.slice(app.indexOf("function renderSide"), app.indexOf("// Each Learn step offers"));
+  assert.match(side, /kid\(IC\.fork, b\.name, branchStatus\(branchFacts\(b\)\)\.tone, \(\) => go\(b\.id\)\);/, "a branch is one click from the sidebar, with where it stands");
+  assert.match(side, /\[\.\.\.lastPage\.values\(\)\]\.reverse\(\)/, "what you opened last");
   const show = app.slice(app.indexOf("function showHome()"), app.indexOf("const goSection"));
-  assert.ok(show.indexOf("S.homeSection = sec;") < show.indexOf("renderTabs();"), "the row is drawn once the section is known");
+  assert.ok(show.indexOf("S.homeSection = sec;") < show.indexOf("renderTabs();"));
   const css = read("app.css");
-  assert.ok(!/\.hside|\.hdock|\.hdpill/.test(css), "no sidebar or floating bar styles left");
+  assert.match(css, /\.hside\{[^}]*border-radius:var\(--r-panel\);background:var\(--glass-bg\)/, "the editor's panel");
+  assert.ok(!/\.hdock|\.hdpill|\.hpathbar/.test(css), "no floating bars left over");
   assert.match(css, /\.home\{[^}]*background:var\(--bg-canvas\)/);
   assert.ok(!/\.pv-tag\.agent\{[^}]*--i-orange/.test(css), "agents are ink, as in the app");
+});
+
+// The bar over the home's view says where you are and offers what a working app offers: filters
+// with counts, a sort, grid or canvas, and the one main action for the level. The grid's cards carry
+// rows of facts, not just a picture.
+test("ui: the home has a bar with filters, sort and views, and cards with facts", () => {
+  const app = read("app.js");
+  const top = app.slice(app.indexOf("function renderHomeTop"), app.indexOf("// The home's shell"));
+  assert.match(top, /class="hcrumb"/);
+  assert.match(top, /for \(const \[k, label, test\] of FILTERS\) tab\(label, lv\.items\.filter\(test\)\.length,/, "filters show their counts");
+  assert.match(top, /tab\("Projects", rs\.length,[^\n]*tab\("Guides", FEATURES\.length,/);
+  assert.match(top, /dropdown\(\{ value: S\.homeSort \|\| "edited", options: \[\{ label: "Sort by: Last edited"/);
+  assert.match(top, /segmented\(\[\{ label: "Grid", value: "grid" \}, \{ label: "Canvas", value: "canvas" \}\]/);
+  assert.match(top, /New branch<\/button>`\) : h\(`<button type="button" class="createbtn sm">\$\{IC\.upload\}Import HTML/, "the main action fits the level");
+  assert.match(app, /const homeView = \(\) => \(store\.get\("ws-home-view", "grid"\) === "canvas" \? "canvas" : "grid"\);/, "the grid is the default");
+  const level = app.slice(app.indexOf("function homeLevelOf"), app.indexOf("function renderHomeCanvas"));
+  assert.match(level, /rows: \[\["Started by", b\.author \|\| "Someone"\], \["Started",[^\n]*\["Changes", String\(f\.changes\)\], \["Comments", String\(f\.comments\)\]\]/);
+  const browse = read("browse.js");
+  assert.match(browse, /class="brow"><span class="k"><\/span><span class="v"><\/span>/);
+  assert.match(browse, /c\.querySelector\("\.bhd b"\)\.textContent = a\.title;/, "a guide's title, not a <b> inside its picture");
 });
 
 // The Home tab was class "tab home", and ".home" is the home page itself: the tab took the page's
@@ -388,13 +413,12 @@ test("ui: the home canvas goes deeper, level by level", () => {
   assert.match(level, /cue: "Enter", cls: "hproj", deep: true/, "a project is a block you enter");
   assert.match(level, /title: "Guides",[^\n]*cue: "Enter", deep: true,[^\n]*run: \(\) => goIn\("guides"\)/, "so is Guides");
   assert.match(level, /name: "Main", meta: \["The agreed version"/);
-  assert.match(level, /branchStatus\(f\)\.label, branchCounts\(f\)/, "a branch says where it stands");
+  assert.match(level, /const st = branchStatus\(f\);[\s\S]*meta: \[st\.label, branchCounts\(f\)/, "a branch says where it stands");
   assert.match(level, /title: "New branch"[^\n]*run: \(\) => createBranch\(root\.id\)/);
   assert.match(level, /open: \(it\) => go\(it\.id\)/, "Main or a branch opens its frames");
   assert.match(level, /open: \(it\) => goIn\(it\.id\)/, "a project is entered, not opened");
   assert.match(app, /const inside = \/\^#\\\/in\\\/\(\[\^\/\?#\]\+\)\$\/\.exec\(location\.hash\);/, "each project's level has a route");
-  const canvas = app.slice(app.indexOf("function renderHomeCanvas"), app.indexOf("// Esc goes up a level"));
-  assert.match(canvas, /if \(lv\.key !== "space"\) \{[\s\S]*data-a="up"[\s\S]*onclick = \(\) => goIn\(null\);/, "the way back up");
+  assert.match(app, /top\.querySelector\('\[data-a="up"\]'\)\.onclick = \(\) => \(S\.homeSection === "activity" \? goSection\("home"\) : goIn\(null\)\);/, "the way back up, in the bar");
   assert.match(app, /if \(e\.key !== "Escape" \|\| S\.view !== "home" \|\| !S\.homeIn/, "Esc goes up too");
   assert.ok(!/renderBoard|renderHomeList|renderLearnPage/.test(app), "one home");
   const home = read("home.js");

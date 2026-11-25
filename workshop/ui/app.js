@@ -1,13 +1,14 @@
 // Atelier — boot, Home and tabs, pages, live updates, branches, review and merge, dialogs.
 
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural, pageName } from "./state.js";
-import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented, skeleton, loadingToast, pendingButton, initTips } from "./lib.js";
+import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented, dropdown, skeleton, loadingToast, pendingButton, initTips } from "./lib.js";
 import { setTool, addLink, addPicture, initCanvas, sync, fit, fitOpen, fitPair, camNow, flyTo, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
 import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff } from "./panels.js";
 import { rulesFor, loadOverrides } from "./styles.js";
 import { loadRecipes } from "./recipes.js";
 import { playIntro } from "./intro.js";
 import { mountHomeCanvas } from "./home.js";
+import { renderGrid } from "./browse.js";
 import { branchStatus, branchCounts, greeting, waitingLine } from "./boardfacts.js";
 import { outline } from "./ink.js";
 import { FEATURES, artEl, openLearn } from "./visuals.js";
@@ -239,8 +240,8 @@ function renderTabs() {
   t.replaceChildren();
   // One row of navigation, always here: the space's three places (Prototypes is the board), then
   // the prototypes you have open. Nothing else navigates.
-  const cur = S.view === "home" ? (S.homeSection === "activity" ? "activity" : "home") : null; // every level of the canvas is Home
-  for (const [sec, icon, label] of [["home", IC.home, "Home"], ["activity", IC.version, "Activity"]]) {
+  const cur = S.view === "home" ? "home" : null; // Home is the browser; its sidebar holds the places
+  for (const [sec, icon, label] of [["home", IC.home, "Home"]]) {
     const on = cur === sec;
     const tab = h(`<div class="tab tab-home${on ? " on" : ""}" role="tab" tabindex="0" data-s="${sec}" aria-selected="${on}">${icon}<span class="t">${label}</span></div>`);
     tab.onclick = () => goSection(sec);
@@ -308,10 +309,11 @@ function homeLevelOf(rs) {
     const brs = openBranches(root.id).sort((a, b) => String(b.branch?.at || b.created || "").localeCompare(String(a.branch?.at || a.created || "")));
     const mc = commentsOn(root.id);
     const items = [
-      { id: root.id, name: "Main", meta: ["The agreed version", plural(boardsOf(root.id).length, "screen"), branchCounts({ comments: mc })].filter(Boolean).join(" · "), board: firstBoard(root.id), cue: "Open", cls: "hproj" },
+      { id: root.id, name: "Main", meta: ["The agreed version", plural(boardsOf(root.id).length, "screen"), branchCounts({ comments: mc })].filter(Boolean).join(" · "), board: firstBoard(root.id), cue: "Open", cls: "hproj", kind: "main", edited: lastEdit(root.id), tag: { label: "Agreed version", tone: "" }, rows: [["Screens", String(boardsOf(root.id).length)], ["Comments", String(mc)], ["Edited", lastEdit(root.id) ? timeAgo(lastEdit(root.id)) : "—"]] },
       ...brs.map((b) => {
         const f = branchFacts(b);
-        return { id: b.id, name: b.name, meta: [branchStatus(f).label, branchCounts(f), `${b.author || "Someone"}, ${timeAgo(b.branch?.at || b.created)}`].filter(Boolean).join(" · "), board: firstBoard(b.id), cue: "Open" };
+        const st = branchStatus(f);
+        return { id: b.id, name: b.name, meta: [st.label, branchCounts(f), `${b.author || "Someone"}, ${timeAgo(b.branch?.at || b.created)}`].filter(Boolean).join(" · "), board: firstBoard(b.id), cue: "Open", kind: "branch", edited: b.branch?.at || b.created, tag: st, rows: [["Started by", b.author || "Someone"], ["Started", timeAgo(b.branch?.at || b.created)], ["Changes", String(f.changes)], ["Comments", String(f.comments)]] };
       }),
     ];
     const actions = [{ title: "New branch", desc: "Try an idea without touching Main", icon: IC.fork, cue: "Branch", run: () => createBranch(root.id) }];
@@ -327,7 +329,7 @@ function homeLevelOf(rs) {
       const brs = openBranches(e.id);
       const ready = brs.filter((b) => branchStatus(branchFacts(b)).tone === "ok").length;
       const edited = lastEdit(e.id);
-      return { id: e.id, name: e.name, edited, board: firstBoard(e.id), cue: "Enter", cls: "hproj", deep: true, meta: [plural(boardsOf(e.id).length, "screen"), brs.length ? plural(brs.length, "branch", "branches") : "", ready ? `${ready} ready to review` : ""].filter(Boolean).join(" · ") };
+      return { id: e.id, name: e.name, edited, board: firstBoard(e.id), cue: "Enter", cls: "hproj", deep: true, kind: "project", tag: ready ? { label: `${ready} ready to review`, tone: "ok" } : null, rows: [["Screens", String(boardsOf(e.id).length)], ["Open branches", String(brs.length)], ["Edited", edited ? timeAgo(edited) : "—"]], meta: [plural(boardsOf(e.id).length, "screen"), brs.length ? plural(brs.length, "branch", "branches") : "", ready ? `${ready} ready to review` : ""].filter(Boolean).join(" · ") };
     })
     .sort((a, b) => String(b.edited || "").localeCompare(String(a.edited || "")));
   const actions = [
@@ -340,11 +342,6 @@ function homeLevelOf(rs) {
 }
 function renderHomeCanvas(rs) {
   const el = homeMain();
-  // a project that's gone (deleted, or a link to a branch): back to the space
-  if (S.homeIn && S.homeIn !== "guides" && !(S.envs.get(S.homeIn) && !isBranch(S.envs.get(S.homeIn)))) {
-    S.homeIn = null;
-    history.replaceState(null, "", "#/");
-  }
   const lv = homeLevelOf(rs);
   if (!homeCv || homeLevel !== lv.key || !el.querySelector(".hcanvas")) {
     homeCv?.destroy();
@@ -357,15 +354,63 @@ function renderHomeCanvas(rs) {
   // time of day, and what's waiting on you (a way straight into it when something is)
   el.querySelector(".hgreet")?.remove();
   if (lv.key === "space") el.append(homeGreeting(rs));
-  // where you are, and the way back up (also Esc); nothing on the first level
-  el.querySelector(".hpathbar")?.remove();
-  if (lv.key !== "space") {
-    const bar = h(`<div class="hpathbar"><button type="button" class="dbtn sm" data-a="up"><span class="flip">${IC.chevr}</span>Home</button><b></b><span class="m"></span></div>`);
-    bar.querySelector("b").textContent = lv.title;
-    bar.querySelector(".m").textContent = lv.sub;
-    bar.querySelector('[data-a="up"]').onclick = () => goIn(null);
-    el.append(bar);
+}
+// Home as a grid (ui/browse.js): the same level, as neat cards you can filter and sort.
+let homeGrid = null;
+const homeView = () => (store.get("ws-home-view", "grid") === "canvas" ? "canvas" : "grid");
+const FILTERS = [["all", "All", () => true], ["ready", "Ready to review", (it) => it.tag?.tone === "ok"], ["progress", "In progress", (it) => it.kind === "branch" && it.tag?.tone !== "ok"]];
+function renderHomeGrid(rs) {
+  const el = homeMain();
+  homeCv?.destroy();
+  homeCv = null;
+  homeLevel = "";
+  el.classList.remove("hc");
+  const lv = homeLevelOf(rs);
+  const inProject = lv.key.startsWith("in:");
+  const keep = inProject ? (FILTERS.find((f) => f[0] === S.homeFilter) || FILTERS[0])[2] : () => true;
+  let items = lv.items.filter((it) => keep(it));
+  if (S.homeSort === "name") items = items.slice().sort((a, b) => (a.kind === "main" ? -1 : b.kind === "main" ? 1 : a.name.localeCompare(b.name)));
+  // Guides is a tab here, not a block; the other actions are cards (hidden while a filter is on)
+  const actions = S.homeFilter && S.homeFilter !== "all" && inProject ? [] : lv.actions.filter((a) => !a.deep);
+  let head;
+  if (lv.key === "space") head = homeGreeting(rs);
+  else {
+    head = h(`<header class="bhead"><h1></h1><p></p></header>`);
+    head.querySelector("h1").textContent = lv.title;
+    head.querySelector("p").textContent = lv.sub;
   }
+  homeGrid?.destroy();
+  homeGrid = renderGrid(el, { items, actions, open: lv.open, head });
+}
+// The bar over the home's main area: where you are (and the way back), then how to see it (filter
+// tabs with counts, sort, grid or canvas) and the one main action for this level.
+function renderHomeTop(rs) {
+  const top = homeShell().querySelector(".htop");
+  const lv = S.homeSection === "activity" ? { key: "activity", title: "Activity", items: [] } : homeLevelOf(rs);
+  const deep = lv.key !== "space";
+  const view = homeView();
+  top.replaceChildren(h(`<nav class="hcrumb" aria-label="Where you are"><button type="button" data-a="up"${deep ? "" : ' aria-current="page"'}>Home</button>${deep ? `${IC.chevr}<b></b>` : ""}</nav>`), h(`<div class="htabs2" role="tablist"></div>`), h(`<span class="sp"></span>`), h(`<div class="hctl"></div>`));
+  top.querySelector('[data-a="up"]').onclick = () => (S.homeSection === "activity" ? goSection("home") : goIn(null));
+  if (deep) top.querySelector(".hcrumb b").textContent = lv.title;
+  const tabs = top.querySelector(".htabs2"),
+    ctl = top.querySelector(".hctl");
+  const tab = (label, n, on, fn) => {
+    const b = h(`<button type="button" role="tab" aria-selected="${on}" class="${on ? "on" : ""}"><span></span><span class="tct"></span></button>`);
+    b.firstChild.textContent = label;
+    b.querySelector(".tct").textContent = String(n);
+    b.onclick = fn;
+    tabs.append(b);
+  };
+  if (lv.key === "activity") return;
+  if (view === "grid") {
+    if (lv.key.startsWith("in:")) for (const [k, label, test] of FILTERS) tab(label, lv.items.filter(test).length, (S.homeFilter || "all") === k, () => ((S.homeFilter = k), (homeKey = ""), renderHome()));
+    else (tab("Projects", rs.length, lv.key === "space", () => goIn(null)), tab("Guides", FEATURES.length, lv.key === "guides", () => goIn("guides")));
+    if (lv.items.length > 1) ctl.append(dropdown({ value: S.homeSort || "edited", options: [{ label: "Sort by: Last edited", value: "edited" }, { label: "Sort by: Name", value: "name" }], label: "Sort", onChange: (v) => ((S.homeSort = v), (homeKey = ""), renderHome()) }));
+  }
+  ctl.append(segmented([{ label: "Grid", value: "grid" }, { label: "Canvas", value: "canvas" }], view, (v) => (store.set("ws-home-view", v), (homeKey = ""), renderHome()), { label: "Show as" }));
+  const main = lv.key.startsWith("in:") ? h(`<button type="button" class="createbtn sm">${IC.fork}New branch</button>`) : h(`<button type="button" class="createbtn sm">${IC.upload}Import HTML</button>`);
+  main.onclick = lv.key.startsWith("in:") ? () => createBranch(S.homeIn) : openImport;
+  ctl.append(main);
 }
 // a hand-drawn line from Atelier's own pen engine, to sit under the greeting
 const SCRIBBLE = outline(Array.from({ length: 40 }, (_, i) => [4 + i * 4.9, 6 + Math.sin(i / 5) * 1.6 + (i % 7 === 0 ? 0.8 : 0)]), "marker", 3.2, 1);
@@ -412,13 +457,79 @@ document.addEventListener("keydown", (e) => {
   if (document.querySelector("#modal.open, .cnmenu") || /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) return;
   goIn(null);
 });
-// The home is one main area that changes with the section; the header's row navigates between them.
+// The home's shell, after the neatness of a working app: a sidebar that stays (search, the places,
+// what you opened last, every project with its branches one click away), a bar over the main area
+// (where you are, filters, the main action), and the view under it. Built once; only the view and
+// the bar's contents change.
+const SEARCH_IC = `<svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.2"/><path d="m10.2 10.2 3.3 3.3"/></svg>`;
 function homeShell() {
   const home = $("home");
-  if (!home.querySelector(".hmain")) home.replaceChildren(h(`<div class="hmain" id="homeMain"></div>`));
+  if (home.querySelector(".hside")) return home;
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform || "");
+  const row = (k, icon, label) => `<button type="button" class="pg" data-n="${k}">${icon}<span class="t">${label}</span><span class="m"></span></button>`;
+  home.replaceChildren(
+    h(`<aside class="hside" aria-label="Browse"><div class="lhd"><div class="ttl"><b class="hs-name"></b><span class="hs-sub"></span></div><button type="button" class="ib32" data-a="new" aria-label="Import HTML" data-tip="Import HTML">${IC.plus}</button></div><button type="button" class="hsearch" data-a="search">${SEARCH_IC}<span>Search or jump to…</span><kbd>${mac ? "⌘K" : "Ctrl K"}</kbd></button><nav class="pgs hnav" aria-label="Places">${row("home", IC.home, "Home")}${row("guides", IC.spark, "Guides")}${row("activity", IC.version, "Activity")}</nav><div class="hs-sec" data-k="recent"><div class="shd"><span>Recent</span></div><div class="pgs hrecent"></div></div><div class="hs-sec" data-k="projects"><div class="shd"><span>Projects</span><span class="n"></span></div><div class="pgs htree"></div></div></aside>`),
+    h(`<div class="hmain"><div class="htop"></div><div class="hview" id="homeMain"></div></div>`),
+  );
+  const side = home.querySelector(".hside");
+  side.querySelector('[data-a="new"]').onclick = openImport;
+  side.querySelector('[data-a="search"]').onclick = openPal;
+  side.querySelector('[data-n="home"]').onclick = () => goIn(null);
+  side.querySelector('[data-n="guides"]').onclick = () => goIn("guides");
+  side.querySelector('[data-n="activity"]').onclick = () => goSection("activity");
   return home;
 }
-const homeMain = () => homeShell().querySelector(".hmain");
+const homeMain = () => homeShell().querySelector(".hview");
+function renderSide(rs) {
+  const side = homeShell().querySelector(".hside");
+  side.querySelector(".hs-name").textContent = S.ws.name;
+  side.querySelector(".hs-sub").textContent = plural(rs.length, "project");
+  const at = S.homeSection === "activity" ? "activity" : S.homeIn === "guides" ? "guides" : S.homeIn ? "" : "home";
+  for (const b of side.querySelectorAll("[data-n]")) {
+    const on = b.dataset.n === at;
+    b.classList.toggle("on", on);
+    on ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current");
+  }
+  // what you opened last: straight back into the file
+  const recent = [...lastPage.values()].reverse().filter((id) => S.envs.has(id)).slice(0, 4);
+  side.querySelector('[data-k="recent"]').hidden = !recent.length;
+  side.querySelector(".hrecent").replaceChildren(
+    ...recent.map((id) => {
+      const e = S.envs.get(id),
+        root = rootOf(id);
+      const r = h(`<button type="button" class="pg">${isBranch(e) ? IC.fork : IC.board}<span class="t"></span><span class="m"></span></button>`);
+      r.querySelector(".t").textContent = isBranch(e) ? e.name : root?.name || e.name;
+      r.querySelector(".m").textContent = isBranch(e) ? root?.name || "" : "Main";
+      r.title = `Open ${isBranch(e) ? `${e.name}, a branch of ${root?.name || ""}` : `${e.name}, Main`}`;
+      r.onclick = () => go(id);
+      return r;
+    }),
+  );
+  // every project; the one you're in (or all of them, when there are only a few) shows its pages
+  const tree = side.querySelector(".htree");
+  side.querySelector('[data-k="projects"] .n').textContent = rs.length || "";
+  tree.replaceChildren();
+  const sorted = rs.slice().sort((a, b) => String(lastEdit(b.id) || "").localeCompare(String(lastEdit(a.id) || "")));
+  for (const e of sorted) {
+    const brs = openBranches(e.id);
+    const p = h(`<button type="button" class="pg${S.homeIn === e.id ? " on" : ""}">${IC.folder}<span class="t"></span><span class="m"></span></button>`);
+    p.querySelector(".t").textContent = e.name;
+    p.querySelector(".m").textContent = brs.length || "";
+    p.title = `${e.name} · ${plural(brs.length, "open branch", "open branches")}`;
+    p.onclick = () => goIn(e.id);
+    tree.append(p);
+    if (S.homeIn !== e.id && rs.length > 3) continue;
+    const kid = (icon, name, tone, fn) => {
+      const k = h(`<button type="button" class="pg sub">${icon}<span class="t"></span>${tone ? `<span class="hsdot ${tone}"></span>` : ""}</button>`);
+      k.querySelector(".t").textContent = name;
+      k.onclick = fn;
+      tree.append(k);
+    };
+    kid(IC.board, "Main", "", () => go(e.id));
+    for (const b of brs) kid(IC.fork, b.name, branchStatus(branchFacts(b)).tone, () => go(b.id));
+  }
+  if (!rs.length) tree.append(h(`<div class="pempty" style="padding:8px 16px">No projects yet. Import an HTML file to start one.</div>`));
+}
 // Each Learn step offers the real thing it describes, on the person's own work: the prototype they
 // edited last, or the newest open branch for review. A step that can't be done here has no button.
 const latestRoot = () => roots().slice().sort((a, b) => (lastEdit(b.id) || "").localeCompare(lastEdit(a.id) || ""))[0] || null;
@@ -450,19 +561,28 @@ const learn = (i) => openLearn(i, learnActions());
 function renderHome(moved = false) {
   if (S.view !== "home") return;
   const rs = roots();
-  const key = JSON.stringify([S.homeSection, S.homeIn, S.ws.name, S.ws.home, S.ws.spaces, S.ws.harnesses?.length || 0, S.comments.length, S.tasks.map((t) => t.status).join(), S.activity?.length || 0, [...S.diffs].map(([k, d]) => [k, d.changes.length, d.conflicts]), rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen, lastEdit(e.id)])]);
+  const key = JSON.stringify([S.homeSection, S.homeIn, homeView(), S.homeFilter, S.homeSort, [...lastPage.values()].slice(-4), S.ws.name, S.ws.home, S.ws.spaces, S.ws.harnesses?.length || 0, S.comments.length, S.tasks.map((t) => t.status).join(), S.activity?.length || 0, [...S.diffs].map(([k, d]) => [k, d.changes.length, d.conflicts]), rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen, lastEdit(e.id)])]);
   if (key === homeKey) return;
   homeKey = key;
   const main = homeMain();
   if (moved && !matchMedia("(prefers-reduced-motion: reduce)").matches) main.animate([{ opacity: 0, filter: "blur(2px)" }, { opacity: 1, filter: "blur(0)" }], { duration: 180, easing: "ease-out" });
-  if (S.homeSection === "activity") {
+  // a project that's gone (deleted, or a link to a branch): back to the space
+  if (S.homeIn && S.homeIn !== "guides" && !(S.envs.get(S.homeIn) && !isBranch(S.envs.get(S.homeIn)))) {
+    S.homeIn = null;
+    history.replaceState(null, "", "#/");
+  }
+  renderSide(rs);
+  renderHomeTop(rs);
+  if (S.homeSection === "activity" || homeView() === "grid") {
     homeCv?.destroy();
     homeCv = null;
     homeLevel = "";
     main.classList.remove("hc");
-    return renderActivityPage(main);
   }
-  renderHomeCanvas(rs); // every other route is a level of the canvas
+  if (S.homeSection !== "activity" && homeView() === "canvas") (homeGrid?.destroy(), (homeGrid = null));
+  if (S.homeSection === "activity") return renderActivityPage(main);
+  if (homeView() === "canvas") return renderHomeCanvas(rs);
+  renderHomeGrid(rs);
 }
 // Activity: what people and agents did across the space, newest first
 async function renderActivityPage(main) {

@@ -91,11 +91,18 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   line saying what's waiting on you (`greeting`, `waitingLine` in `ui/boardfacts.js`). Character
   supports, it doesn't perform: nothing loops, and warmth never costs clarity. After the Microsoft
   Design article on character playing a supporting role: a reference only, nothing copied.
-- **One row of navigation, in the header.** Home (every level of the canvas) and Activity, then
-  the prototypes you have open, as tabs. It is always there, on the home and in the editor, and it
-  shows where you are. Nothing else navigates: no sidebar, no floating bar.
-- **Home is a canvas in levels you go into** (`homeLevelOf` in `ui/app.js`; `ui/home.js` is one
-  level's canvas). Atelier is a place to branch off prototypes and for a team to see the attempts,
+- **Home is an app shell, as neat as a working product** (after the owner's Libra Fourth Age app:
+  its structure, not its tokens or assets). The header's row is Home and the prototypes you have
+  open, as tabs. The home's sidebar stays (`homeShell`, `renderSide`: the editor's floating panel,
+  so home and editor read as one app): search (opens the command palette, ⌘K), Home, Guides,
+  Activity, what you opened last, and every project with Main and its branches one click away, each
+  branch with a dot for where it stands. A bar over the view (`renderHomeTop`) says where you are
+  (a breadcrumb, which is also the way back up) and holds filter tabs with counts, a sort, Grid or
+  Canvas, and the one main action for the level (Import HTML; New branch inside a project). Grid is
+  the default (`ui/browse.js`): cards with a picture, a name with where it stands, and rows of
+  facts. Don't add a second place for any of these.
+- **Home has levels you go into, shown as a grid or a canvas** (`homeLevelOf` in `ui/app.js`
+  describes a level for both views; `ui/home.js` is one level's canvas). Atelier is a place to branch off prototypes and for a team to see the attempts,
   comment on them and merge what works, so each level shows real things. The space (`#/`): a block
   for each project and one for Guides, each drawn as a stack because there is a level inside
   (`deep`), plus placeholder cards (add a prototype, connect a folder, connect your AI tool). Inside
@@ -104,7 +111,7 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   tested in Node) and who started it, and a New branch card. Inside Guides (`#/learn`): the guides.
   Entering Main or a branch opens its frames in the editor. Over a card the pointer says what a
   click does ("Enter", "Open", "Branch", "Learn"); entering a block, it grows towards you and
-  dissolves as its canvas arrives; a bar at the top left names the level and goes back up, as does
+  dissolves as its canvas arrives; the bar's breadcrumb goes back up, as does
   Esc; coming back up lands on the block you were in. With seven or more projects (or branches) a level repeats
   endlessly as you drag; with fewer it is a block that fits the view. In the editor, the
   inspector on Main offers "Create a branch" where it warns that edits change Main. The header's one call to action is "Connect your AI tool"

@@ -1242,9 +1242,84 @@ html[data-intro] .app{visibility:hidden}
 .tagro:not(.info):not(.ok):not(.err){background:transparent;box-shadow:inset 0 0 0 1px var(--border-default);color:var(--text-secondary)}
 
 /* ---------- home canvas (ui/home.js): prototypes on paper you can throw around ---------- */
-/* the home canvas is one endless field, edge to edge; it fades out under the header, never cut */
-.home{position:relative}
-.hmain.hc{position:absolute;inset:0;overflow:hidden;-webkit-mask:linear-gradient(to bottom,transparent,black 28px);mask:linear-gradient(to bottom,transparent,black 28px)}
+/* The home's shell: the editor's floating panel as a sidebar that stays, a bar over the main area,
+   and the view under it (a grid of cards, or the canvas) */
+.home{position:relative;display:flex}
+.hside{position:relative;z-index:2;width:256px;flex-shrink:0;display:flex;flex-direction:column;margin:var(--gutter);border-radius:var(--r-panel);background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass);overflow:auto;scrollbar-width:thin}
+.hside .pgs{padding:4px 0}
+.hside .pg{width:calc(100% - 16px);text-align:left;color:var(--text-primary)}
+.hside .pg .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hside .pg .m{font-weight:400;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hside .pg.sub{padding-left:28px;color:var(--text-secondary)}
+.hside .pg.sub:hover{color:var(--text-primary)}
+.hside .hs-sec{border-top:1px solid var(--border-subtle);padding-top:4px}
+.hside .shd .n{margin-left:auto;font-weight:400;color:var(--text-placeholder)}
+.hsdot{flex-shrink:0;width:6px;height:6px;border-radius:50%;margin-right:4px;background:var(--text-disabled)}
+.hsdot.ok{background:var(--text-success)}
+.hsdot.busy{background:var(--text-accent)}
+.hsdot.warn{background:var(--text-error)}
+/* search: opens the command palette */
+.hsearch{display:flex;align-items:center;gap:8px;height:32px;margin:8px 8px 4px;padding:0 8px 0 10px;border-radius:10px;background:var(--bg-input);box-shadow:var(--sh-field);font-size:12px;color:var(--text-placeholder);text-align:left;transition:box-shadow 120ms ease}
+.hsearch:hover{color:var(--text-secondary);box-shadow:0 0 0 1px var(--border-default)}
+.hsearch span{flex:1}
+.hsearch kbd{font:500 10px/1 var(--fakt);padding:3px 5px;border-radius:5px;background:var(--bg-secondary);color:var(--text-secondary)}
+.hmain{flex:1;min-width:0;display:flex;flex-direction:column}
+/* the bar over the view: where you are, the filters, how to see it, the main action */
+.htop{flex-shrink:0;display:flex;align-items:center;gap:16px;height:56px;padding:0 24px 0 16px}
+.htop .sp{flex:1}
+.hcrumb{display:flex;align-items:center;gap:4px;min-width:0;font-size:14px;color:var(--text-secondary)}
+.hcrumb button{height:28px;padding:0 8px;border-radius:8px;transition:background-color 120ms ease}
+.hcrumb button:hover{background:var(--bg-hover);color:var(--text-primary)}
+.hcrumb button[aria-current]{color:var(--text-primary);font-weight:500}
+.hcrumb b{font-weight:500;color:var(--text-primary);padding:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hcrumb .ic{width:12px;height:12px;flex-shrink:0;color:var(--text-placeholder)}
+.htabs2{display:flex;align-items:center;gap:2px;padding:2px;border-radius:99px;background:var(--bg-secondary)}
+.htabs2:empty{display:none}
+.htabs2 button{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 10px 0 12px;border-radius:99px;font-size:12px;font-weight:500;color:var(--text-secondary);white-space:nowrap;transition:color 120ms ease}
+.htabs2 button:hover{color:var(--text-primary)}
+.htabs2 button.on{background:var(--raise);box-shadow:var(--sh-btn);color:var(--text-primary)}
+.htabs2 .tct{min-width:18px;background:none;color:var(--text-placeholder);font-weight:500;padding:0}
+.htabs2 button.on .tct{color:var(--text-secondary)}
+.hctl{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.hview{flex:1;min-height:0;position:relative;overflow:auto;scrollbar-width:thin}
+.hview.hc{overflow:hidden}
+/* the grid: cards you can scan — a picture, a name and where it stands, rows of facts */
+.bpage{max-width:1240px;padding:8px 24px 64px;display:flex;flex-direction:column;gap:24px}
+.bpage>.hgreet{position:static;max-width:none;pointer-events:auto;padding:8px 0 4px}
+.bhead{display:flex;flex-direction:column;gap:4px;padding:8px 0 0}
+.bhead h1{font:400 28px/1.2 var(--serif);letter-spacing:-.005em}
+.bhead p{font-size:14px;color:var(--text-secondary)}
+.bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(264px,1fr));gap:16px}
+.bcard{min-width:0;display:flex;flex-direction:column;gap:12px;padding:8px 8px 12px;border-radius:16px;background:var(--bg-layer);box-shadow:var(--sh-card);text-align:left;transition:box-shadow 150ms var(--ease-smooth)}
+.bcard:hover{box-shadow:var(--sh-card-hi)}
+.bcard:active{transform:scale(.99)}
+.bcard:focus-visible{outline:2px solid var(--ring-default);outline-offset:2px}
+.bth{position:relative;display:block;width:100%;aspect-ratio:288/180;border-radius:10px;overflow:hidden;background:var(--bg-secondary);box-shadow:inset 0 0 0 1px var(--border-subtle)}
+.bth canvas{display:block;width:100%;height:100%}
+.bth.waiting{background:var(--skel)}
+.bth.none{display:grid;place-items:center}
+.bth .pv{position:absolute;inset:0}
+.bhd{display:flex;align-items:center;gap:8px;min-width:0;padding:0 6px}
+.bhd b{flex:1;min-width:0;font:500 14px/1.3 var(--fakt);color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brows{display:flex;flex-direction:column;gap:6px;padding:0 6px}
+.brows:empty{display:none}
+.brow{display:flex;align-items:baseline;gap:8px;font-size:12px;line-height:1.3}
+.brow .k{flex:0 0 96px;color:var(--text-placeholder)}
+.brow .v{flex:1;min-width:0;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bdesc{padding:0 6px;font-size:12px;line-height:1.5;color:var(--text-secondary);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* a project or Main: the inverse card */
+.bcard.main{background:var(--raise-ink);box-shadow:var(--sh-card-inv)}
+.bcard.main:hover{box-shadow:var(--sh-card-inv-hi)}
+.bcard.main .bhd b,.bcard.main .brow .v{color:var(--on-primary)}
+.bcard.main .brow .k{color:color-mix(in srgb,var(--on-primary) 55%,transparent)}
+.bcard.main .bth{box-shadow:inset 0 0 0 .5px color-mix(in srgb,var(--on-primary) 14%,transparent);background:color-mix(in srgb,var(--on-primary) 8%,transparent)}
+.bcard.main .tagro:not(.ok){background:color-mix(in srgb,var(--on-primary) 14%,transparent);color:var(--on-primary)}
+/* a placeholder: a dashed slot that does what it says */
+.bcard.new{background:none;box-shadow:none;outline:1.5px dashed var(--border-default);outline-offset:-1.5px}
+.bcard.new:hover{background:var(--bg-layer);box-shadow:var(--sh-card)}
+.bcard.new .bth{background:none;box-shadow:none}
+@media (max-width:860px){.hside{display:none}.htop{padding:0 12px;gap:8px;overflow-x:auto}.bpage{padding:8px 12px 48px}}
+@media (prefers-reduced-motion:reduce){.bcard:active{transform:none}}
 .hcanvas{position:absolute;inset:0;overflow:clip;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
 .hcanvas.grabbing{cursor:grabbing}
 .hcanvas.grabbing .htile{pointer-events:none}
@@ -1306,12 +1381,6 @@ html[data-intro] .app{visibility:hidden}
 .hg-t p{margin-top:12px;font-size:14px;line-height:1.5;color:var(--text-secondary);max-width:420px}
 .hcanvas.leaving~.hgreet,.hleaving .hgreet{opacity:0;transition:opacity 150ms ease-out}
 @media (max-width:700px){.hg-t h1{font-size:24px}.hg-pin{width:34px;height:34px}}
-/* where you are on the canvas, and the way back up */
-.hpathbar{position:absolute;left:16px;top:16px;z-index:5;display:flex;align-items:center;gap:12px;height:44px;padding:0 16px 0 6px;border-radius:99px;background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass);max-width:calc(100% - 32px)}
-.hpathbar .flip{display:inline-flex;rotate:180deg}
-.hpathbar b{font:600 14px/1 var(--fakt);letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hpathbar .m{font-size:12px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hcanvas.leaving~.hpathbar,.hleaving .hpathbar{opacity:0;transition:opacity 150ms ease-out}
 @media (prefers-reduced-motion:reduce){.htile.hdeep.chosen{scale:none;opacity:1}}
 /* a guide: its picture on the studio canvas, its title and one line */
 .htile.hguide .htt{background:var(--bg-canvas)}
@@ -1373,7 +1442,6 @@ html[data-intro] .app{visibility:hidden}
 .home h1{letter-spacing:-.02em}
 
 /* ═══ Home shell: a sidebar that stays, and the section it shows ═══ */
-.hmain{flex:1;min-width:0;position:relative;overflow:auto;scrollbar-width:thin}
 /* the sections: a two-tone title (a grey lead-in, then the point), and generous air */
 .hl{max-width:1120px;margin:0 auto;padding:32px 40px 64px;display:flex;flex-direction:column;gap:32px}
 .hl-h{display:flex;flex-direction:column;gap:4px}
