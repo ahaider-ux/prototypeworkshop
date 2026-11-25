@@ -1284,6 +1284,21 @@ html[data-intro] .app{visibility:hidden}
 .htile.hproj .hcap b{color:var(--on-primary)}
 .htile.hproj .hcap .m{color:color-mix(in srgb,var(--on-primary) 62%,transparent)}
 .htile.hproj.noboard .htt::after{color:color-mix(in srgb,var(--on-primary) 50%,transparent)}
+/* A block with a level inside (a project, Guides): drawn as a stack, two sheets showing under it,
+   so it reads as something you go into. Entering it, the block grows towards you and dissolves as
+   its own canvas arrives. */
+.htile.hdeep{box-shadow:var(--sh-card),0 9px 0 -5px var(--bg-layer),0 9px 0 -4.5px var(--border-default),0 18px 0 -10px var(--bg-layer),0 18px 0 -9.5px var(--border-default)}
+.htile.hdeep.hot{box-shadow:var(--sh-card-hi),0 11px 0 -5px var(--bg-layer),0 11px 0 -4.5px var(--border-default),0 22px 0 -10px var(--bg-layer),0 22px 0 -9.5px var(--border-default)}
+.htile.hproj.hdeep{box-shadow:var(--sh-card-inv),0 9px 0 -5px color-mix(in srgb,var(--raise-ink) 72%,var(--bg-canvas)),0 18px 0 -10px color-mix(in srgb,var(--raise-ink) 44%,var(--bg-canvas))}
+.htile.hproj.hdeep.hot{box-shadow:var(--sh-card-inv-hi),0 11px 0 -5px color-mix(in srgb,var(--raise-ink) 72%,var(--bg-canvas)),0 22px 0 -10px color-mix(in srgb,var(--raise-ink) 44%,var(--bg-canvas))}
+.htile.hdeep.chosen{scale:1.3;opacity:0;transition:scale 340ms var(--ease-io),opacity 220ms ease-in 120ms}
+/* where you are on the canvas, and the way back up */
+.hpathbar{position:absolute;left:16px;top:16px;z-index:5;display:flex;align-items:center;gap:12px;height:44px;padding:0 16px 0 6px;border-radius:99px;background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass);max-width:calc(100% - 32px)}
+.hpathbar .flip{display:inline-flex;rotate:180deg}
+.hpathbar b{font:600 14px/1 var(--fakt);letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hpathbar .m{font-size:12px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hcanvas.leaving~.hpathbar,.hleaving .hpathbar{opacity:0;transition:opacity 150ms ease-out}
+@media (prefers-reduced-motion:reduce){.htile.hdeep.chosen{scale:none;opacity:1}}
 /* a guide: its picture on the studio canvas, its title and one line */
 .htile.hguide .htt{background:var(--bg-canvas)}
 .htile.hguide .pv{position:absolute;inset:0}
@@ -1345,52 +1360,6 @@ html[data-intro] .app{visibility:hidden}
 
 /* ═══ Home shell: a sidebar that stays, and the section it shows ═══ */
 .hmain{flex:1;min-width:0;position:relative;overflow:auto;scrollbar-width:thin}
-/* Home, the team's board: each prototype with its branches beside it, joined by a line from Main */
-.hl.hboard{max-width:1280px;gap:40px}
-.hb-h{display:flex;align-items:flex-end;gap:24px}
-.hb-h .tt{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
-.hb-h h1{font:600 24px/1.2 var(--fakt);letter-spacing:-.02em}
-.hb-h p{font-size:14px;line-height:1.5;color:var(--text-secondary);max-width:560px}
-.hb-h .hacts{display:flex;gap:8px;flex-shrink:0}
-.hb-list{display:flex;flex-direction:column;gap:40px}
-.hb-p,.hb-act{display:flex;flex-direction:column;gap:12px;min-width:0}
-.hb-ph{display:flex;align-items:center;gap:12px;min-height:28px}
-.hb-ph b{font:600 16px/1.3 var(--fakt);letter-spacing:-.015em}
-.hb-ph .m{font-size:12px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hb-ph .sp{flex:1}
-.hb-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:24px}
-.hb-card{min-width:0;display:flex;flex-direction:column;gap:10px;padding:8px;border-radius:16px;background:var(--bg-layer);box-shadow:var(--sh-card);text-align:left;transition:box-shadow 150ms var(--ease-smooth)}
-.hb-card:hover{box-shadow:var(--sh-card-hi)}
-.hb-card:active{transform:scale(.99)}
-.hb-card:focus-visible{outline:2px solid var(--ring-default);outline-offset:2px}
-.hb-th{position:relative;display:block;width:100%;aspect-ratio:264/165;border-radius:10px;overflow:hidden;background:var(--bg-secondary);box-shadow:inset 0 0 0 1px var(--border-subtle)}
-.hb-th canvas{display:block;width:100%;height:100%}
-.hb-th.waiting{background:var(--skel)}
-.hb-th.none{display:grid;place-items:center}
-.hb-th.none canvas{display:none}
-.hb-cap{display:flex;flex-direction:column;gap:4px;min-width:0;padding:0 6px 4px}
-.hb-k{display:flex;align-items:center;gap:6px;min-width:0;color:var(--text-secondary)}
-.hb-k .ic{flex-shrink:0}
-.hb-k b{font:500 14px/1.3 var(--fakt);color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.hb-m{font-size:12px;line-height:1.4;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.hb-s{display:flex;align-items:center;gap:6px;min-width:0;margin-top:4px}
-.hb-s .av{width:20px;height:20px;border:0;font-size:10px}
-.hb-s .av.agent,.hb-feed .av.agent{background:var(--raise-ink);color:var(--on-primary)}
-.hb-s .who{flex:1;min-width:0;font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* Main is the agreed version: the inverse card, as on every list of prototypes */
-.hb-card.main{background:var(--raise-ink);box-shadow:var(--sh-card-inv)}
-.hb-card.main:hover{box-shadow:var(--sh-card-inv-hi)}
-.hb-card.main .hb-k,.hb-card.main .hb-m{color:color-mix(in srgb,var(--on-primary) 62%,transparent)}
-.hb-card.main .hb-k b{color:var(--on-primary)}
-.hb-card.main .hb-th{box-shadow:inset 0 0 0 .5px color-mix(in srgb,var(--on-primary) 14%,transparent);background:color-mix(in srgb,var(--on-primary) 8%,transparent)}
-/* a new attempt: a dashed slot */
-.hb-card.new{background:none;box-shadow:none;outline:1.5px dashed var(--border-default);outline-offset:-1.5px}
-.hb-card.new:hover{background:var(--bg-layer);box-shadow:var(--sh-card)}
-.hb-card.new .hb-th{background:none;box-shadow:none}
-.hb-feed{display:flex;flex-direction:column;gap:2px;max-width:720px}
-.hb-feed .av{width:28px;height:28px;border:0;flex-shrink:0}
-@media (max-width:700px){.hb-h{flex-direction:column;align-items:flex-start}}
-@media (prefers-reduced-motion:reduce){.hb-card:active{transform:none}}
 /* the sections: a two-tone title (a grey lead-in, then the point), and generous air */
 .hl{max-width:1120px;margin:0 auto;padding:32px 40px 64px;display:flex;flex-direction:column;gap:32px}
 .hl-h{display:flex;flex-direction:column;gap:4px}

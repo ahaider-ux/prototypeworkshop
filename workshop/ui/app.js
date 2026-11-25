@@ -7,8 +7,9 @@ import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDi
 import { rulesFor, loadOverrides } from "./styles.js";
 import { loadRecipes } from "./recipes.js";
 import { playIntro } from "./intro.js";
-import { renderBoard } from "./board.js";
-import { FEATURES, featureCard, openLearn } from "./visuals.js";
+import { mountHomeCanvas } from "./home.js";
+import { branchStatus, branchCounts } from "./boardfacts.js";
+import { FEATURES, artEl, openLearn } from "./visuals.js";
 
 const store = {
   get(k, d) {
@@ -141,10 +142,6 @@ const lastPage = new Map(store.get("ws-last", []));
 const SECTIONS = ["home", "prototypes", "learn", "activity"];
 function parseHash() {
   const m = /^#\/p\/([^/?#]+)(?:\/([^/?#]+))?/.exec(location.hash);
-  if (!m) {
-    const sec = /^#\/([a-z]+)$/.exec(location.hash)?.[1];
-    return { view: "home", section: SECTIONS.includes(sec) ? sec : "home" };
-  }
   const dec = (s) => {
     try {
       return decodeURIComponent(s);
@@ -152,6 +149,13 @@ function parseHash() {
       return "";
     }
   };
+  if (!m) {
+    // #/in/<prototype>: the level inside a project on the home canvas
+    const inside = /^#\/in\/([^/?#]+)$/.exec(location.hash);
+    if (inside) return { view: "home", section: "home", inside: dec(inside[1]) };
+    const sec = /^#\/([a-z]+)$/.exec(location.hash)?.[1];
+    return { view: "home", section: SECTIONS.includes(sec) ? sec : "home" };
+  }
   return { view: "proto", root: dec(m[1]), page: m[2] ? dec(m[2]) : null };
 }
 function hashFor(page) {
@@ -185,14 +189,18 @@ function showHome() {
   $("work").hidden = true;
   $("frame").classList.add("home-on");
   sync();
-  const sec = parseHash().section || "home";
+  const r = parseHash();
+  const sec = r.section || "home";
   const moved = S.homeSection && S.homeSection !== sec;
   S.homeSection = sec;
+  // which level of the canvas: the space, inside a project, or inside Guides (#/learn)
+  S.homeIn = sec === "learn" ? "guides" : sec === "activity" ? null : r.inside || null;
   renderTabs(); // after the section is known: the row shows where you are
   homeKey = "";
   renderHome(moved);
-  document.title = `${sec === "home" ? S.ws.name : sec[0].toUpperCase() + sec.slice(1)} · Atelier`;
-  store.set("ws-route", sec === "home" ? "#/" : `#/${sec}`);
+  const inEnv = S.homeIn && S.envs.get(S.homeIn);
+  document.title = `${inEnv ? inEnv.name : S.homeIn === "guides" ? "Guides" : sec === "activity" ? "Activity" : S.ws.name} · Atelier`;
+  store.set("ws-route", location.hash && parseHash().view === "home" ? location.hash : "#/");
 }
 const goSection = (sec) => {
   const want = sec === "home" ? "#/" : `#/${sec}`;
@@ -230,8 +238,8 @@ function renderTabs() {
   t.replaceChildren();
   // One row of navigation, always here: the space's three places (Prototypes is the board), then
   // the prototypes you have open. Nothing else navigates.
-  const cur = S.view === "home" ? (S.homeSection === "prototypes" ? "home" : S.homeSection || "home") : null;
-  for (const [sec, icon, label] of [["home", IC.board, "Prototypes"], ["learn", IC.spark, "Learn"], ["activity", IC.version, "Activity"]]) {
+  const cur = S.view === "home" ? (S.homeSection === "activity" ? "activity" : "home") : null; // every level of the canvas is Home
+  for (const [sec, icon, label] of [["home", IC.home, "Home"], ["activity", IC.version, "Activity"]]) {
     const on = cur === sec;
     const tab = h(`<div class="tab tab-home${on ? " on" : ""}" role="tab" tabindex="0" data-s="${sec}" aria-selected="${on}">${icon}<span class="t">${label}</span></div>`);
     tab.onclick = () => goSection(sec);
@@ -276,14 +284,90 @@ function lastEdit(rootId) {
   for (const tk of S.tasks) if (fam.has(tk.env)) see(tk.updatedAt);
   return t ? new Date(t).toISOString() : null;
 }
-// Home is the team's board (ui/board.js): every prototype with its branches beside it.
-let homeBoard = null;
-function renderHomeBoard(rs) {
-  const el = homeMain();
-  el.classList.remove("hc");
-  homeBoard?.destroy();
-  homeBoard = renderBoard(el, rs, { go, branch: createBranch, importHtml: openImport, connect: () => openSpaces(), section: goSection, lastEdit, loadDiff, spaces: !!S.ws.spaces });
+// Home is a canvas in levels (ui/home.js is one level's canvas). The space: a block for each
+// project, and Guides. Inside a project: Main and its branches, and a place to start a new one.
+// Inside Guides: the guides. Entering Main or a branch opens its frames in the editor.
+let homeCv = null,
+  homeLevel = "";
+const firstBoard = (id) => boardsOf(id).slice().sort((a, b) => a.y - b.y || a.x - b.x)[0] || null;
+// open comments and notes on a page: what people have said about it
+const commentsOn = (id) => S.comments.filter((c) => !c.parent && !c.resolved && c.env === id).length + itemsOf("note").filter((n) => n.env === id).length;
+const openBranches = (rootId) => familyOf(rootId).map((x) => x.env).filter((e) => isBranch(e) && !e.archived);
+function branchFacts(b) {
+  const d = S.diffs.get(b.id);
+  if (!d) loadDiff(b.id);
+  const tasks = S.tasks.filter((t) => t.env === b.id);
+  return { changes: d?.changes.length || 0, conflicts: d?.conflicts || 0, comments: commentsOn(b.id), working: tasks.filter((t) => t.status === "working").length, queued: tasks.filter((t) => t.status === "queued").length };
 }
+const goIn = (x) => (location.hash = x === "guides" ? "#/learn" : x ? `#/in/${encodeURIComponent(x)}` : "#/");
+function homeLevelOf(rs) {
+  const root = S.homeIn && S.homeIn !== "guides" ? S.envs.get(S.homeIn) : null;
+  if (root && !isBranch(root)) {
+    // inside a project: Main, then each branch (newest first), then a new one
+    const brs = openBranches(root.id).sort((a, b) => String(b.branch?.at || b.created || "").localeCompare(String(a.branch?.at || a.created || "")));
+    const mc = commentsOn(root.id);
+    const items = [
+      { id: root.id, name: "Main", meta: ["The agreed version", plural(boardsOf(root.id).length, "screen"), branchCounts({ comments: mc })].filter(Boolean).join(" · "), board: firstBoard(root.id), cue: "Open", cls: "hproj" },
+      ...brs.map((b) => {
+        const f = branchFacts(b);
+        return { id: b.id, name: b.name, meta: [branchStatus(f).label, branchCounts(f), `${b.author || "Someone"}, ${timeAgo(b.branch?.at || b.created)}`].filter(Boolean).join(" · "), board: firstBoard(b.id), cue: "Open" };
+      }),
+    ];
+    const actions = [{ title: "New branch", desc: "Try an idea without touching Main", icon: IC.fork, cue: "Branch", run: () => createBranch(root.id) }];
+    return { key: `in:${root.id}`, title: root.name, sub: [plural(boardsOf(root.id).length, "screen"), brs.length ? plural(brs.length, "open branch", "open branches") : "no branches yet"].join(" · "), items, actions, open: (it) => go(it.id) };
+  }
+  if (S.homeIn === "guides") {
+    const actions = FEATURES.map((f, i) => ({ title: f.title, desc: f.text, cue: "Learn", art: () => artEl(f.id), run: () => learn(i) }));
+    return { key: "guides", title: "Guides", sub: `${FEATURES.length} short guides to what you can do here`, items: [], actions, open: () => {} };
+  }
+  // the space: a block per project (most recently edited first), Guides, and what to add
+  const items = rs
+    .map((e) => {
+      const brs = openBranches(e.id);
+      const ready = brs.filter((b) => branchStatus(branchFacts(b)).tone === "ok").length;
+      const edited = lastEdit(e.id);
+      return { id: e.id, name: e.name, edited, board: firstBoard(e.id), cue: "Enter", cls: "hproj", deep: true, meta: [plural(boardsOf(e.id).length, "screen"), brs.length ? plural(brs.length, "branch", "branches") : "", ready ? `${ready} ready to review` : ""].filter(Boolean).join(" · ") };
+    })
+    .sort((a, b) => String(b.edited || "").localeCompare(String(a.edited || "")));
+  const actions = [
+    { title: "Guides", desc: `${FEATURES.length} short guides to what you can do here`, cue: "Enter", deep: true, art: () => artEl("intro"), run: () => goIn("guides") },
+    { title: "Add a prototype", desc: "Import an HTML file or a whole folder", icon: IC.upload, cue: "Start", run: openImport },
+    ...(S.ws.spaces ? [{ title: "Connect a folder", desc: "Edit prototypes where they live", icon: IC.folder, cue: "Connect", run: () => openSpaces() }] : []),
+    ...(S.ws.harnesses?.length ? [] : [{ title: "Connect your AI tool", desc: "It works on branches; you review", icon: IC.agent, cue: "Connect", run: openConnect }]),
+  ];
+  return { key: "space", title: "", sub: "", items, actions, open: (it) => goIn(it.id) };
+}
+function renderHomeCanvas(rs) {
+  const el = homeMain();
+  // a project that's gone (deleted, or a link to a branch): back to the space
+  if (S.homeIn && S.homeIn !== "guides" && !(S.envs.get(S.homeIn) && !isBranch(S.envs.get(S.homeIn)))) {
+    S.homeIn = null;
+    history.replaceState(null, "", "#/");
+  }
+  const lv = homeLevelOf(rs);
+  if (!homeCv || homeLevel !== lv.key || !el.querySelector(".hcanvas")) {
+    homeCv?.destroy();
+    el.replaceChildren();
+    el.classList.add("hc");
+    homeLevel = lv.key;
+    homeCv = mountHomeCanvas(el, lv.items, { open: lv.open, actions: lv.actions, key: `${S.ws.home || S.ws.name}|${lv.key}` });
+  } else homeCv.update(lv.items, lv.actions);
+  // where you are, and the way back up (also Esc); nothing on the first level
+  el.querySelector(".hpathbar")?.remove();
+  if (lv.key !== "space") {
+    const bar = h(`<div class="hpathbar"><button type="button" class="dbtn sm" data-a="up"><span class="flip">${IC.chevr}</span>Home</button><b></b><span class="m"></span></div>`);
+    bar.querySelector("b").textContent = lv.title;
+    bar.querySelector(".m").textContent = lv.sub;
+    bar.querySelector('[data-a="up"]').onclick = () => goIn(null);
+    el.append(bar);
+  }
+}
+// Esc goes up a level on the home canvas (unless a dialog or a menu has it)
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || S.view !== "home" || !S.homeIn || S.homeSection === "activity") return;
+  if (document.querySelector("#modal.open, .cnmenu") || /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) return;
+  goIn(null);
+});
 // The home is one main area that changes with the section; the header's row navigates between them.
 function homeShell() {
   const home = $("home");
@@ -322,22 +406,19 @@ const learn = (i) => openLearn(i, learnActions());
 function renderHome(moved = false) {
   if (S.view !== "home") return;
   const rs = roots();
-  const key = JSON.stringify([S.homeSection, S.ws.name, S.ws.home, S.ws.spaces, S.ws.harnesses?.length || 0, S.comments.length, S.tasks.map((t) => t.status).join(), S.activity?.length || 0, [...S.diffs].map(([k, d]) => [k, d.changes.length, d.conflicts]), rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen, lastEdit(e.id)])]);
+  const key = JSON.stringify([S.homeSection, S.homeIn, S.ws.name, S.ws.home, S.ws.spaces, S.ws.harnesses?.length || 0, S.comments.length, S.tasks.map((t) => t.status).join(), S.activity?.length || 0, [...S.diffs].map(([k, d]) => [k, d.changes.length, d.conflicts]), rs.map((e) => [e.id, e.name, familyOf(e.id).map((x) => [x.env.id, x.env.name, x.env.archived]), boardsOf(e.id).length, boardsOf(e.id)[0]?.screen, lastEdit(e.id)])]);
   if (key === homeKey) return;
   homeKey = key;
   const main = homeMain();
   if (moved && !matchMedia("(prefers-reduced-motion: reduce)").matches) main.animate([{ opacity: 0, filter: "blur(2px)" }, { opacity: 1, filter: "blur(0)" }], { duration: 180, easing: "ease-out" });
-  homeBoard?.destroy();
-  homeBoard = null;
-  if (S.homeSection === "learn") return renderLearnPage(main);
-  if (S.homeSection === "activity") return renderActivityPage(main);
-  renderHomeBoard(rs); // #/ and #/prototypes
-}
-function renderLearnPage(main) {
-  const page = h(`<div class="hl"><header class="hl-h"><h1>Learn</h1><p>Short guides to everything you can do in Atelier.</p></header><div class="hl-learn all"></div></div>`);
-  const lc = page.querySelector(".hl-learn");
-  FEATURES.forEach((_, i) => lc.append(featureCard(i, learn)));
-  main.replaceChildren(page);
+  if (S.homeSection === "activity") {
+    homeCv?.destroy();
+    homeCv = null;
+    homeLevel = "";
+    main.classList.remove("hc");
+    return renderActivityPage(main);
+  }
+  renderHomeCanvas(rs); // every other route is a level of the canvas
 }
 // Activity: what people and agents did across the space, newest first
 async function renderActivityPage(main) {
@@ -1294,6 +1375,7 @@ async function boot() {
     renderRight();
     requestAnimationFrame(() => (S.compare ? fitPair() : flyTo(beforeCompare)));
   });
+  on("diff", () => S.view === "home" && renderHome()); // a branch's counts on the home canvas
   on("archive", (id) => patchArchived(id, true));
   on("unarchive", (id) => patchArchived(id, false));
   on("shortcuts", openShortcuts);

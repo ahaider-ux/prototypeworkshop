@@ -179,10 +179,10 @@ test("ui: the intro's pin steps aside while the word lands", () => {
 // only real prototypes; a spare place is an empty-state card whose click does the real thing, and
 // the intro's screen is Atelier's own empty state, not a fake design.
 test("ui: nothing made up stands in for a prototype", () => {
-  const board = read("board.js");
-  assert.match(board, /nb\.onclick = \(\) => ctx\.branch\(root\.id\);/, "the board's spare place starts a real branch");
-  assert.match(board, /em\.querySelector\("button"\)\.onclick = ctx\.importHtml;/, "an empty space offers Import");
-  assert.ok(!/artEl|FEATURES|guide/i.test(board), "no guide or picture cards among the prototypes");
+  const app = read("app.js");
+  const level = app.slice(app.indexOf("function homeLevelOf"), app.indexOf("function renderHomeCanvas"));
+  for (const run of ["run: openImport", "run: () => openSpaces()", "run: openConnect", "run: () => createBranch(root.id)"]) assert.ok(level.includes(run), `the canvas's placeholder cards do something real: ${run}`);
+  assert.match(read("home.js"), /if \(act && !act\.deep\) return act\.run\?\.\(\);/);
   const intro = read("intro.js");
   const page = intro.slice(intro.indexOf("const PAGE"), intro.indexOf("\n", intro.indexOf("const PAGE")));
   assert.match(page, /class="pempty/, "the intro's screen is the empty state");
@@ -224,19 +224,15 @@ test("ui: every panel section lives under one of the three tabs", () => {
   assert.ok(!/measureLabels/.test(js));
 });
 
-// The home is one main area that changes with the section: picking a section re-renders only that
-// area, and every section has a route.
-test("ui: the home's sections swap in one main area", () => {
+// The home is one main area: every level of the canvas and the Activity page render into it, and
+// each has a route.
+test("ui: the home renders into one main area", () => {
   const app = read("app.js");
-  assert.match(app, /const SECTIONS = \["home", "prototypes", "learn", "activity"\]/);
   assert.match(app, /if \(!home\.querySelector\("\.hmain"\)\) home\.replaceChildren\(/, "built once");
-  const board = app.slice(app.indexOf("function renderHomeBoard"), app.indexOf("\n}\n", app.indexOf("function renderHomeBoard")));
-  assert.ok(board.includes("homeMain()") && !/\$\("home"\)\.replaceChildren/.test(board), "the board fills only the main area");
-  for (const f of ["renderLearnPage", "renderActivityPage"]) {
-    const body = app.slice(app.indexOf(`function ${f}`), app.indexOf("\n}\n", app.indexOf(`function ${f}`)));
-    assert.ok(body.includes("main.replaceChildren"), `${f} replaces only the main area`);
-    assert.ok(!/\$\("home"\)\.replaceChildren/.test(body), `${f} leaves the rest alone`);
-  }
+  const canvas = app.slice(app.indexOf("function renderHomeCanvas"), app.indexOf("// Esc goes up a level"));
+  assert.ok(canvas.includes("homeMain()") && !/\$\("home"\)\.replaceChildren/.test(canvas), "the canvas fills only the main area");
+  const act = app.slice(app.indexOf("function renderActivityPage"), app.indexOf("\n}\n", app.indexOf("function renderActivityPage")));
+  assert.ok(act.includes("main.replaceChildren") && !/\$\("home"\)\.replaceChildren/.test(act));
 });
 
 // The product pictures ship in the app, so they follow the same content rules as live art: no
@@ -302,9 +298,8 @@ test("ui: a canvas that fits stays centred; a bigger one returns to what you ope
 test("ui: one row of navigation, in the header", () => {
   const app = read("app.js");
   const tabs = app.slice(app.indexOf("function renderTabs()"), app.indexOf("function closeTab"));
-  assert.match(tabs, /\[\["home", IC\.board, "Prototypes"\], \["learn", IC\.spark, "Learn"\], \["activity", IC\.version, "Activity"\]\]/);
+  assert.match(tabs, /\[\["home", IC\.home, "Home"\], \["activity", IC\.version, "Activity"\]\]/, "Home (every level of the canvas) and Activity");
   assert.match(tabs, /tab\.onclick = \(\) => goSection\(sec\);/);
-  assert.ok(!/>Home</.test(tabs), "no Home tab beside a Prototypes one");
   const shell = app.slice(app.indexOf("function homeShell()"), app.indexOf("const homeMain"));
   assert.ok(!/hdock|hside|tablist/.test(shell), "no second navigation on the home");
   const show = app.slice(app.indexOf("function showHome()"), app.indexOf("const goSection"));
@@ -383,24 +378,35 @@ test("ui: the header asks you to connect your AI tool with a real button", () =>
   assert.match(read("app.js"), /\$\("agentBtn"\)\.className = on \? "dbtn sm agst" : "createbtn sm agst cta"/);
 });
 
-// Home is the team's board, not an abstract canvas: every prototype with Main and its open branches
-// beside it (who started each, its changes and comments, where it stands), a place to start a new
-// branch, and what happened lately. The same board answers #/ and #/prototypes.
-test("ui: the home is a board of prototypes and their branches", () => {
+// Home is a canvas in levels you go into. The space: a block per project, and Guides, each drawn as
+// a stack because there's a level inside. Inside a project: Main, each open branch (where it stands,
+// its changes and comments, who started it) and a place to start a new one. Inside Guides: the
+// guides. Entering Main or a branch opens its frames. The way back up is always there.
+test("ui: the home canvas goes deeper, level by level", () => {
   const app = read("app.js");
-  assert.match(app, /renderHomeBoard\(rs\); \/\/ #\/ and #\/prototypes/);
-  assert.match(app, /renderBoard\(el, rs, \{ go, branch: createBranch, importHtml: openImport/);
-  assert.ok(!/mountHomeCanvas|renderHomeCanvas|renderHomeList/.test(app), "one home, not three");
-  assert.ok(!/data-a="br"/.test(read("board.js")), "New branch is offered once per prototype, as its last card");
-  assert.match(read("app.css"), /\.hb-row\{display:grid;grid-template-columns:repeat\(auto-fill,minmax\(248px,1fr\)\);gap:24px\}/, "rows wrap: nothing scrolls sideways");
-  const board = read("board.js");
-  for (const piece of ['class="hb-card main"', "<b>Main</b>", "for (const b of open)", 'class="hb-card new"', "branchStatus(facts)", "branchCounts(facts)", "commentsOn(b.id)", "Latest"]) assert.ok(board.includes(piece), piece);
-  assert.match(board, /c\.onclick = \(\) => ctx\.go\(b\.id\);/, "a branch card opens that branch");
+  const level = app.slice(app.indexOf("function homeLevelOf"), app.indexOf("function renderHomeCanvas"));
+  assert.match(level, /cue: "Enter", cls: "hproj", deep: true/, "a project is a block you enter");
+  assert.match(level, /title: "Guides",[^\n]*cue: "Enter", deep: true,[^\n]*run: \(\) => goIn\("guides"\)/, "so is Guides");
+  assert.match(level, /name: "Main", meta: \["The agreed version"/);
+  assert.match(level, /branchStatus\(f\)\.label, branchCounts\(f\)/, "a branch says where it stands");
+  assert.match(level, /title: "New branch"[^\n]*run: \(\) => createBranch\(root\.id\)/);
+  assert.match(level, /open: \(it\) => go\(it\.id\)/, "Main or a branch opens its frames");
+  assert.match(level, /open: \(it\) => goIn\(it\.id\)/, "a project is entered, not opened");
+  assert.match(app, /const inside = \/\^#\\\/in\\\/\(\[\^\/\?#\]\+\)\$\/\.exec\(location\.hash\);/, "each project's level has a route");
+  const canvas = app.slice(app.indexOf("function renderHomeCanvas"), app.indexOf("// Esc goes up a level"));
+  assert.match(canvas, /if \(lv\.key !== "space"\) \{[\s\S]*data-a="up"[\s\S]*onclick = \(\) => goIn\(null\);/, "the way back up");
+  assert.match(app, /if \(e\.key !== "Escape" \|\| S\.view !== "home" \|\| !S\.homeIn/, "Esc goes up too");
+  assert.ok(!/renderBoard|renderHomeList|renderLearnPage/.test(app), "one home");
+  const home = read("home.js");
+  assert.match(home, /\$\{it\.deep \? " hdeep" : ""\}/);
+  assert.match(home, /list\[idx\]\?\.cue \|\| "Open"/, "the pointer says Enter or Open");
+  assert.match(home, /memory\.set\(key, \{ x: -cx \* CW, y: -cy \* CH, id: act \? `action:\$\{act\.title\}` : it\.id \}\);/, "coming back up lands on the block you were in");
   const css = read("app.css");
-  assert.match(css, /\.hb-card\.main\{background:var\(--raise-ink\);box-shadow:var\(--sh-card-inv\)\}/, "Main is the inverse card");
+  assert.match(css, /\.htile\.hdeep\{box-shadow:var\(--sh-card\),0 9px 0 -5px/, "a block with a level inside is a stack");
+  assert.match(css, /\.htile\.hdeep\.chosen\{scale:1\.3;opacity:0;/, "entering it, the block grows and dissolves");
+  assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{\.htile\.hdeep\.chosen\{scale:none;opacity:1\}\}/);
   for (const t of ["--sh-card-inv:", "--sh-card-inv-hi:"]) assert.equal(css.split(t).length - 1, 2, `${t} has a dark-mode pair`);
-  // on Main, the inspector offers the branch instead of only warning
-  assert.match(read("panels.js"), /You're editing Main[^`]*`\);\s*const br = h\(`<button[^`]*Create a branch<\/button>`\);\s*br\.onclick = \(\) => fire\("branch", env\.id\);/);
+  assert.match(read("panels.js"), /You're editing Main[^`]*`\);\s*const br = h\(`<button[^`]*Create a branch<\/button>`\);/);
 });
 
 // A frame is editable as it stands, as in Figma: the frame under the pointer and the selected one are

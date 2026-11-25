@@ -1,4 +1,7 @@
-// Home: every prototype in the space on a canvas you can throw around.
+// Home: a canvas you can throw around, in levels you go into. The first level holds the space's
+// blocks: each project, and Guides. Entering a block takes you into its own canvas (a project's
+// Main and branches; the guides), and entering one of those opens the file itself. app.js decides
+// what's on each level; this module is one level's canvas.
 //
 // Every prototype is a project card: its picture, its name and when it was last edited, readable
 // before the picture has even arrived. The interaction follows design.cash.app (observed in the
@@ -34,8 +37,10 @@ const CARD = { w: 320, h: 264 }, // every prototype is a card: its picture, its 
 // where each space's canvas was left, and which prototype was opened from it (for this page's life)
 const memory = new Map();
 
-// items: [{ id, name, meta, board, edited }] most recent first. open(item) opens one. actions:
-// [{ title, desc, icon, run, cue, art }], everything else on the field: what a space can do next
+// items: [{ id, name, meta, board, edited, cue, cls, deep }] most recent first. open(item) opens
+// one. cue is what the pointer says over it ("Enter", "Open"); cls styles the card (hproj: the
+// inverse card); deep marks a block with a level inside (it's drawn as a stack, and opening it
+// dives in). actions: [{ title, desc, icon, run, cue, art, deep }], everything else on the field: what a space can do next
 // (import, connect a folder, connect an AI tool) as placeholder cards, and the guides (art(): their
 // picture) — all real, so the field never needs made-up content to look full. cue is what the
 // pointer says over it ("Start", "Learn"; a prototype says "Open"). key names the space.
@@ -123,7 +128,7 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
       el.setAttribute("aria-label", a.title || "");
       if (a.art) {
         // a guide: its picture, its title and one line; it opens the guide
-        el.className = "htile hguide";
+        el.className = `htile hguide${a.deep ? " hdeep" : ""}`;
         const node = arts.get(i)?.pop() || a.art();
         el._art = [i, node];
         tt.replaceChildren(node);
@@ -134,10 +139,10 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
       }
     } else {
       const it = list[idx];
-      el.className = "htile hproj";
+      el.className = `htile${it.cls ? ` ${it.cls}` : ""}${it.deep ? " hdeep" : ""}`;
       el.querySelector("b").textContent = it.name;
       el.querySelector(".m").textContent = it.meta;
-      el.setAttribute("aria-label", `Open ${it.name}`);
+      el.setAttribute("aria-label", `${it.cue || "Open"} ${it.name}`);
       if (!tt.querySelector("canvas")) tt.replaceChildren(h(`<canvas aria-hidden="true"></canvas>`));
       paint(el, it);
     }
@@ -238,7 +243,7 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
   }
   // over a card the dot opens into a glass label saying what a click does
   const label = cur.querySelector("b");
-  const cueOf = (idx) => (idx >= 0 ? "Open" : actions[-idx - 1]?.cue || "Start");
+  const cueOf = (idx) => (idx >= 0 ? list[idx]?.cue || "Open" : actions[-idx - 1]?.cue || "Start");
   function setHot(next) {
     if (next === hot) return;
     tiles.get(hot)?.classList.remove("hot");
@@ -371,19 +376,22 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
   // A keyboard open is immediate (nothing animates on keyboard actions), as is reduced motion.
   function choose(el, animate) {
     const idx = +el.dataset.idx;
-    if (idx < 0) return actions[-idx - 1]?.run?.();
-    const it = list[idx];
+    const act = idx < 0 ? actions[-idx - 1] : null;
+    // an action that isn't a block does its thing where it is (a dialog); a block is entered
+    if (act && !act.deep) return act.run?.();
+    const it = act || list[idx];
     if (!it || leaving) return;
+    const go = () => (act ? act.run?.() : open(it));
     const [cx, cy] = el.dataset.cell.split(",").map(Number);
-    memory.set(key, { x: -cx * CW, y: -cy * CH, id: it.id });
-    if (!animate || rmo()) return open(it);
+    memory.set(key, { x: -cx * CW, y: -cy * CH, id: act ? `action:${act.title}` : it.id });
+    if (!animate || rmo()) return go();
     leaving = true;
     setHot(null);
     el.classList.add("chosen");
     root.classList.add("leaving");
     host.classList.add("hleaving");
     focusCell(cx, cy, LEAVE_MS);
-    setTimeout(() => open(it), LEAVE_MS);
+    setTimeout(go, LEAVE_MS);
   }
 
   // ---------- input ----------
@@ -507,8 +515,10 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
   let backCell = null;
   if (back) {
     (cam.x = back.x), (cam.y = back.y);
-    const idx = list.findIndex((x) => x.id === back.id);
-    backCell = idx >= 0 ? cellOf(idx) : null;
+    // the block you came back out of: a prototype, or an action block such as Guides
+    const ai = actions.findIndex((a) => `action:${a.title}` === back.id);
+    const idx = ai >= 0 ? -(ai + 1) : list.findIndex((x) => x.id === back.id);
+    backCell = idx >= 0 || ai >= 0 ? cellOf(idx) : null;
     if (backCell && !fitsView()) (cam.x = -backCell.x * CW), (cam.y = -backCell.y * CH);
     else Object.assign(cam, middle());
     root.classList.add("used"); // they know how it works by now: no hint
