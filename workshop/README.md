@@ -165,6 +165,9 @@ them all):
   **⌥⇧H / ⌥⇧V** (distribute).
 - **Copy, cut, paste, duplicate** boards and annotations (**⌘C / ⌘X / ⌘V / ⌘D**), on the same page
   or onto another branch: a pasted board shows that page's version of the prototype.
+- **Resize a frame, link or picture** from any edge or corner: the whole length of an edge
+  resizes that side, a corner resizes both, and the opposite side stays where it was. Drag inside
+  to move it.
 - **Undo and redo** everything — moves, resizes, adding and removing, alignment and every element
   edit — with **⌘Z** and **⌘⇧Z**.
 - **Right-click** anything for what you can do with it.
@@ -260,7 +263,8 @@ Prototype, in a new tab and in share links. On a branch it is one of the changes
 - **Move**: drag it. Inside an auto layout (a flex or grid parent) dragging **reorders** it among
   its siblings, with a line showing where it will land (saved with `order`); anywhere else it moves
   freely (saved with `translate`). Arrow keys reorder or nudge it, **Shift** for 8 px.
-- **Resize**: drag one of its eight handles (saved as `width` and `height`; in an auto layout it
+- **Resize**: drag any edge or corner (the whole edge works, not only the square in its middle;
+  a small layer's edges and corners are grabbed from just outside it, so its middle still moves it) (saved as `width` and `height`; in an auto layout it
   stops growing or shrinking along that axis).
 - **Remove**: **Delete** hides it with `display: none`, so it can come back.
 - **Design panel**, in the same order as FigCraft's: Position (X, Y, rotation), Layout (add or

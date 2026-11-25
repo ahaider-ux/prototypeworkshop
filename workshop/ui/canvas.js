@@ -6,6 +6,7 @@
 
 import { S, on, fire, itemsOf, isBranch, screenName, pageItems, pageEnv, plural, branchesOf, factsOf, pageName } from "./state.js";
 import { studyRows, branchStatus } from "./boardfacts.js";
+import { resizeAreas, resizeFrom, SIDES } from "./hitareas.js";
 import { $, h, esc, clamp, frScale, api, toast, IC, menu, rmo, timeAgo, loadPage } from "./lib.js";
 import { commitRules, preview, endPreview, undoStyle, idle as stylesIdle } from "./styles.js";
 import * as G from "./gfx.js";
@@ -17,7 +18,7 @@ import { readableZoom, openOn } from "./motion.js";
 const B = new Map(); // board item id → {id, el, hit, frame, live, ready} — frame only while mounted live
 const NEL = new Map(); // note/box item id → element
 const GH = new Map(); // boards shown but not saved: compare's (the parent's screens above a branch's) and side by side's (each branch's screens in a row under the page's)
-const HUD = { play: null, stop: null, rows: new Map(), labels: new Map(), alabels: new Map(), pins: new Map(), sel: null, hover: null, size: null, handles: [], ehandles: [], ins: null, draft: null, multi: [], guides: [] };
+const HUD = { play: null, stop: null, rz: [], rows: new Map(), labels: new Map(), alabels: new Map(), pins: new Map(), sel: null, hover: null, size: null, handles: [], ehandles: [], ins: null, draft: null, multi: [], guides: [] };
 let cv, world, hud, wires, boardLayer, noteLayer, inkLayer, inkRoot, wiresRoot, rulerH, rulerV;
 const INK = new Map(); // ink item id → {g, path, key}
 const RULER = 20;
@@ -1368,7 +1369,14 @@ export function drawHud() {
     HUD.hover = h(`<div class="selbox hover"></div>`);
     HUD.size = h(`<span class="sizetag"></span>`);
     hud.append(HUD.sel, HUD.hover, HUD.size);
-    for (const k of ["e", "s", "se"]) {
+    // What you grab to resize is an area (hitareas.js): a band along each edge and a square at each
+    // corner. The small squares drawn at the corners only show where; they take no clicks.
+    for (const k of SIDES) {
+      const d = h(`<div class="rz ${k}" data-h="${k}"></div>`);
+      hud.append(d);
+      HUD.rz.push(d);
+    }
+    for (const k of ["nw", "ne", "se", "sw"]) {
       const d = h(`<div class="hdl ${k}" data-h="${k}"></div>`);
       hud.append(d);
       HUD.handles.push(d);
@@ -1434,7 +1442,7 @@ export function drawHud() {
   const eh = er && S.tool === "move" && drag?.mode !== "reorder" ? er : null;
   for (const d of HUD.ehandles) {
     const k = d.dataset.h;
-    // on a small element the handles would cover it: keep its middle free to drag
+    // on a small element the drawn squares would cover it; its resize areas are still there, outside it
     const tooSmall = eh && ((k.length === 1 && (/[ns]/.test(k) ? eh.h : eh.w) < 28) || (k.length === 2 && Math.min(eh.w, eh.h) < 14));
     d.hidden = !eh || tooSmall;
     if (d.hidden) continue;
@@ -1446,8 +1454,21 @@ export function drawHud() {
     d.hidden = !br;
     if (!br) continue;
     const k = d.dataset.h;
-    d.style.left = (k === "s" ? br.x + br.w / 2 : br.x + br.w) + "px";
-    d.style.top = (k === "e" ? br.y + br.h / 2 : br.y + br.h) + "px";
+    d.style.left = (k.includes("w") ? br.x : br.x + br.w) + "px";
+    d.style.top = (k.includes("n") ? br.y : br.y + br.h) + "px";
+  }
+  // the resize areas of what's selected: a frame, link or picture, or a layer
+  const rzOf = S.tool === "move" && !S.presenting ? eh || br : null;
+  const areas = new Map(resizeAreas(rzOf).map((a) => [a.k, a]));
+  for (const d of HUD.rz) {
+    const a = areas.get(d.dataset.h);
+    d.hidden = !a;
+    if (!a) continue;
+    d.dataset.el = eh ? "1" : "";
+    d.style.left = a.x + "px";
+    d.style.top = a.y + "px";
+    d.style.width = a.w + "px";
+    d.style.height = a.h + "px";
   }
   const hv = S.hover;
   const hr = hv && S.mode === "design" && S.tool === "move" && !(s?.kind === "el" && s.el === hv.el) ? elScreenRect(hv.item, hv.el) : null;
@@ -2515,7 +2536,7 @@ function onDown(e) {
   if (e.target.closest(".pin")) return;
   closePop();
   const pan = e.button === 1 || S.tool === "hand" || spaceDown;
-  const handle = e.target.closest(".hdl");
+  const handle = e.target.closest(".rz");
   const label = e.target.closest(".blabel:not(.ghost)");
   const alabel = e.target.closest(".alabel");
   const ghost = e.target.closest(".bd.ghost");
@@ -2528,7 +2549,7 @@ function onDown(e) {
     if (!drag) return;
   } else if (handle && (S.sel?.kind === "board" || S.sel?.kind === "web" || S.sel?.kind === "image")) {
     const it = item(S.sel.item);
-    drag = { kind: "resize", id: it.id, h: handle.dataset.h, p0: p, w0: it.w, h0: it.h };
+    drag = { kind: "resize", id: it.id, h: handle.dataset.h, p0: p, x0: it.x, y0: it.y, w0: it.w, h0: it.h };
   } else if (pan) {
     drag = { kind: "pan", p0: p, c0: { ...S.cam } };
     cv.classList.add("grabbing");
@@ -2712,13 +2733,11 @@ function onMove(e) {
     dirty = true;
   } else if (drag.kind === "resize") {
     const it = item(drag.id);
-    const lo = it.type === "image" ? 16 : 120;
-    if (drag.h.includes("e")) it.w = clamp(Math.round((drag.w0 + dx / z) / SNAP) * SNAP, lo, it.type === "image" ? 8192 : 4096);
-    if (drag.h.includes("s")) it.h = clamp(Math.round((drag.h0 + dy / z) / SNAP) * SNAP, lo, it.type === "image" ? 8192 : 4096);
-    // a picture keeps its proportions from the corner
-    if (it.type === "image" && drag.h === "se") it.h = Math.max(lo, Math.round((it.w * drag.h0) / drag.w0));
+    // from any side or corner; the opposite side stays put; a picture keeps its proportions from a corner
+    const pic = it.type === "image";
+    Object.assign(it, resizeFrom({ x: drag.x0, y: drag.y0, w: drag.w0, h: drag.h0 }, drag.h, dx / z, dy / z, { lo: pic ? 16 : 120, hi: pic ? 8192 : 4096, snap: SNAP, ratio: pic }));
     const el = B.get(drag.id)?.el || EMB.get(drag.id)?.el;
-    if (el) (el.style.width = it.w + "px"), (el.style.height = it.h + "px");
+    if (el) (el.style.left = it.x + "px"), (el.style.top = it.y + "px"), (el.style.width = it.w + "px"), (el.style.height = it.h + "px");
     drag.moved = true;
     dirty = true;
     fire("board-size", drag.id);
@@ -2769,8 +2788,8 @@ async function onUp(e) {
   }
   if (d.kind === "resize" && d.moved) {
     const it = item(d.id);
-    saveItem(it.id, { w: it.w, h: it.h });
-    recordMove([{ id: d.id, w: d.w0, h: d.h0 }], "resize");
+    saveItem(it.id, { x: it.x, y: it.y, w: it.w, h: it.h });
+    recordMove([{ id: d.id, x: d.x0, y: d.y0, w: d.w0, h: d.h0 }], "resize");
     return;
   }
   if (d.kind === "ink") return finishInk(d);

@@ -575,8 +575,14 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
 .selbox .tag{position:absolute;left:-1px;top:-21px;height:20px;padding:0 6px;border-radius:4px;background:var(--text-accent);color:var(--on-accent);font:400 12px/20px var(--fakt);white-space:nowrap;font-variant-numeric:tabular-nums}
 .selbox.flip .tag{top:auto;bottom:-21px}
 .draftbox{position:absolute;border:2px dashed var(--text-accent);border-radius:8px;pointer-events:none}
-.hdl{position:absolute;width:8px;height:8px;margin:-4px 0 0 -4px;background:var(--knob);border:1px solid var(--text-accent);pointer-events:auto;border-radius:0}
-.hdl.e,.hdl.w{cursor:ew-resize}.hdl.n,.hdl.s{cursor:ns-resize}.hdl.se,.hdl.nw{cursor:nwse-resize}.hdl.ne,.hdl.sw{cursor:nesw-resize}
+/* the squares drawn on a selection only show where its corners and sides are; what takes the
+   pointer is the resize area around each (.rz, laid out by ui/hitareas.js), with its cursor */
+.hdl{position:absolute;width:8px;height:8px;margin:-4px 0 0 -4px;background:var(--knob);border:1px solid var(--text-accent);pointer-events:none;border-radius:0}
+.rz{position:absolute;pointer-events:auto;touch-action:none}
+.rz.e,.rz.w{cursor:ew-resize}.rz.n,.rz.s{cursor:ns-resize}.rz.se,.rz.nw{cursor:nwse-resize}.rz.ne,.rz.sw{cursor:nesw-resize}
+.rz[hidden]{display:none}
+.hud .blabel,.hud .srow{z-index:1} /* a frame's title and Run stay clickable beside its top edge */
+.app.present .rz{display:none}
 .insline{position:absolute;background:var(--text-accent);border-radius:1px;pointer-events:none}
 .guide{position:absolute;background:var(--text-error);pointer-events:none}
 .draftbox.marquee{border:1px solid var(--text-accent);border-radius:0;background:var(--accent-subtle);opacity:.6}

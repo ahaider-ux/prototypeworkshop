@@ -634,3 +634,22 @@ test("ui: asking for several versions puts each on its own branch, side by side"
   const on = app.slice(app.indexOf('on("versions-started"'), app.indexOf('on("diff", () => S.view === "home"'));
   assert.match(on, /await loadWorkspace\(\);[\s\S]*fire\("studies", true\);/);
 });
+
+// What you grab to resize is an area around the selection (ui/hitareas.js), not the small squares
+// drawn on it: the squares take no clicks, the areas carry the cursors, and a frame resizes from
+// every side with the opposite side staying where it was.
+test("ui: a selection is resized by its areas, not its drawn squares", () => {
+  const css = read("app.css");
+  assert.match(css, /\.hdl\{[^}]*pointer-events:none/);
+  assert.match(css, /\.rz\{position:absolute;pointer-events:auto/);
+  assert.match(css, /\.rz\.e,\.rz\.w\{cursor:ew-resize\}\.rz\.n,\.rz\.s\{cursor:ns-resize\}\.rz\.se,\.rz\.nw\{cursor:nwse-resize\}\.rz\.ne,\.rz\.sw\{cursor:nesw-resize\}/);
+  assert.match(css, /\.hud \.blabel,\.hud \.srow\{z-index:1\}/, "a frame's title and Run stay clickable beside its top edge");
+  const cv = read("canvas.js");
+  assert.match(cv, /for \(const k of SIDES\) \{\n\s*const d = h\(`<div class="rz \$\{k\}" data-h="\$\{k\}"><\/div>`\);/);
+  assert.match(cv, /const rzOf = S\.tool === "move" && !S\.presenting \? eh \|\| br : null;/, "only with Select, for a layer or a frame");
+  assert.match(cv, /const areas = new Map\(resizeAreas\(rzOf\)\.map\(\(a\) => \[a\.k, a\]\)\);/);
+  assert.match(cv, /const handle = e\.target\.closest\("\.rz"\);/);
+  assert.ok(!/closest\("\.hdl"\)/.test(cv), "the drawn squares are not the target");
+  assert.match(cv, /Object\.assign\(it, resizeFrom\(\{ x: drag\.x0, y: drag\.y0, w: drag\.w0, h: drag\.h0 \}, drag\.h, dx \/ z, dy \/ z,/);
+  assert.match(cv, /recordMove\(\[\{ id: d\.id, x: d\.x0, y: d\.y0, w: d\.w0, h: d\.h0 \}\], "resize"\);/, "undo puts the place back as well as the size");
+});

@@ -155,6 +155,14 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   Agent composer on Main; `versionRequests`) sends one request per version, each on its own
   numbered branch, and shows them side by side instead of leaving for one. Words: the thing is a
   branch, the original is Main, the view is Side by side; do not add a second name for any of them.
+- **A selection's targets are areas, not the drawn squares** (`ui/hitareas.js`, tested in
+  `test/hitareas.test.js`; the `.rz` elements in `ui/canvas.js`). Drag inside to move; a band along
+  the whole of each edge resizes that side; a square at each corner, larger than the band and set a
+  little outward, resizes both. No area reaches more than a quarter of the way into the selection,
+  so the middle always moves it, and on something small the areas sit outside it instead of being
+  hidden. Each area shows its resize cursor on hover. The squares drawn at the corners take no
+  clicks. Frames, links and pictures resize from all eight (`resizeFrom` keeps the opposite side in
+  place). Change sizes in `hitareas.js`, not by making the drawn squares bigger or clickable.
 - **One place for each thing.** See the real prototype, edit it like a
   design file, and hand changes to an agent that works on a branch you review and merge. The editor
   is laid out around that: a prototype opens on its first screen at a readable size (`fitOpen`; Fit
