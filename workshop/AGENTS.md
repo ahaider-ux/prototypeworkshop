@@ -33,8 +33,8 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
 - **No runtime dependencies.** Node 20+ built-ins only, ES modules, no build step. Playwright is
   optional and only used for screenshots when it is already installed.
 - **Atelier has its own look, not Libra's.** The editor's colours, shadows, type and motion come
-  from the Atelier tokens at the top of `ui/app.css` ("studio white": neutral greys with no warm tint,
-  white surfaces lifted off a soft studio light (`--studio` behind the home, a plain neutral canvas),
+  from the Atelier tokens at the top of `ui/app.css` ("warm paper": off-white paper tones and a warm ink, never cold neutral grey,
+  white sheets lifted off the paper (`--bg-canvas`),
   hairlines and soft layered shadows; fills, hovers and hairlines are translucent neutral tints;
   controls are flat: white pills with a hairline (`--raise`, `--sh-btn`) and the flat ink pill for
   the one main action (`--raise-ink`, `--sh-ink`); no gloss, no gradients, no glow: the mark is one flat colour, status lights are plain dots, and nothing blinks or pulses on its own; every control's surface, edge and shadow is set once,
@@ -42,10 +42,12 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   hand-drawn mark; shapes: what you press is a pill and icon buttons are circles, list rows are
   rounded 8, fields 10, sheets 16 and panels 20; padding follows the control scale at the end
   of `ui/app.css` (32-tall pills 14 a side, 28-tall 12, 24-tall 8, a leading icon takes 2 off the left); type in
-  two tokens: `--display` Inter Bold for the wordmark only (header logo and intro lockup; never
+  three tokens: `--display` Inter Bold for the wordmark only (header logo and intro lockup; never
   titles or other app text), `--fakt` Inter for the interface (Regular for controls and values,
   SemiBold for headings, tightening as it grows: no letter-spacing at 12–14px, about -.02em on
-  titles), notes included: no handwriting fonts anywhere; mono only for code). Font files are never committed here: `src/fonts.js` serves them from a craft-fonts
+  titles), notes included; `--serif` (the system's serif, no font file) for the few big moments only: the
+  home's greeting, a dialog's title, a page's heading, an empty state, never anything you operate;
+  no handwriting fonts anywhere; mono only for code). Font files are never committed here: `src/fonts.js` serves them from a craft-fonts
   checkout, and every token falls back to system fonts. Libra's tokens belong to the prototypes: they appear only inside boards
   and in the inspector's swatches. Compose new surfaces from the existing classes (`.dbtn`,
   `.createbtn`, `.ghbtn`, `.segds`, `.cnmenu`, `.ddtrig`, `.afld-in`, `.tagro`, `.tct`, `.md`,
@@ -81,6 +83,14 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   hit-testing. Its pure maths lives in `ui/motion.js`, tested in Node. Nothing made up stands in
   for a prototype, on the home or in the intro: a slot without a real one is a placeholder card
   that does something real (add a prototype, new branch).
+- **Warm, light and a little analogue, never cold.** The app is a studio, not a dashboard. Beyond
+  the paper tones and the serif: cards on the home canvas sit a little off square, like papers on a
+  desk, and straighten under the pointer; the first level greets you by the time of day with the
+  mark as a small character whose eye looks towards the pointer (a few pixels, still under reduced
+  motion), a hand-drawn line from Atelier's own pen (`ui/ink.js`) under the words, and one plain
+  line saying what's waiting on you (`greeting`, `waitingLine` in `ui/boardfacts.js`). Character
+  supports, it doesn't perform: nothing loops, and warmth never costs clarity. After the Microsoft
+  Design article on character playing a supporting role: a reference only, nothing copied.
 - **One row of navigation, in the header.** Home (every level of the canvas) and Activity, then
   the prototypes you have open, as tabs. It is always there, on the home and in the editor, and it
   shows where you are. Nothing else navigates: no sidebar, no floating bar.

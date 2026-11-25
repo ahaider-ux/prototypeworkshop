@@ -18,38 +18,39 @@
 /* Shapes: what you press is a pill (icon buttons are circles), what you list is a rounded row (8),
    what you type in is a soft field (10), what holds things is a sheet (16; panels 20). */
 /* ═══ Tokens ═══ */
-/* Studio white: neutral (no warm tint), white surfaces lifted off a soft studio light, hairlines
+/* Warm paper: off-white paper tones and a warm ink (not neutral grey), white sheets lifted off the
+   paper, hairlines
    and soft layered shadows rather than tone; one blue for selection and links; colour otherwise only
    where it means something (status lights, errors, the pens' ink). After the clean product films
    and storefronts the owner pointed to; nothing copied. */
 :root{
   color-scheme:light;
-  --text-primary:#121212;--text-primary-warm:#121212;--text-secondary:#666666;--text-placeholder:#8f8f8f;--text-muted:#8f8f8f;
-  --text-disabled:#c2c2c2;--text-accent:#2f6df6;--text-error:#d92d20;--text-success:#12805c;--badge:#2f6df6;
-  --bg-shell:#fafafa;--bg-base:#fafafa;--bg-layer:#ffffff;--bg-input:#ffffff;--bg-hover:rgba(0,0,0,.05);--bg-warm:rgba(0,0,0,.03);--bg-canvas:#f1f1f0;
-  --bg-secondary:rgba(0,0,0,.045);--bg-secondary-hover:rgba(0,0,0,.08);--bg-primary:#121212;--bg-primary-hover:#2b2b2b;
-  --bg-error:#d92d20;--bg-error-hover:#b42318;--bg-overlay:rgba(18,18,18,.22);--accent-subtle:#eef3fe;
+  --text-primary:#1c1a17;--text-primary-warm:#1c1a17;--text-secondary:#6b665e;--text-placeholder:#948e84;--text-muted:#948e84;
+  --text-disabled:#c9c4ba;--text-accent:#2f6df6;--text-error:#d92d20;--text-success:#12805c;--badge:#2f6df6;
+  --bg-shell:#faf8f4;--bg-base:#faf8f4;--bg-layer:#ffffff;--bg-input:#ffffff;--bg-hover:rgba(0,0,0,.05);--bg-warm:rgba(0,0,0,.03);--bg-canvas:#f3f0e9;
+  --bg-secondary:rgba(0,0,0,.045);--bg-secondary-hover:rgba(0,0,0,.08);--bg-primary:#1c1a17;--bg-primary-hover:#33302b;
+  --bg-error:#d92d20;--bg-error-hover:#b42318;--bg-overlay:rgba(28,26,23,.24);--accent-subtle:#eef3fe;
   --tag-grey:rgba(0,0,0,.05);--tag-info-bg:#e8effe;--tag-success-bg:#e2f4ec;
   --border-subtle:rgba(0,0,0,.08);--border-crumb:rgba(0,0,0,.08);--border-default:rgba(0,0,0,.14);--border-white:rgba(255,255,255,.9);
-  --switch-off:#dcdcdc;--switch-on:#121212;--ring-default:rgba(47,109,246,.5);--menu-hover:rgba(0,0,0,.045);
-  --on-primary:#ffffff;--on-accent:#fff;--tip-bg:#121212;--tip-ink:#ffffff;--knob:#fff;
+  --switch-off:#ddd8cd;--switch-on:#1c1a17;--ring-default:rgba(47,109,246,.5);--menu-hover:rgba(0,0,0,.045);
+  --on-primary:#ffffff;--on-accent:#fff;--tip-bg:#1c1a17;--tip-ink:#ffffff;--knob:#fff;
   --note-bg:#fff6d6;--note-edge:#f1e2a6;--guide:#f2482a;
-  --i-paper:#fafafa;--i-ink:#121212;--i-red:#e03131;--i-orange:#f76707;--i-yellow:#ffd43b;--i-lime:#dcefb4;--i-green:#2f9e44;--i-greenl:#b9dbb0;--i-violet:#7048e8;--i-peri:#c3cffb;--i-perid:#2c3e9e;--i-lav:#e4e1fb;--i-peach:#ffd9bd;--i-sky:#d7e6f7;--i-grey:#d6d6da;--i-greyl:#ececee;--i-white:#fff;--skel:#efefef;--skel-hi:#f8f8f8;
+  --i-paper:#faf8f4;--i-ink:#1c1a17;--i-red:#e03131;--i-orange:#f76707;--i-yellow:#ffd43b;--i-lime:#dcefb4;--i-green:#2f9e44;--i-greenl:#b9dbb0;--i-violet:#7048e8;--i-peri:#c3cffb;--i-perid:#2c3e9e;--i-lav:#e4e1fb;--i-peach:#ffd9bd;--i-sky:#d7e6f7;--i-grey:#d6d6da;--i-greyl:#ececee;--i-white:#fff;--skel:#efefef;--skel-hi:#f8f8f8;
   --sh-sm:0 1px 2px rgba(0,0,0,.05);--sh-card:0 0 0 .5px rgba(0,0,0,.08),0 1px 1px rgba(0,0,0,.04),0 4px 8px -2px rgba(0,0,0,.05),0 18px 36px -12px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.9);--sh-card-hi:0 0 0 .5px rgba(0,0,0,.1),0 2px 3px rgba(0,0,0,.05),0 10px 20px -6px rgba(0,0,0,.08),0 32px 64px -16px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.9);--sh-md:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.07),0 0 0 .5px rgba(0,0,0,.07);--sh-field:0 0 0 1px rgba(0,0,0,.1);
   --sh-btn:0 0 0 1px rgba(0,0,0,.09),0 1px 1px rgba(0,0,0,.03);
   --sh-chat:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.07),0 0 0 .5px rgba(0,0,0,.08);--sh-modal:0 2px 6px rgba(0,0,0,.04),0 24px 64px rgba(0,0,0,.14),0 0 0 .5px rgba(0,0,0,.08);
   /* controls: flat white with a hairline, and the flat ink pill for the one main action (no gloss) */
   --raise:#ffffff;
-  --raise-ink:#121212;--sh-card-inv:0 1px 2px rgba(0,0,0,.08),0 6px 12px -4px rgba(0,0,0,.12),0 22px 44px -14px rgba(0,0,0,.28);--sh-card-inv-hi:0 2px 4px rgba(0,0,0,.1),0 12px 24px -8px rgba(0,0,0,.16),0 36px 72px -18px rgba(0,0,0,.36);
+  --raise-ink:#1c1a17;--sh-card-inv:0 1px 2px rgba(0,0,0,.08),0 6px 12px -4px rgba(0,0,0,.12),0 22px 44px -14px rgba(0,0,0,.28);--sh-card-inv-hi:0 2px 4px rgba(0,0,0,.1),0 12px 24px -8px rgba(0,0,0,.16),0 36px 72px -18px rgba(0,0,0,.36);
   --sh-ink:0 1px 2px rgba(0,0,0,.12);--sh-ink-hover:0 1px 2px rgba(0,0,0,.16);
   --sh-btn-hover:0 0 0 1px rgba(0,0,0,.15),0 1px 2px rgba(0,0,0,.05);
   /* the studio light behind the home: white from above, falling to a soft grey (light, not decoration) */
-  --studio:radial-gradient(140% 90% at 50% -12%,#ffffff 0%,#f8f8f7 42%,#ededec 100%);--i-studio:var(--studio);
+  --studio:radial-gradient(140% 90% at 50% -12%,#ffffff 0%,#f8f6f1 42%,#ece8df 100%);--i-studio:var(--studio);
   /* product pictures: a flat canvas with a faint dot grid */
-  --pv-base:#f4f4f3;--pv-dot:rgba(0,0,0,.09);--i-page-ink:#666666;--i-page-fill:rgba(0,0,0,.05);--i-page-line:rgba(0,0,0,.12);--i-lit:linear-gradient(180deg,rgba(255,255,255,.24) 0%,rgba(255,255,255,0) 46%,rgba(0,0,0,.07) 100%);--i-lit-rim:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(0,0,0,.14);
+  --pv-base:#f4f4f3;--pv-dot:rgba(0,0,0,.09);--i-page-ink:#6b665e;--i-page-fill:rgba(0,0,0,.05);--i-page-line:rgba(0,0,0,.12);--i-lit:linear-gradient(180deg,rgba(255,255,255,.24) 0%,rgba(255,255,255,0) 46%,rgba(0,0,0,.07) 100%);--i-lit-rim:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(0,0,0,.14);
   --grain:none;
   --display:'Atelier Display','Inter',ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-  --fakt:'Atelier Sans','Inter',ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;--ivar:var(--fakt);
+  --fakt:'Atelier Sans','Inter',ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;--serif:ui-serif,'Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Times New Roman',serif;--ivar:var(--fakt);
   --mono:ui-monospace,'SF Mono','JetBrains Mono',Menlo,Consolas,monospace;
   /* motion: four curves, nothing else */
   --ease-out:cubic-bezier(.23,1,.32,1);--ease-smooth:cubic-bezier(.22,1,.36,1);--ease-io:cubic-bezier(.65,0,.25,1);--ease-spring:cubic-bezier(.34,1.56,.64,1);
@@ -57,26 +58,26 @@
 @supports (transition-timing-function:linear(0,1)){:root{--ease-out:linear(0,0.0217,0.0766,0.1517,0.2376,0.3275,0.4162,0.5007,0.5787,0.6491,0.7115,0.7659,0.8126,0.8521,0.8851,0.9123,0.9345,0.9523,0.9664,0.9774,0.9858,0.9921,0.9968,1.0001,1.0023,1.0037,1.0046,1.005,1.005,1.0048,1.0045,1.0041,1.0037,1.0032,1.0028,1.0024,1)}}
 /* Dark — graphite: neutral greys, one step of lift per layer */
 :root[data-ltheme="dark"]{color-scheme:dark;
-  --text-primary:#f2f2f2;--text-primary-warm:#f2f2f2;--text-secondary:#a3a3a3;--text-placeholder:#808080;--text-muted:#808080;--text-disabled:#4d4d4d;
+  --text-primary:#f3f0e9;--text-primary-warm:#f3f0e9;--text-secondary:#a3a3a3;--text-placeholder:#808080;--text-muted:#808080;--text-disabled:#4d4d4d;
   --text-accent:#6b9bff;--text-error:#ff6b5e;--text-success:#4fcf98;--badge:#6b9bff;
-  --bg-shell:#111111;--bg-base:#151515;--bg-layer:#1c1c1c;--bg-input:#181818;--menu-hover:rgba(255,255,255,.06);--bg-hover:rgba(255,255,255,.07);--bg-warm:rgba(255,255,255,.04);--bg-canvas:#0c0c0c;
-  --bg-secondary:rgba(255,255,255,.07);--bg-secondary-hover:rgba(255,255,255,.11);--bg-primary:#f2f2f2;--bg-primary-hover:#d9d9d9;--bg-overlay:rgba(0,0,0,.6);
+  --bg-shell:#151412;--bg-base:#191816;--bg-layer:#201f1c;--bg-input:#1c1b18;--menu-hover:rgba(255,255,255,.06);--bg-hover:rgba(255,255,255,.07);--bg-warm:rgba(255,255,255,.04);--bg-canvas:#11100e;
+  --bg-secondary:rgba(255,255,255,.07);--bg-secondary-hover:rgba(255,255,255,.11);--bg-primary:#f3f0e9;--bg-primary-hover:#ddd8cd;--bg-overlay:rgba(0,0,0,.6);
   --accent-subtle:rgba(107,155,255,.14);--tag-grey:rgba(255,255,255,.08);--tag-info-bg:rgba(107,155,255,.18);--tag-success-bg:rgba(79,207,152,.16);
   --border-subtle:rgba(255,255,255,.08);--border-crumb:rgba(255,255,255,.08);--border-default:rgba(255,255,255,.15);--border-white:rgba(255,255,255,.06);
-  --switch-off:#3a3a3a;--switch-on:#f2f2f2;--ring-default:rgba(107,155,255,.6);
-  --on-primary:#121212;--on-accent:#fff;--tip-bg:#f2f2f2;--tip-ink:#121212;--knob:#fff;
+  --switch-off:#3b3832;--switch-on:#f3f0e9;--ring-default:rgba(107,155,255,.6);
+  --on-primary:#1c1a17;--on-accent:#fff;--tip-bg:#f3f0e9;--tip-ink:#1c1a17;--knob:#fff;
   --note-bg:#3a3420;--note-edge:#4d4428;--guide:#ff6b4a;
-  --i-paper:#fafafa;--i-ink:#121212;--i-red:#e03131;--i-orange:#f76707;--i-yellow:#ffd43b;--i-lime:#dcefb4;--i-green:#2f9e44;--i-greenl:#b9dbb0;--i-violet:#7048e8;--i-peri:#c3cffb;--i-perid:#2c3e9e;--i-lav:#e4e1fb;--i-peach:#ffd9bd;--i-sky:#d7e6f7;--i-grey:#d6d6da;--i-greyl:#ececee;--i-white:#fff;--skel:#232323;--skel-hi:#2c2c2c;
+  --i-paper:#faf8f4;--i-ink:#1c1a17;--i-red:#e03131;--i-orange:#f76707;--i-yellow:#ffd43b;--i-lime:#dcefb4;--i-green:#2f9e44;--i-greenl:#b9dbb0;--i-violet:#7048e8;--i-peri:#c3cffb;--i-perid:#2c3e9e;--i-lav:#e4e1fb;--i-peach:#ffd9bd;--i-sky:#d7e6f7;--i-grey:#d6d6da;--i-greyl:#ececee;--i-white:#fff;--skel:#262420;--skel-hi:#302d28;
   --sh-sm:0 1px 2px rgba(0,0,0,.5);--sh-card:0 0 0 .5px rgba(255,255,255,.09),0 1px 2px rgba(0,0,0,.4),0 18px 36px -12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06);--sh-card-hi:0 0 0 .5px rgba(255,255,255,.14),0 2px 4px rgba(0,0,0,.4),0 32px 64px -16px rgba(0,0,0,.75),inset 0 1px 0 rgba(255,255,255,.08);--sh-md:0 12px 32px rgba(0,0,0,.5),0 0 0 .5px rgba(255,255,255,.08);
   --sh-field:0 0 0 1px rgba(255,255,255,.1);--sh-btn:0 0 0 1px rgba(255,255,255,.09);
   --sh-chat:0 10px 30px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.07);--sh-modal:0 16px 48px rgba(0,0,0,.55),0 0 0 .5px rgba(255,255,255,.08);
   --raise:#222222;
-  --raise-ink:#f2f2f2;--sh-card-inv:0 0 0 .5px rgba(255,255,255,.2),0 18px 40px -12px rgba(0,0,0,.7);--sh-card-inv-hi:0 0 0 .5px rgba(255,255,255,.3),0 32px 64px -16px rgba(0,0,0,.8);
+  --raise-ink:#f3f0e9;--sh-card-inv:0 0 0 .5px rgba(255,255,255,.2),0 18px 40px -12px rgba(0,0,0,.7);--sh-card-inv-hi:0 0 0 .5px rgba(255,255,255,.3),0 32px 64px -16px rgba(0,0,0,.8);
   --sh-ink:0 1px 2px rgba(0,0,0,.4);--sh-ink-hover:0 1px 2px rgba(0,0,0,.45);
   --sh-btn-hover:0 0 0 1px rgba(255,255,255,.16);
-  --studio:radial-gradient(140% 90% at 50% -12%,#202020 0%,#151515 45%,#0d0d0d 100%);
-  --i-studio:radial-gradient(140% 90% at 50% -12%,#ffffff 0%,#f8f8f7 42%,#ededec 100%); /* the intro is always on paper */
-  --pv-base:#161616;--pv-dot:rgba(255,255,255,.08);--i-page-ink:#666666;--i-page-fill:rgba(0,0,0,.05);--i-page-line:rgba(0,0,0,.12);--i-lit:linear-gradient(180deg,rgba(255,255,255,.24) 0%,rgba(255,255,255,0) 46%,rgba(0,0,0,.07) 100%);--i-lit-rim:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(0,0,0,.14);
+  --studio:radial-gradient(140% 90% at 50% -12%,#24221e 0%,#191816 45%,#100f0d 100%);
+  --i-studio:radial-gradient(140% 90% at 50% -12%,#ffffff 0%,#f8f6f1 42%,#ece8df 100%); /* the intro is always on paper */
+  --pv-base:#161616;--pv-dot:rgba(255,255,255,.08);--i-page-ink:#6b665e;--i-page-fill:rgba(0,0,0,.05);--i-page-line:rgba(0,0,0,.12);--i-lit:linear-gradient(180deg,rgba(255,255,255,.24) 0%,rgba(255,255,255,0) 46%,rgba(0,0,0,.07) 100%);--i-lit-rim:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(0,0,0,.14);
 }
 
 /* ═══ Base ═══ */
@@ -757,7 +758,7 @@ input,textarea,select{font-family:var(--fakt);border:none;background:none;outlin
   --glass:var(--glass-rim),var(--glass-spec),var(--glass-shadow);
   --r-panel:20px;--gutter:8px}
 :root[data-ltheme="dark"]{
-  --glass-a:.92;--glass-bg:rgba(30,30,30,var(--glass-a));
+  --glass-a:.92;--glass-bg:rgba(32,31,28,var(--glass-a));
   --glass-rim:0 0 0 .5px rgba(0,0,0,.6);
   --glass-spec:inset 0 0 0 .5px rgba(255,255,255,.08);
   --glass-shadow:0 10px 32px rgba(0,0,0,.45),0 1px 3px rgba(0,0,0,.3)}
@@ -1250,8 +1251,8 @@ html[data-intro] .app{visibility:hidden}
 .hworld{position:absolute;left:0;top:0;will-change:transform}
 /* project cards: the picture, the name, when it was edited (size set by home.js); a card under the
    pointer swells a little (after design.cash.app), slower in than out */
-.htile{position:absolute;left:0;top:0;display:flex;flex-direction:column;gap:10px;padding:8px;border-radius:18px;background:var(--bg-layer);box-shadow:var(--sh-card);text-align:left;cursor:inherit;transition:scale 180ms var(--ease-smooth),box-shadow 180ms var(--ease-smooth),translate 180ms var(--ease-smooth)}
-.htile.hot{z-index:2;scale:1.02;box-shadow:var(--sh-card-hi)}
+.htile{position:absolute;left:0;top:0;display:flex;flex-direction:column;gap:10px;padding:8px;border-radius:18px;background:var(--bg-layer);box-shadow:var(--sh-card);text-align:left;cursor:inherit;rotate:var(--r,0deg);transition:scale 180ms var(--ease-smooth),box-shadow 180ms var(--ease-smooth),rotate 220ms var(--ease-smooth)}
+.htile.hot{z-index:2;scale:1.02;rotate:0deg;box-shadow:var(--sh-card-hi)}
 .hcanvas:not(.grabbing) .htile.hot:active{scale:1.01;transition-duration:120ms}
 .htt{position:relative;display:block;width:304px;height:190px;flex-shrink:0;border-radius:10px;overflow:hidden;background:var(--bg-secondary)}
 .htt canvas{display:block;width:100%;height:100%}
@@ -1292,6 +1293,19 @@ html[data-intro] .app{visibility:hidden}
 .htile.hproj.hdeep{box-shadow:var(--sh-card-inv),0 9px 0 -5px color-mix(in srgb,var(--raise-ink) 72%,var(--bg-canvas)),0 18px 0 -10px color-mix(in srgb,var(--raise-ink) 44%,var(--bg-canvas))}
 .htile.hproj.hdeep.hot{box-shadow:var(--sh-card-inv-hi),0 11px 0 -5px color-mix(in srgb,var(--raise-ink) 72%,var(--bg-canvas)),0 22px 0 -10px color-mix(in srgb,var(--raise-ink) 44%,var(--bg-canvas))}
 .htile.hdeep.chosen{scale:1.3;opacity:0;transition:scale 340ms var(--ease-io),opacity 220ms ease-in 120ms}
+/* the first level's greeting: the mark as a small character, the time of day in the serif, and what's
+   waiting on you; a hand-drawn line under the words */
+.hgreet{position:absolute;left:24px;top:20px;z-index:5;display:flex;align-items:flex-start;gap:14px;max-width:calc(100% - 48px);pointer-events:none}
+.hgreet .dbtn{pointer-events:auto;align-self:flex-start;margin-top:8px}
+.hg-pin{width:44px;height:44px;flex-shrink:0;margin-top:2px}
+.hg-pin .eye{transition:transform 160ms var(--ease-out)}
+.hg-t{display:flex;flex-direction:column;min-width:0}
+.hg-t h1{position:relative;align-self:flex-start;font:400 32px/1.15 var(--serif);letter-spacing:-.01em;color:var(--text-primary)}
+.hg-line{position:absolute;left:0;right:0;bottom:-7px;width:100%;height:9px;overflow:visible}
+.hg-line path{fill:var(--text-accent)}
+.hg-t p{margin-top:12px;font-size:14px;line-height:1.5;color:var(--text-secondary);max-width:420px}
+.hcanvas.leaving~.hgreet,.hleaving .hgreet{opacity:0;transition:opacity 150ms ease-out}
+@media (max-width:700px){.hg-t h1{font-size:24px}.hg-pin{width:34px;height:34px}}
 /* where you are on the canvas, and the way back up */
 .hpathbar{position:absolute;left:16px;top:16px;z-index:5;display:flex;align-items:center;gap:12px;height:44px;padding:0 16px 0 6px;border-radius:99px;background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass);max-width:calc(100% - 32px)}
 .hpathbar .flip{display:inline-flex;rotate:180deg}
@@ -1315,7 +1329,7 @@ html[data-intro] .app{visibility:hidden}
 @media (hover:hover) and (pointer:fine){.hcanvas.pointing,.hcanvas.pointing .htile{cursor:none}.hcanvas.pointing .hcur{opacity:1}}
 /* opening one: the field clears, it glides to the middle and swells, then the editor takes over */
 .hcanvas.leaving .htile:not(.chosen){opacity:0;transition:opacity 200ms ease-out}
-.htile.chosen{z-index:3}
+.htile.chosen{z-index:3;rotate:0deg}
 .htile.chosen{scale:1.04;box-shadow:var(--sh-card-hi);transition:scale 340ms var(--ease-io)}
 .hcanvas.leaving .hcur,.hcanvas.leaving .hhint{opacity:0;transition:opacity 150ms ease-out}
 /* coming back: the one you opened is there; the rest fade in */
@@ -1469,3 +1483,11 @@ html[data-intro] .app{visibility:hidden}
 .cn-try{font-size:12px;line-height:1.5;color:var(--text-secondary)}
 .cn-try i{font-style:normal;color:var(--text-primary)}
 #cnCode .cn-c{white-space:pre-wrap;word-break:break-all}
+
+/* The serif is for the few big moments (a greeting, a dialog's title, an empty state, a page's
+   heading): it's what makes the app read warm rather than technical. Everything you operate is Inter. */
+.md-h h2,.lrn-t h2,.hl-h h1,.pempty b{font-family:var(--serif);font-weight:400;letter-spacing:-.005em}
+.md-h h2{font-size:22px}
+.lrn-t h2{font-size:28px}
+.hl-h h1{font-size:28px}
+.pempty b{font-size:18px}

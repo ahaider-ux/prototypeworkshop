@@ -8,7 +8,8 @@ import { rulesFor, loadOverrides } from "./styles.js";
 import { loadRecipes } from "./recipes.js";
 import { playIntro } from "./intro.js";
 import { mountHomeCanvas } from "./home.js";
-import { branchStatus, branchCounts } from "./boardfacts.js";
+import { branchStatus, branchCounts, greeting, waitingLine } from "./boardfacts.js";
+import { outline } from "./ink.js";
 import { FEATURES, artEl, openLearn } from "./visuals.js";
 
 const store = {
@@ -352,6 +353,10 @@ function renderHomeCanvas(rs) {
     homeLevel = lv.key;
     homeCv = mountHomeCanvas(el, lv.items, { open: lv.open, actions: lv.actions, key: `${S.ws.home || S.ws.name}|${lv.key}` });
   } else homeCv.update(lv.items, lv.actions);
+  // the first level greets you: the mark as a small character whose eye follows the pointer, the
+  // time of day, and what's waiting on you (a way straight into it when something is)
+  el.querySelector(".hgreet")?.remove();
+  if (lv.key === "space") el.append(homeGreeting(rs));
   // where you are, and the way back up (also Esc); nothing on the first level
   el.querySelector(".hpathbar")?.remove();
   if (lv.key !== "space") {
@@ -361,6 +366,45 @@ function renderHomeCanvas(rs) {
     bar.querySelector('[data-a="up"]').onclick = () => goIn(null);
     el.append(bar);
   }
+}
+// a hand-drawn line from Atelier's own pen engine, to sit under the greeting
+const SCRIBBLE = outline(Array.from({ length: 40 }, (_, i) => [4 + i * 4.9, 6 + Math.sin(i / 5) * 1.6 + (i % 7 === 0 ? 0.8 : 0)]), "marker", 3.2, 1);
+function homeGreeting(rs) {
+  let ready = 0,
+    working = 0,
+    first = null;
+  for (const e of rs)
+    for (const b of openBranches(e.id)) {
+      const f = branchFacts(b);
+      if (f.working) working++;
+      if (branchStatus(f).tone === "ok") (ready++, (first = first || e.id));
+    }
+  const g = h(`<div class="hgreet"><svg class="pinmark hg-pin" viewBox="0 0 24 24" aria-hidden="true"><path class="pb" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><g class="eye"><circle class="ew" cx="13.4" cy="10.6" r="3.6"/></g></svg><div class="hg-t"><h1><span></span><svg class="hg-line" viewBox="0 0 200 12" preserveAspectRatio="none" aria-hidden="true"><path d="${SCRIBBLE}"/></svg></h1><p></p></div></div>`);
+  g.querySelector("h1 span").textContent = greeting(new Date().getHours());
+  const line = g.querySelector("p");
+  line.textContent = waitingLine({ ready, working, projects: rs.length });
+  if (first) {
+    const go = h(`<button type="button" class="dbtn sm">Take a look${IC.chevr}</button>`);
+    go.onclick = () => goIn(first);
+    g.querySelector(".hg-t").append(go);
+  }
+  // the eye looks towards the pointer: a few pixels, no more (still under reduced motion)
+  const eye = g.querySelector(".eye"),
+    host = homeMain();
+  let raf = 0;
+  host.onpointermove = (ev) => {
+    if (raf || !g.isConnected || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    raf = requestAnimationFrame(() => {
+      raf = 0;
+      const r = g.querySelector(".hg-pin").getBoundingClientRect();
+      const dx = ev.clientX - (r.left + r.width / 2),
+        dy = ev.clientY - (r.top + r.height / 2);
+      const d = Math.hypot(dx, dy) || 1,
+        k = Math.min(1, d / 240) * 1.5;
+      eye.style.transform = `translate(${((dx / d) * k).toFixed(2)}px, ${((dy / d) * k).toFixed(2)}px)`;
+    });
+  };
+  return g;
 }
 // Esc goes up a level on the home canvas (unless a dialog or a menu has it)
 document.addEventListener("keydown", (e) => {

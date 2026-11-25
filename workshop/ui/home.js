@@ -31,6 +31,7 @@ const DECAY = 325; // ms: how quickly a fling slows down (the time constant iOS 
 const EASE = [0.32, 0.72, 0, 1]; // glides: quick to start, long soft landing
 const ease = bezier(EASE);
 const mod = (a, n) => ((a % n) + n) % n;
+const TILT = [-0.7, 0.5, -0.3, 0.8, -0.5, 0.3]; // degrees
 const CARD = { w: 320, h: 264 }, // every prototype is a card: its picture, its name, when it was edited
   PIC = { w: 304, h: 190 }; // the picture inside it
 
@@ -116,6 +117,8 @@ export function mountHomeCanvas(host, items, { open, actions = [], key = "" }) {
     const el = spare.pop() || h(`<button type="button" class="htile"><span class="htt"></span><span class="hcap"><b></b><span class="m"></span></span></button>`);
     freeArt(el);
     el.dataset.idx = String(idx);
+    // cards sit like papers on a desk, a little off square (they straighten under the pointer)
+    el.style.setProperty("--r", `${TILT[Math.abs(idx * 7 + 3) % TILT.length]}deg`);
     const s = sizeOf(idx);
     el.style.width = `${s.w}px`;
     el.style.height = `${s.h}px`;

@@ -459,7 +459,7 @@ test("ui: the brand and chrome are flat and still", () => {
   assert.match(css, /\.hdot\.on\{box-shadow:none\}/, "status lights don't glow");
   assert.match(css, /--glass-a:\.94;--glass-blur:blur\(20px\);/);
   assert.ok(!/--glass-spec:inset 0 1px 0 rgba\(255,255,255,\.85\)/.test(css), "no specular top edge");
-  assert.match(css, /--switch-on:#121212;/);
+  assert.match(css, /--switch-on:#1c1a17;/, "switches are ink, not blue");
   assert.ok(!/hpulse/.test(css), "thumbnails don't pulse while they load");
   assert.ok(!/harrive [0-9]+ms [^;]*var\(--d/.test(css), "home cards don't cascade in");
 });
@@ -515,4 +515,26 @@ test("ui: Prototype shows the screen's picture while its page loads", () => {
   const css = read("app.css");
   assert.ok(!/\.app\.present \.gfx\{visibility:hidden\}/.test(css) && !/\.app\.present [^{]*,\.app\.present \.gfx\{visibility:hidden/.test(css));
   assert.match(read("canvas.js"), /const list = S\.presenting \? pageBoards\(\)\.filter\(\(it\) => it\.id === S\.presenting\) : pageBoards\(\);/);
+});
+
+// The app read cold: neutral greys and one sans everywhere. It's warm paper and a warm ink now, a
+// serif for the few big moments, cards that sit a little off square like papers on a desk, and a
+// greeting on the home with the mark as a small character whose eye follows the pointer.
+test("ui: the app is warm, light and a little analogue", () => {
+  const css = read("app.css");
+  assert.match(css, /--bg-canvas:#f3f0e9;/, "warm paper, not neutral grey");
+  assert.match(css, /--text-primary:#1c1a17;/, "a warm ink");
+  assert.ok(!/#121212|#f1f1f0|#fafafa\b/i.test(css), "no cold greys left behind");
+  assert.match(css, /--serif:ui-serif,/);
+  assert.match(css, /\.md-h h2,\.lrn-t h2,\.hl-h h1,\.pempty b\{font-family:var\(--serif\)/, "the serif is for the big moments");
+  assert.ok(!/\.(dbtn|createbtn|ghbtn|tab|pg|irow)[^{]*\{[^}]*var\(--serif\)/.test(css), "never on what you operate");
+  assert.match(css, /rotate:var\(--r,0deg\)/);
+  assert.match(css, /\.htile\.hot\{z-index:2;scale:1\.02;rotate:0deg;/, "a card straightens under the pointer");
+  assert.match(read("home.js"), /el\.style\.setProperty\("--r", `\$\{TILT\[Math\.abs\(idx \* 7 \+ 3\) % TILT\.length\]\}deg`\);/);
+  const app = read("app.js");
+  const greet = app.slice(app.indexOf("function homeGreeting"), app.indexOf("// Esc goes up a level"));
+  assert.match(greet, /greeting\(new Date\(\)\.getHours\(\)\)/);
+  assert.match(greet, /waitingLine\(\{ ready, working, projects: rs\.length \}\)/, "it says what's waiting on you");
+  assert.match(greet, /matchMedia\("\(prefers-reduced-motion: reduce\)"\)\.matches\) return;/, "the eye stays still under reduced motion");
+  assert.match(app, /const SCRIBBLE = outline\(/, "the line under the greeting is drawn by Atelier's own pen");
 });
