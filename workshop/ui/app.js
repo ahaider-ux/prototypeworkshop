@@ -12,6 +12,7 @@ import { renderGrid } from "./browse.js";
 import { branchStatus, branchCounts, greeting, waitingLine } from "./boardfacts.js";
 import { outline } from "./ink.js";
 import { FEATURES, artEl, openLearn } from "./visuals.js";
+import { firstSteps, stepDone, welcomeLine } from "./firststeps.js";
 
 const store = {
   get(k, d) {
@@ -106,6 +107,7 @@ async function loadTasks() {
 }
 function renderAll() {
   renderTabs();
+  renderSteps();
   renderWho();
   renderAgent();
   if (S.view === "home") return renderHome();
@@ -134,6 +136,7 @@ function renderAgent() {
   // not connected: the one visible call to action in the header; connected: a quiet status pill
   $("agentBtn").className = on ? "dbtn sm agst" : "createbtn sm agst cta";
   $("agentDot").classList.toggle("on", on);
+  if (on) markStep("connect", { quiet: !document.querySelector("#modal.open") }); // said only if they were connecting it just now
   $("agentTxt").innerHTML = hs.length ? `<b>${esc(hs[0].client)}</b> connected` : ws?.agent ? `Requests run with <b>${esc(ws.agent.name)}</b>` : "Connect your AI tool";
 }
 
@@ -188,6 +191,7 @@ function showHome() {
   S.compare = false;
   S.studies = false;
   sideOn = null;
+  renderSteps(); // Home lays the first steps out; the header chip is for everywhere else
   if (S.sel) clearSel();
   $("home").hidden = false;
   $("work").hidden = true;
@@ -237,6 +241,7 @@ function openPage(page) {
   }
   renderAll();
   document.title = `${pageName(pageEnv())} · ${root.name}`;
+  if (changed) markStep("open"); // the first prototype opened: the first step, and what comes next
 }
 function renderTabs() {
   renderMode();
@@ -338,6 +343,7 @@ function homeLevelOf(rs) {
     .sort((a, b) => String(b.edited || "").localeCompare(String(a.edited || "")));
   const actions = [
     { title: "Guides", desc: `${FEATURES.length} short guides to what you can do here`, cue: "Enter", deep: true, art: () => artEl("intro"), run: () => goIn("guides") },
+    ...(rs.length || stepsOn() ? [] : [{ title: "Start with the sample", desc: "A small reading-list app to branch and change", icon: IC.play, cue: "Open", run: addSample }]),
     { title: "Add a prototype", desc: "Import an HTML file or a whole folder", icon: IC.upload, cue: "Start", run: openImport },
     ...(S.ws.spaces ? [{ title: "Connect a folder", desc: "Edit prototypes where they live", icon: IC.folder, cue: "Connect", run: () => openSpaces() }] : []),
     ...(S.ws.harnesses?.length ? [] : [{ title: "Connect your AI tool", desc: "It works on branches; you review", icon: IC.agent, cue: "Connect", run: openConnect }]),
@@ -377,8 +383,12 @@ function renderHomeGrid(rs) {
   // Guides is a tab here, not a block; the other actions are cards (hidden while a filter is on)
   const actions = S.homeFilter && S.homeFilter !== "all" && inProject ? [] : lv.actions.filter((a) => !a.deep);
   let head;
-  if (lv.key === "space") head = homeGreeting(rs);
-  else {
+  if (lv.key === "space") {
+    head = h(`<div class="hhead"></div>`);
+    head.append(homeGreeting(rs));
+    const fs = firstStepsCard(rs);
+    if (fs) head.append(fs);
+  } else {
     head = h(`<header class="bhead"><h1></h1><p></p></header>`);
     head.querySelector("h1").textContent = lv.title;
     head.querySelector("p").textContent = lv.sub;
@@ -418,6 +428,118 @@ function renderHomeTop(rs) {
 }
 // a hand-drawn line from Atelier's own pen engine, to sit under the greeting
 const SCRIBBLE = outline(Array.from({ length: 40 }, (_, i) => [4 + i * 4.9, 6 + Math.sin(i / 5) * 1.6 + (i % 7 === 0 ? 0.8 : 0)]), "marker", 3.2, 1);
+// ----- first steps: a new person's way through the whole loop, once (ui/firststeps.js) -----
+// What's done is kept in this browser: it's this person's progress, not the space's.
+const STEPS_KEY = "atelier-steps";
+const stepsState = () => {
+  const v = store.get(STEPS_KEY, null);
+  return { done: Array.isArray(v?.done) ? v.done : [], hidden: !!v?.hidden };
+};
+const stepsOn = () => {
+  const st = stepsState();
+  return !st.hidden && !firstSteps(st.done).finished;
+};
+// A step was done. Said once, where the person is: a toast with the next step in the editor; on
+// Home the card itself shows it. `quiet` records it without saying so.
+function markStep(id, { quiet = false } = {}) {
+  const st = stepsState();
+  const r = stepDone(st.done, id);
+  if (!r) return;
+  store.set(STEPS_KEY, { done: r.done, hidden: st.hidden });
+  homeKey = "";
+  renderSteps();
+  if (S.view === "home") return renderHome();
+  if (quiet || st.hidden) return;
+  toast(r.note.title, r.note.text, r.note.next ? { label: r.note.next.cta, fn: () => runStep(r.note.next.id) } : undefined);
+}
+// In the header, wherever the person is: how far along they are and what's next. A toast is gone in
+// seconds; this stays until the steps are done or hidden. It opens the five steps as a menu.
+function renderSteps() {
+  const btn = $("stepsBtn");
+  const on = stepsOn() && S.view !== "home"; // Home has the steps laid out; the chip is for everywhere else
+  btn.hidden = !on;
+  if (!on) return;
+  const st = firstSteps(stepsState().done);
+  const was = $("stepsN").textContent;
+  $("stepsN").textContent = `${st.count}/${st.total}`;
+  $("stepsTxt").textContent = `Next: ${st.next.title}`;
+  // a step just went by: the chip says so once, where the eye already is after the action's own toast
+  if (was && was !== $("stepsN").textContent && !matchMedia("(prefers-reduced-motion: reduce)").matches) btn.animate([{ transform: "scale(1)" }, { transform: "scale(1.06)" }, { transform: "scale(1)" }], { duration: 320, easing: "ease-out" });
+  btn.setAttribute("aria-label", `First steps, ${st.count} of ${st.total} done. Next: ${st.next.title}`);
+  btn.onclick = () =>
+    menu(
+      btn,
+      [
+        { head: `First steps · ${st.count} of ${st.total}` },
+        ...st.steps.map((s) => ({ label: s.id === "open" && !roots().length ? "Start with the sample" : s.title, checked: s.done, disabled: s.done, onClick: () => runStep(s.id) })),
+        "-",
+        { label: "Hide first steps", onClick: () => (store.set(STEPS_KEY, { done: stepsState().done, hidden: true }), (homeKey = ""), renderSteps(), renderHome()) },
+      ],
+      { align: "right", width: 260 }
+    );
+}
+// The sample: something to open when a space has nothing in it (ui/sample.html, original and synthetic)
+async function addSample() {
+  const done = loadingToast("Adding the sample…");
+  try {
+    const html = await (await fetch("/ui/sample.html")).text();
+    const env = await api("envs", { method: "POST", body: { html, name: "Sample — Reading list", source: { kind: "sample" } } });
+    await loadWorkspace();
+    done();
+    go(env.id);
+    // all three of its screens, side by side, so there is a prototype to look at and not one page
+    for (const name of ["Book", "Add a book"]) await placeScreen(env.id, name);
+    requestAnimationFrame(() => fitOpen());
+  } catch (e) {
+    done();
+    toast("Couldn't add the sample", e.message);
+  }
+}
+// Do a step: each takes the person to the place it happens, on their own work
+function runStep(id) {
+  const root = rootOf(S.page) || latestRoot();
+  if (id === "connect") return openConnect();
+  if (!root) return addSample(); // nothing here yet: every step starts with something to open
+  if (id === "open") return go(lastPage.get(root.id) && S.envs.has(lastPage.get(root.id)) ? lastPage.get(root.id) : root.id);
+  if (id === "branch") return go(root.id), setTimeout(() => createBranch(root.id), 200);
+  if (id === "ask") return go(S.view === "proto" && S.page ? S.page : root.id), setTimeout(() => fire("ask-agent", {}), 250);
+  if (id === "merge") {
+    const ready = roots().flatMap((r) => openBranches(r.id)).find((b) => branchFacts(b).changes > 0);
+    if (ready) return go(ready.id), setTimeout(() => openReview(ready.id), 250);
+    go(root.id);
+    return setTimeout(() => toast("Nothing to review yet", "A branch can be reviewed once it has changes. Make one, or ask an agent for one.", { label: "Create a branch", fn: () => createBranch(root.id) }), 300);
+  }
+}
+// The card under the greeting: the five steps as a path, the next one with its button
+function firstStepsCard(rs) {
+  if (!stepsOn()) return null;
+  const st = firstSteps(stepsState().done);
+  const el = h(`<section class="fsteps" aria-label="First steps"><header><b>First steps</b><span class="n">${st.count} of ${st.total}</span><span class="sp"></span><button type="button" class="ghbtn sm" data-a="hide">Hide</button></header><ol></ol></section>`);
+  const ol = el.querySelector("ol");
+  st.steps.forEach((s, i) => {
+    const li = h(`<li class="${s.done ? "done" : s.next ? "next" : ""}"><span class="ck" aria-hidden="true">${s.done ? IC.check : i + 1}</span><b></b><span class="tx"></span></li>`);
+    li.querySelector("b").textContent = s.title;
+    li.querySelector(".tx").textContent = s.text;
+    if (s.done) li.append(h(`<span class="st">Done</span>`));
+    else {
+      // with nothing in the space, opening a prototype means starting with the sample
+      const label = s.id === "open" && !rs.length ? "Start with the sample" : s.cta;
+      const b = h(`<button type="button" class="${s.next ? "createbtn" : "ghbtn"} sm"></button>`);
+      b.textContent = label;
+      b.onclick = () => runStep(s.id);
+      li.append(b);
+    }
+    ol.append(li);
+  });
+  el.querySelector('[data-a="hide"]').onclick = () => {
+    store.set(STEPS_KEY, { done: stepsState().done, hidden: true });
+    homeKey = "";
+    renderSteps();
+    renderHome();
+    toast("First steps hidden", "Show first steps in the Atelier menu brings them back", { label: "Show", fn: () => (store.set(STEPS_KEY, { done: stepsState().done, hidden: false }), (homeKey = ""), renderSteps(), renderHome()) });
+  };
+  return el;
+}
 function homeGreeting(rs) {
   let ready = 0,
     working = 0,
@@ -429,10 +551,12 @@ function homeGreeting(rs) {
       if (branchStatus(f).tone === "ok") (ready++, (first = first || e.id));
     }
   const g = h(`<div class="hgreet"><svg class="pinmark hg-pin" viewBox="0 0 24 24" aria-hidden="true"><path class="pb" d="M12 2.5a9.5 9.5 0 0 1 0 19H2.5V12A9.5 9.5 0 0 1 12 2.5Z"/><g class="eye"><circle class="ew" cx="13.4" cy="10.6" r="3.6"/></g></svg><div class="hg-t"><h1><span></span><svg class="hg-line" viewBox="0 0 200 12" preserveAspectRatio="none" aria-hidden="true"><path d="${SCRIBBLE}"/></svg></h1><p></p></div></div>`);
-  g.querySelector("h1 span").textContent = greeting(new Date().getHours());
+  // someone new is welcomed and pointed at the first steps; after that, what's waiting on them
+  const fresh = stepsOn() && !stepsState().done.length;
+  g.querySelector("h1 span").textContent = fresh ? "Welcome to Atelier" : greeting(new Date().getHours());
   const line = g.querySelector("p");
-  line.textContent = waitingLine({ ready, working, projects: rs.length });
-  if (first) {
+  line.textContent = fresh ? welcomeLine(0) : waitingLine({ ready, working, projects: rs.length });
+  if (first && !fresh) {
     const go = h(`<button type="button" class="dbtn sm">Take a look${IC.chevr}</button>`);
     go.onclick = () => goIn(first);
     g.querySelector(".hg-t").append(go);
@@ -650,6 +774,7 @@ function createBranch(id) {
       await loadWorkspace();
       go(env.id);
       toast(`Created ${env.name}`, `A branch of ${pageName(src)}. It reads ${pageName(src)}'s files until it changes them`);
+      markStep("branch", { quiet: true }); // that toast is enough; the header chip moves on to the next step
     } catch (e) {
       busy = false;
       undoBusy();
@@ -711,6 +836,7 @@ async function openReview(id) {
       closeModal();
       await loadWorkspace();
       go(parent.id);
+      markStep("merge", { quiet: true });
       toast(`Merged ${env.name} into ${pageName(parent)}`, `${plural(r.applied, "change")} · the branch is archived · V${r.before.n} has ${pageName(parent)} as it was`, {
         label: "Undo",
         fn: async () => {
@@ -1090,7 +1216,8 @@ function openImport() {
     <div class="fld"><span class="lr">Or paste HTML<span class="hint">A whole document, e.g. an HTML artifact</span></span><textarea class="afld-ta" id="imHtml" style="min-height:120px;font-family:var(--mono);font-size:12px" placeholder="<!doctype html>…"></textarea></div>
     <div class="fld"><span class="lr">Name<span class="hint">Optional — the page title is used otherwise</span></span><div class="afld-in"><input id="imName" maxlength="120"></div></div>
   </div>
-  <div class="md-f"><span class="sp"></span><button type="button" class="ghbtn" data-a="x2">Cancel</button><button type="button" class="createbtn" data-a="ok">Import</button></div>`);
+  <div class="md-f"><button type="button" class="ghbtn" data-a="sample">Start with the sample</button><span class="sp"></span><button type="button" class="ghbtn" data-a="x2">Cancel</button><button type="button" class="createbtn" data-a="ok">Import</button></div>`);
+  md.querySelector('[data-a="sample"]').onclick = () => (closeModal(), addSample());
   let file = null;
   const drop = $("imDrop");
   const setFile = (f) => ((file = f), (drop.querySelector("b").textContent = f.name), (drop.querySelector("span").textContent = `${Math.round(f.size / 1024)} KB · ready to import`));
@@ -1241,6 +1368,7 @@ function wsMenu() {
     { label: "Rename space", icon: IC.board, onClick: renameWorkspace },
     { label: "Hide panels", kbd: "⌘\\", onClick: toggleUi },
     { label: "Play the intro", onClick: () => playIntro({ force: true }) },
+    { label: "Show first steps", onClick: () => (store.set(STEPS_KEY, { done: firstSteps(stepsState().done).finished ? [] : stepsState().done, hidden: false }), (homeKey = ""), renderSteps(), S.view === "home" ? renderHome() : (location.hash = "#/")) },
     { label: "Keyboard shortcuts", kbd: "?", onClick: openShortcuts },
     "-",
     { head: "Appearance" },
@@ -1549,6 +1677,7 @@ async function boot() {
   });
   // Several versions were asked for: their branches exist now, so show them beside this page
   on("versions-started", async (n) => {
+    markStep("ask", { quiet: true }); // its own toast says what happened
     await loadWorkspace();
     for (const e of envList()) if (e.parent === S.page) loadDiff(e.id);
     fire("studies", true);
@@ -1596,6 +1725,7 @@ async function boot() {
     if (d?.reopen) openThread(d.reopen);
   });
   on("tasks-changed", async (d) => {
+    if (d?.created) markStep("ask");
     if (d?.created && d.created.env !== S.page) {
       // the request opened a branch: go to its page, where the agent will work
       await loadWorkspace();

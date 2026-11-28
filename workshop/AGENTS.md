@@ -177,6 +177,16 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   branch, with Compare and Review and merge, and on a page with open branches, with Side by side;
   Main with no branches has no bar); Run is in every frame's title, and the tool bar's one
   main action is Ask agent. Don't add a second home for something that already has one.
+- **A new person reaches working, and the end of the loop.** First steps (`ui/firststeps.js`,
+  tested in `test/firststeps.test.js`; `markStep`, `runStep`, `firstStepsCard`, `renderSteps` in
+  `ui/app.js`) are the studio loop once, in order: open, branch, connect, ask, merge. Home shows
+  them as a card under a welcome; everywhere else a chip in the header says how far along and
+  what's next, because a toast is gone in seconds. A step is marked where the thing is really done
+  (opening a page, creating a branch, sending a request, merging, a tool connecting), and progress
+  is the person's (this browser), not the space's: a team's space has branches and merges before a
+  newcomer has made one. Every step's button does the thing on their own work; with nothing in the
+  space it starts with the sample (`ui/sample.html`: original, synthetic, no images, fonts or
+  network). Don't add a tour of tooltips or a second checklist: one path, real actions.
 - **No dead ends.** Every guide step, empty state and dialog ends in something real to do on the
   person's own work (the Learn steps' `try` actions in `ui/app.js`). Connecting an AI tool shows the
   setup for each tool and a live status that turns on as soon as it connects (`openConnect`).

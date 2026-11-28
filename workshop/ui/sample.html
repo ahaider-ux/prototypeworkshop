@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sample — Reading list</title>
+<!-- Atelier's sample prototype: something to branch, mark up and ask an agent about when a space has
+     nothing in it yet. Original and synthetic: the books and people are made up. No images, no fonts,
+     no network. Its look is all in the variables below, so a small request has a visible result. -->
+<style>
+  :root{
+    --bg:#f6f4ef; --panel:#ffffff; --ink:#1d1b18; --muted:#6f6a61; --line:#e4e0d6;
+    --accent:#2f5d50; --accent-ink:#ffffff; --soft:#eef3f0;
+    --radius:14px; --gap:20px; --side:232px;
+    --font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --serif:ui-serif,Georgia,"Times New Roman",serif;
+  }
+  [data-theme="dark"]{ --bg:#171613; --panel:#211f1b; --ink:#f1eee7; --muted:#a39d91; --line:#34312b; --accent:#8fc7b3; --accent-ink:#13231e; --soft:#26302c; }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font:15px/1.5 var(--font);color:var(--ink);background:var(--bg);display:flex}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  .side{width:var(--side);flex:none;padding:24px 16px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+  .brand{font:600 18px/1 var(--serif);padding:4px 12px 20px}
+  .nav{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;color:var(--muted);text-align:left}
+  .nav i{width:8px;height:8px;border-radius:99px;background:currentColor;opacity:.5}
+  .nav.on{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+  .nav .n{margin-left:auto;font-size:12px}
+  .goal{margin-top:auto;padding:14px;border-radius:var(--radius);background:var(--soft);font-size:13px}
+  .goal b{display:block;font-size:14px}
+  .bar{height:6px;border-radius:99px;background:var(--line);margin-top:10px;overflow:hidden}
+  .bar span{display:block;height:100%;background:var(--accent);border-radius:99px}
+  .main{flex:1;min-width:0;padding:28px 36px;overflow:auto}
+  .head{display:flex;align-items:center;gap:16px;margin-bottom:24px}
+  .head h1{font:400 30px/1.15 var(--serif);margin:0}
+  .head p{margin:2px 0 0;color:var(--muted)}
+  .head .sp{flex:1}
+  .search{height:40px;width:260px;padding:0 14px;border:1px solid var(--line);border-radius:99px;background:var(--panel);color:var(--muted);display:flex;align-items:center}
+  .btn{height:40px;padding:0 18px;border-radius:99px;background:var(--accent);color:var(--accent-ink);font-weight:600}
+  .btn.ghost{background:none;color:var(--ink);border:1px solid var(--line)}
+  .chips{display:flex;gap:8px;margin-bottom:var(--gap)}
+  .chip{height:32px;padding:0 14px;border-radius:99px;border:1px solid var(--line);color:var(--muted);font-size:13px}
+  .chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:var(--gap)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;display:flex;gap:14px;text-align:left}
+  .cover{width:64px;height:92px;flex:none;border-radius:6px;background:var(--c,#b9c7c1);box-shadow:inset 6px 0 0 rgba(0,0,0,.12)}
+  .card h3{margin:0;font:600 16px/1.25 var(--serif)}
+  .card .by{color:var(--muted);font-size:13px;margin:2px 0 10px}
+  .tag{display:inline-block;font-size:12px;padding:2px 9px;border-radius:99px;background:var(--soft);color:var(--accent)}
+  .card .bar{margin-top:12px}
+  .pct{font-size:12px;color:var(--muted);margin-top:4px}
+  .empty{border:1px dashed var(--line);border-radius:var(--radius);padding:64px 24px;text-align:center;color:var(--muted)}
+  .empty b{display:block;font:400 22px/1.3 var(--serif);color:var(--ink);margin-bottom:6px}
+  .empty .btn{margin-top:18px}
+  .book{display:grid;grid-template-columns:220px 1fr;gap:36px;max-width:900px}
+  .book .cover{width:220px;height:316px;border-radius:10px}
+  .book h2{font:400 34px/1.15 var(--serif);margin:0 0 4px}
+  .book .by{color:var(--muted);margin-bottom:18px}
+  .notes{margin-top:26px;display:grid;gap:12px}
+  .note{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+  .note .pg{font-size:12px;color:var(--muted)}
+  .form{max-width:520px;display:grid;gap:16px}
+  .fld{display:grid;gap:6px;font-size:13px;color:var(--muted)}
+  .fld input,.fld select{height:44px;padding:0 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);font:inherit;color:var(--ink)}
+  .row{display:flex;gap:10px;margin-top:6px}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<aside class="side">
+  <div class="brand">Reading list</div>
+  <button class="nav on" data-go="Library"><i></i>Library<span class="n">6</span></button>
+  <button class="nav" data-go="Book"><i></i>Reading now<span class="n">1</span></button>
+  <button class="nav" data-go="Add a book"><i></i>Add a book</button>
+  <div class="goal"><b>12 books this year</b>5 finished so far<div class="bar"><span style="width:42%"></span></div></div>
+</aside>
+<main class="main">
+  <section data-screen="Library">
+    <div class="head"><div><h1>Library</h1><p>Six books, one in progress</p></div><span class="sp"></span><div class="search">Search titles and authors</div><button class="btn" data-go="Add a book">Add a book</button></div>
+    <div class="chips"><button class="chip on">All</button><button class="chip">Reading</button><button class="chip">Finished</button><button class="chip">Wishlist</button></div>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty" hidden><b>Nothing on the shelf yet</b>Add the book you're reading now and it shows up here.<br><button class="btn" data-go="Add a book">Add a book</button></div>
+  </section>
+  <section data-screen="Book" hidden>
+    <div class="head"><div><h1>Reading now</h1><p>Started three weeks ago</p></div><span class="sp"></span><button class="btn ghost" data-go="Library">Back to library</button></div>
+    <div class="book">
+      <div class="cover" style="--c:#c9a66b"></div>
+      <div>
+        <h2>The Salt Road</h2><div class="by">Ilse Maren · 312 pages</div>
+        <span class="tag">Travel</span>
+        <div class="bar" style="max-width:360px"><span style="width:64%"></span></div><div class="pct">Page 200 of 312 · 64%</div>
+        <div class="notes">
+          <div class="note"><div class="pg">Page 41</div>The market scene: every trade is a small negotiation about trust.</div>
+          <div class="note"><div class="pg">Page 158</div>Look up the old caravan routes she mentions before the next chapter.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section data-screen="Add a book" hidden>
+    <div class="head"><div><h1>Add a book</h1><p>It goes on your shelf straight away</p></div></div>
+    <div class="form">
+      <label class="fld">Title<input value="A Year of Tides"></label>
+      <label class="fld">Author<input value="Noor Castell"></label>
+      <label class="fld">Shelf<select><option>Reading</option><option>Finished</option><option>Wishlist</option></select></label>
+      <div class="row"><button class="btn" data-go="Library">Add to library</button><button class="btn ghost" data-go="Library">Cancel</button></div>
+    </div>
+  </section>
+</main>
+<script>
+  var BOOKS = [
+    { t: "The Salt Road", a: "Ilse Maren", tag: "Travel", p: 64, c: "#c9a66b" },
+    { t: "Small Machines", a: "Tobin Arkwright", tag: "Essays", p: 100, c: "#7d9bb5" },
+    { t: "A Year of Tides", a: "Noor Castell", tag: "Nature", p: 100, c: "#8fb09a" },
+    { t: "Paper Weather", a: "J. L. Okoro", tag: "Fiction", p: 100, c: "#c98f8f" },
+    { t: "The Long Table", a: "Mirela Voss", tag: "Food", p: 0, c: "#b7a3c9" },
+    { t: "Night Trains", a: "Castor Lindqvist", tag: "Fiction", p: 0, c: "#9aa3a8" }
+  ];
+  var current = "Library", state = "Default";
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function render() {
+    var list = state === "Empty" ? [] : BOOKS;
+    document.getElementById("grid").innerHTML = list.map(function (b) {
+      return '<button class="card" data-go="Book"><span class="cover" style="--c:' + b.c + '"></span><span><h3>' + esc(b.t) + '</h3><div class="by">' + esc(b.a) + '</div><span class="tag">' + esc(b.tag) + '</span>' +
+        (b.p ? '<div class="bar"><span style="width:' + b.p + '%"></span></div><div class="pct">' + (b.p === 100 ? "Finished" : b.p + "% read") + "</div>" : '<div class="pct">On the wishlist</div>') + "</span></button>";
+    }).join("");
+    document.getElementById("grid").hidden = !list.length;
+    document.getElementById("empty").hidden = !!list.length;
+  }
+  function show(name) {
+    var found = false;
+    document.querySelectorAll("[data-screen]").forEach(function (s) { var on = s.getAttribute("data-screen") === name; s.hidden = !on; if (on) found = true; });
+    if (!found) return show("Library");
+    current = name;
+    document.querySelectorAll(".nav").forEach(function (n) { n.classList.toggle("on", n.getAttribute("data-go") === name); });
+  }
+  document.addEventListener("click", function (e) { var g = e.target.closest("[data-go]"); if (g) show(g.getAttribute("data-go")); });
+  render();
+  // what Atelier reads to list this prototype's screens and states (README: "Make a prototype canvas-aware")
+  window.workshopEnv = {
+    screens: [{ group: "App", name: "Library" }, { group: "App", name: "Book" }, { group: "App", name: "Add a book" }],
+    screen: function () { return current; },
+    go: function (name) { show(name); },
+    states: ["Default", "Empty"],
+    setState: function (s) { state = s === "Empty" ? "Empty" : "Default"; render(); },
+    theme: function (t) { document.documentElement.setAttribute("data-theme", t === "dark" ? "dark" : "light"); }
+  };
+</script>
+</body>
+</html>

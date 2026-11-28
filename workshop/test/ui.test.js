@@ -658,3 +658,42 @@ test("ui: a selection is resized by its areas, not its drawn squares", () => {
   assert.match(cv, /Object\.assign\(it, resizeFrom\(\{ x: drag\.x0, y: drag\.y0, w: drag\.w0, h: drag\.h0 \}, drag\.h, dx \/ z, dy \/ z,/);
   assert.match(cv, /recordMove\(\[\{ id: d\.id, x: d\.x0, y: d\.y0, w: d\.w0, h: d\.h0 \}\], "resize"\);/, "undo puts the place back as well as the size");
 });
+
+// A new person is taken through the whole loop once: Home welcomes them and lays out five first
+// steps, each a real action; in the editor the header says what's next (a toast is gone in
+// seconds); and a space with nothing in it offers a sample, so the first step never needs a file.
+test("ui: first steps take a new person from first open to merged", () => {
+  const app = read("app.js");
+  // progress is this person's, kept in this browser, marked where each thing is actually done
+  assert.match(app, /const STEPS_KEY = "atelier-steps";/);
+  assert.match(app, /if \(changed\) markStep\("open"\);/);
+  assert.match(app, /markStep\("branch", \{ quiet: true \}\);/);
+  assert.match(app, /if \(d\?\.created\) markStep\("ask"\);/);
+  assert.match(app, /markStep\("merge", \{ quiet: true \}\);/);
+  assert.match(app, /if \(on\) markStep\("connect", \{ quiet: !document\.querySelector\("#modal\.open"\) \}\);/);
+  // Home: the welcome and the card, for someone who has done nothing yet
+  const greet = app.slice(app.indexOf("function homeGreeting"), app.indexOf("function homeGreeting") + 1800);
+  assert.match(greet, /const fresh = stepsOn\(\) && !stepsState\(\)\.done\.length;/);
+  assert.match(greet, /fresh \? "Welcome to Atelier" : greeting\(/);
+  assert.match(app, /const fs = firstStepsCard\(rs\);\n\s*if \(fs\) head\.append\(fs\);/);
+  const card = app.slice(app.indexOf("function firstStepsCard"), app.indexOf("function homeGreeting"));
+  assert.match(card, /b\.onclick = \(\) => runStep\(s\.id\);/, "every step that isn't done has something to press");
+  assert.match(card, /s\.id === "open" && !rs\.length \? "Start with the sample" : s\.cta/);
+  // every step's action goes somewhere real, and with nothing in the space it starts with the sample
+  const run = app.slice(app.indexOf("function runStep"), app.indexOf("function firstStepsCard"));
+  assert.match(run, /if \(!root\) return addSample\(\);/);
+  for (const id of ["connect", "open", "branch", "ask", "merge"]) assert.ok(run.includes(`id === "${id}"`), `${id} has an action`);
+  assert.match(run, /Nothing to review yet/, "review with nothing ready says why and what to do");
+  // the editor: a chip in the header that stays, hidden on Home where the card is
+  assert.match(read("index.html"), /id="stepsBtn" aria-haspopup="menu" hidden>/);
+  const chip = app.slice(app.indexOf("function renderSteps"), app.indexOf("async function addSample"));
+  assert.match(chip, /const on = stepsOn\(\) && S\.view !== "home";/);
+  assert.match(chip, /\$\("stepsTxt"\)\.textContent = `Next: \$\{st\.next\.title\}`;/);
+  assert.match(app, /\{ label: "Show first steps",/, "hidden steps can be brought back");
+  // the sample: original, synthetic, no network, and canvas-aware so its screens can be placed
+  const sample = read("sample.html");
+  assert.ok(!/https?:\/\//.test(sample), "the sample loads nothing from the network");
+  assert.ok(!/<img|@font-face|url\(/.test(sample), "no images or font files");
+  assert.match(sample, /window\.workshopEnv = \{\s*screens: \[\{ group: "App", name: "Library" \}, \{ group: "App", name: "Book" \}, \{ group: "App", name: "Add a book" \}\]/);
+  assert.match(app, /for \(const name of \["Book", "Add a book"\]\) await placeScreen\(env\.id, name\);/);
+});

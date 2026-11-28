@@ -20,6 +20,14 @@ the prototypes in it and works on them where they are. The repository's own work
 
 Needs Node 20 or later. Nothing to install.
 
+The first time you open it, Home welcomes you with five **first steps** that go through the whole
+loop once: open a prototype, try an idea on a branch, connect your AI tool, ask an agent for a
+change, review and merge. Each is a button that takes you to where it happens. In a space with
+nothing in it the first step is **Start with the sample**, a small reading-list app with three
+screens, so you don't need a file of your own to begin. Away from Home, a chip in the header shows
+how far along you are and what's next. Progress is yours (kept in this browser), not the space's;
+**Hide** puts the steps away and **Show first steps** in the Atelier menu brings them back.
+
 ```bash
 cd workshop
 ```
