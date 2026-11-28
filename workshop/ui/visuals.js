@@ -7,7 +7,7 @@
 // The same pictures are the cards on the home and the Learn page, and the art in the Learn dialog
 // (an announcement flow: an intro step, then one step per feature, the bars showing the real count).
 
-import { h, esc, IC, modal, closeModal } from "./lib.js";
+import { h, IC, modal, closeModal } from "./lib.js";
 import { outline } from "./ink.js";
 
 // every picture is drawn in a 360 × 240 design box and scaled to fit wherever it's shown
@@ -64,7 +64,7 @@ const ART = {
 
   agent: () =>
     head("hand it<br>to an agent") +
-    piece(66, 134, `<div class="ccomp"><div class="cbox"><span class="ctx">Make the header bigger</span><div class="cbar"><span class="cagent" aria-pressed="true">${IC.spark}Agent fixes this</span><span class="sp"></span><span class="csend">${IC.send}</span></div></div></div>`, { w: 228 }),
+    piece(66, 134, `<div class="ccomp"><div class="cbox"><span class="ctx">Make the header bigger</span><div class="cbar"><span class="cagent" aria-pressed="true">${IC.agent}Agent fixes this</span><span class="sp"></span><span class="csend">${IC.send}</span></div></div></div>`, { w: 228 }),
 
   merge: () =>
     head("review it,<br>then merge") +
@@ -112,7 +112,7 @@ export function artEl(id) {
 
 
 // The Learn dialog: copy on the left, the picture on the right, one step at a time. The intro step
-// offers "Learn more" (the Learn page) and "See what's new" (the next step); the last step's main
+// offers "All guides" (the Learn page) and "See what's new" (the next step); the last step's main
 // button is Done. actions: { learn() } plus, for each step's `try`, { label, run() }: the real thing
 // the step describes, done on the person's own prototypes (missing when it can't be done here).
 export function openLearn(start = 0, actions = {}) {
@@ -129,7 +129,7 @@ export function openLearn(start = 0, actions = {}) {
     const back = md.querySelector('[data-a="back"]'),
       next = md.querySelector('[data-a="next"]'),
       tryB = md.querySelector('[data-a="try"]');
-    back.textContent = i === 0 ? "Learn more" : "Back";
+    back.textContent = i === 0 ? "All guides" : "Back";
     next.textContent = i === 0 ? "See what's new" : i === FEATURES.length - 1 ? "Done" : "Next";
     const t = f.try ? actions[f.try] : null;
     tryB.hidden = !t;

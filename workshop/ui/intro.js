@@ -47,10 +47,10 @@ const PIECES = () => [
   ["toolbar", -267, 196, 0, 0, 1420, 2760, "TOOLBAR"],
   ["frame", -430, -150, 300, 196, 1400, 2820, `<span class="flbl on">Start screen</span>${PAGE}<span class="isel">${CORNERS}</span>`],
   ["ink", -425, -127, 290, 150, 1640, 2820, "INK:circle"],
-  ["pin", 96, -196, 0, 0, 1480, 3060, `<span class="pin agent" style="position:relative;margin:0"><span class="pi">C</span></span>`],
-  ["peek", 140, -228, 0, 0, 1560, 2880, `<div class="pinpeek" style="position:relative"><div class="ph"><span class="cav agent">C</span><b>Claude</b><span>now</span></div><p>On it: designing this screen, on a branch.</p></div>`],
+  ["pin", 96, -196, 0, 0, 1480, 3060, `<span class="pin agent u-rel u-m0"><span class="pi">C</span></span>`],
+  ["peek", 140, -228, 0, 0, 1560, 2880, `<div class="pinpeek u-rel"><div class="ph"><span class="cav agent">C</span><b>Claude</b><span>now</span></div><p>On it: designing this screen, on a branch.</p></div>`],
   ["cursor", 300, -40, 0, 0, 1600, 2820, `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5 13 8l-4.3 1.2L7 13.5Z"/></svg><b>Claude</b>`],
-  ["toast", 144, 72, 0, 0, 2450, 2960, `<div class="toast is-open" style="position:relative"><div class="tcol"><span class="tt2">${IC.fork}Branch ready to review</span></div></div>`],
+  ["toast", 144, 72, 0, 0, 2450, 2960, `<div class="toast is-open u-rel"><div class="tcol"><span class="tt2">${IC.fork}Branch ready to review</span></div></div>`],
 ];
 
 // Hand-drawn marks move like hand-drawn marks: on eights (125 ms a frame), drawn on in four frames
@@ -92,7 +92,7 @@ const OPENERS = [
   `<span class="ot ink">${IC.frame}</span>`,
   `<span class="ot white">${IC.cmt}</span>`,
   `<span class="ot ink">${IC.draw}</span>`,
-  `<span class="ot white">${IC.spark}</span>`,
+  `<span class="ot white">${IC.agent}</span>`,
   `<span class="ot ink">${IC.fork}</span>`,
   `<span class="ot blue">${IC.play}</span>`,
 ];

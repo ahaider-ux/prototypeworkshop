@@ -124,7 +124,7 @@ function renderWho() {
     const name = hs[0]?.client || S.ws.agent.name;
     w.append(h(`<span class="av agent" title="${esc(name)}${hs.length ? " is connected" : " runs requests"}">${esc(name[0])}<span class="on"></span></span>`));
   } else {
-    const c = h(`<button type="button" class="av" style="margin-left:-6px;cursor:pointer" aria-label="Connect your AI tool" data-tip="Connect your AI tool">${IC.plus}</button>`);
+    const c = h(`<button type="button" class="av u-back" aria-label="Connect your AI tool" data-tip="Connect your AI tool">${IC.plus}</button>`);
     c.onclick = openConnect;
     w.append(c);
   }
@@ -595,7 +595,7 @@ function homeShell() {
   const mac = /Mac|iPhone|iPad/.test(navigator.platform || "");
   const row = (k, icon, label) => `<button type="button" class="pg" data-n="${k}">${icon}<span class="t">${label}</span><span class="m"></span></button>`;
   home.replaceChildren(
-    h(`<aside class="hside" aria-label="Browse"><div class="lhd"><div class="ttl"><b class="hs-name"></b><span class="hs-sub"></span></div><button type="button" class="ib32" data-a="new" aria-label="Import HTML" data-tip="Import HTML">${IC.plus}</button></div><button type="button" class="hsearch" data-a="search">${SEARCH_IC}<span>Search or jump to…</span><kbd>${mac ? "⌘K" : "Ctrl K"}</kbd></button><nav class="pgs hnav" aria-label="Places">${row("home", IC.home, "Home")}${row("guides", IC.spark, "Guides")}${row("activity", IC.version, "Activity")}</nav><div class="hs-sec" data-k="recent"><div class="shd"><span>Recent</span></div><div class="pgs hrecent"></div></div><div class="hs-sec" data-k="projects"><div class="shd"><span>Projects</span><span class="n"></span></div><div class="pgs htree"></div></div></aside>`),
+    h(`<aside class="hside" aria-label="Browse"><div class="lhd"><div class="ttl"><b class="hs-name"></b><span class="hs-sub"></span></div><button type="button" class="ib32" data-a="new" aria-label="Import HTML" data-tip="Import HTML">${IC.plus}</button></div><button type="button" class="hsearch" data-a="search">${SEARCH_IC}<span>Search or jump to…</span><kbd>${mac ? "⌘K" : "Ctrl K"}</kbd></button><nav class="pgs hnav" aria-label="Places">${row("home", IC.home, "Home")}${row("guides", IC.agent, "Guides")}${row("activity", IC.version, "Activity")}</nav><div class="hs-sec" data-k="recent"><div class="shd"><span>Recent</span></div><div class="pgs hrecent"></div></div><div class="hs-sec" data-k="projects"><div class="shd"><span>Projects</span><span class="n"></span></div><div class="pgs htree"></div></div></aside>`),
     h(`<div class="hmain"><div class="htop"></div><div class="hview" id="homeMain"></div></div>`),
   );
   const side = home.querySelector(".hside");
@@ -655,7 +655,7 @@ function renderSide(rs) {
     kid(IC.board, "Main", "", () => go(e.id));
     for (const b of brs) kid(IC.fork, b.name, branchStatus(branchFacts(b)).tone, () => go(b.id));
   }
-  if (!rs.length) tree.append(h(`<div class="pempty" style="padding:8px 16px">No projects yet. Import an HTML file to start one.</div>`));
+  if (!rs.length) tree.append(h(`<div class="pempty u-p8-16">No projects yet. Import an HTML file to start one.</div>`));
 }
 // Each Learn step offers the real thing it describes, on the person's own work: the prototype they
 // edited last, or the newest open branch for review. A step that can't be done here has no button.
@@ -734,7 +734,7 @@ async function renderActivityPage(main) {
   }
   for (const e of rows) {
     const env = e.env && S.envs.get(e.env);
-    const r = h(`<button type="button" class="hact"><span class="hact-k">${e.by && /claude|agent|codex|cursor/i.test(e.by) ? IC.spark : IC.version}</span><span class="hact-t"><span class="x"></span><span class="m"></span></span><span class="hact-w"></span></button>`);
+    const r = h(`<button type="button" class="hact"><span class="hact-k">${e.by && /claude|agent|codex|cursor/i.test(e.by) ? IC.agent : IC.version}</span><span class="hact-t"><span class="x"></span><span class="m"></span></span><span class="hact-w"></span></button>`);
     r.querySelector(".x").textContent = e.text;
     r.querySelector(".m").textContent = [e.by, env ? pageName(env) : ""].filter(Boolean).join(" · ");
     r.querySelector(".hact-w").textContent = timeAgo(e.at);
@@ -797,9 +797,9 @@ async function openReview(id) {
   }
   const parent = S.envs.get(env.parent);
   const take = {};
-  const md = modal(`<div class="md-h"><div class="tt"><h2>Review and merge</h2><p>${esc(env.name)} into ${esc(pageName(parent))} · ${d.changes.length} change${d.changes.length === 1 ? "" : "s"}${d.conflicts ? ` · ${d.conflicts} conflict${d.conflicts === 1 ? "" : "s"}: ${esc(pageName(parent))} changed the same thing since the branch was made` : ""}</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div><div class="md-b" id="rvB"></div><div class="rvwhy fld"><label class="lr" for="rvWhy">Why merge this? <span style="color:var(--text-secondary);font-weight:400">· optional, kept in the decision log that agents read</span></label><div class="afld-in"><input id="rvWhy" maxlength="2000" placeholder="The sidebar felt cramped"></div></div><div class="md-f">${d.behind ? `<span style="font-size:12px;color:var(--text-secondary)">${d.behind} change${d.behind === 1 ? "" : "s"} on ${esc(pageName(parent))} stay as they are.</span>` : ""}<span class="sp"></span><button type="button" class="ghbtn" data-a="x2">Cancel</button><button type="button" class="createbtn" data-a="ok" ${d.changes.length ? "" : "disabled"}>Merge into ${esc(pageName(parent))}</button></div>`, { wide: true });
+  const md = modal(`<div class="md-h"><div class="tt"><h2>Review and merge</h2><p>${esc(env.name)} into ${esc(pageName(parent))} · ${d.changes.length} change${d.changes.length === 1 ? "" : "s"}${d.conflicts ? ` · ${d.conflicts} conflict${d.conflicts === 1 ? "" : "s"}: ${esc(pageName(parent))} changed the same thing since the branch was made` : ""}</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div><div class="md-b" id="rvB"></div><div class="rvwhy fld"><label class="lr" for="rvWhy">Why merge this? <span class="u-quiet u-400">· optional, kept in the decision log that agents read</span></label><div class="afld-in"><input id="rvWhy" maxlength="2000" placeholder="The sidebar felt cramped"></div></div><div class="md-f">${d.behind ? `<span class="u-note">${d.behind} change${d.behind === 1 ? "" : "s"} on ${esc(pageName(parent))} stay as they are.</span>` : ""}<span class="sp"></span><button type="button" class="ghbtn" data-a="x2">Cancel</button><button type="button" class="createbtn" data-a="ok" ${d.changes.length ? "" : "disabled"}>Merge into ${esc(pageName(parent))}</button></div>`, { wide: true });
   const b = $("rvB");
-  if (!d.changes.length) b.append(h(`<div class="pempty" style="padding:0"><b>Nothing to merge yet</b>This branch is the same as ${esc(pageName(parent))} was when it was made.</div>`));
+  if (!d.changes.length) b.append(h(`<div class="pempty u-p0"><b>Nothing to merge yet</b>This branch is the same as ${esc(pageName(parent))} was when it was made.</div>`));
   const groups = [["setting", "Settings"], ["style", "Design overrides"], ["file", "Files"]];
   for (const [kind, title] of groups) {
     const cs = d.changes.filter((c) => c.kind === kind);
@@ -807,12 +807,12 @@ async function openReview(id) {
     const g = h(`<div class="rvg"><div class="rvh">${title} · ${cs.length}</div></div>`);
     for (const c of cs) {
       const val = kind === "file" ? (c.conflict ? `Changed here and on ${esc(pageName(parent))}` : "Changed on the branch") : `<del>${esc(fmt(c.main, c.key))}</del> → <ins>${esc(fmt(c.branch, c.key))}</ins>`;
-      const r = h(`<div class="rvr${c.conflict ? " conflict" : ""}"><div style="display:flex;flex-direction:column;gap:4px;min-width:0"><span class="k">${esc(c.label)}</span><span class="v">${val}</span></div><span class="ch"></span></div>`);
+      const r = h(`<div class="rvr${c.conflict ? " conflict" : ""}"><div class="u-col4 u-min0"><span class="k">${esc(c.label)}</span><span class="v">${val}</span></div><span class="ch"></span></div>`);
       if (c.conflict) {
         take[c.key] = "branch";
         const pick = () =>
           r.querySelector(".ch").replaceChildren(
-            segmented([{ label: "Keep branch", value: "branch" }, { label: `Keep ${pageName(parent).length > 14 ? "main" : pageName(parent)}`, value: "main" }], take[c.key], (v) => {
+            segmented([{ label: "Keep branch", value: "branch" }, { label: `Keep ${pageName(parent).length > 14 ? "Main" : pageName(parent)}`, value: "main" }], take[c.key], (v) => {
               take[c.key] = v;
               pick();
             }, { label: `Resolve ${c.label}` }),
@@ -869,7 +869,7 @@ function envMenu({ anchor, env: id }) {
   const name = br ? "branch" : "prototype";
   menu(anchor, [
     ...(br ? [{ head: e.name }] : [{ head: e.name }]),
-    ...(id !== S.page ? [{ label: br ? "Open branch" : "Open main", icon: br ? IC.fork : IC.board, onClick: () => go(id) }] : []),
+    ...(id !== S.page ? [{ label: br ? "Open branch" : "Open Main", icon: br ? IC.fork : IC.board, onClick: () => go(id) }] : []),
     { label: br ? "Create a branch of this" : "Create branch", icon: IC.fork, onClick: () => createBranch(id) },
     ...(br && !e.archived ? [{ label: "Review and merge", icon: IC.check, onClick: () => openReview(id) }, { label: `Update from ${pageName(S.envs.get(e.parent))}`, icon: IC.restore, onClick: () => updateFromMain(id) }] : []),
     "-",
@@ -1081,7 +1081,7 @@ async function openShare(id) {
       }
     };
     b.append(net);
-    const lf = h(`<div class="fld"><span class="lr">Links<span class="hint">${links.length ? `${links.length} active` : ""}</span></span><div style="display:flex;gap:8px"></div></div>`);
+    const lf = h(`<div class="fld"><span class="lr">Links<span class="hint">${links.length ? `${links.length} active` : ""}</span></span><div class="u-row"></div></div>`);
     const mk = h(`<button type="button" class="dbtn" ${data.network ? "" : "disabled"}>${IC.link}Create link</button>`);
     mk.onclick = async () => {
       try {
@@ -1096,7 +1096,7 @@ async function openShare(id) {
     b.append(lf);
     for (const l of links) {
       const url = data.base ? `${data.base}/s/${l.token}` : `/s/${l.token}`;
-      const r = h(`<div class="lnk"><span class="u" title="${esc(url)}">${esc(url)}</span><span class="tagro">${l.role === "comment" ? "Can comment" : "Can view"}</span><button type="button" class="ib24" aria-label="Copy link">${IC.copy}</button><button type="button" class="ghbtn sm" style="color:var(--text-error)">Turn off</button></div>`);
+      const r = h(`<div class="lnk"><span class="u" title="${esc(url)}">${esc(url)}</span><span class="tagro">${l.role === "comment" ? "Can comment" : "Can view"}</span><button type="button" class="ib24" aria-label="Copy link">${IC.copy}</button><button type="button" class="ghbtn sm u-err">Turn off</button></div>`);
       r.querySelector(".ib24").onclick = () => copyText(url);
       r.querySelector(".ghbtn").onclick = async () => (await api(`shares/${l.id}`, { method: "DELETE" }).catch((e) => toast("Couldn't turn it off", e.message)), paint());
       b.append(r);
@@ -1132,7 +1132,7 @@ function openConnect() {
   const toml = (v) => JSON.stringify(v); // TOML basic strings take JSON's escapes
   // each AI tool's own way to add an MCP server, filled in for this computer (paths and all)
   const TOOLS = [
-    { id: "claude", label: "Claude Code", how: "Run this once in a terminal, then start <b>claude</b>. In this workshop's own folder it connects by itself.", code: `claude mcp add workshop -- ${[node, ...args].map(shq).join(" ")}` },
+    { id: "claude", label: "Claude Code", how: "Run this once in a terminal, then start <b>claude</b>. In Atelier's own folder it connects by itself.", code: `claude mcp add workshop -- ${[node, ...args].map(shq).join(" ")}` },
     { id: "cursor", label: "Cursor", how: "Add this to <b>~/.cursor/mcp.json</b> (or <b>.cursor/mcp.json</b> in your project), then reload Cursor.", code: JSON.stringify({ mcpServers: { workshop: { command: node, args } } }, null, 2) },
     { id: "codex", label: "Codex", how: "Add this to <b>~/.codex/config.toml</b>, then start <b>codex</b>.", code: `[mcp_servers.workshop]\ncommand = ${toml(node)}\nargs = [${args.map(toml).join(", ")}]` },
     { id: "vscode", label: "VS Code", how: "Add this to <b>.vscode/mcp.json</b> in your project, then start the server from the MCP view and use agent mode.", code: JSON.stringify({ servers: { workshop: { type: "stdio", command: node, args } } }, null, 2) },
@@ -1178,9 +1178,9 @@ function openConnect() {
   const paint = () => {
     $("cnSeg").replaceChildren(segmented([{ label: "Wait for my tool", value: "wait" }, { label: "Run Claude Code", value: "claude" }, { label: "Run a command", value: "custom" }], mode, (v) => ((mode = v), paint()), { full: true, label: "When you ask from the canvas" }));
     const more = $("cnMore");
-    if (mode === "wait") more.innerHTML = `<span class="cn-how">Requests wait for your connected tool, which picks them up with <span class="mono" style="font-size:12px;font-weight:400">take_task</span>.</span>`;
-    if (mode === "claude") more.innerHTML = `<span class="cn-how">Each request runs <span class="mono" style="font-size:12px;font-weight:400">claude -p</span> in its branch's folder with edits allowed, one at a time.</span>`;
-    if (mode === "custom") more.innerHTML = `<div class="afld-in"><input id="cnCmd" placeholder="my-agent --task {prompt}" value="${esc(ws.agent && !isClaude ? ws.agent.command.map(shq).join(" ") : "")}" aria-label="Command"></div><span style="font-size:12px;color:var(--text-secondary)">{prompt} is the full brief, {request} the words typed, {dir} the folder, {file} its index.html. Without {prompt} the brief arrives on stdin.</span>`;
+    if (mode === "wait") more.innerHTML = `<span class="cn-how">Requests wait for your connected tool, which picks them up with <span class="mono u-sub">take_task</span>.</span>`;
+    if (mode === "claude") more.innerHTML = `<span class="cn-how">Each request runs <span class="mono u-sub">claude -p</span> in its branch's folder with edits allowed, one at a time.</span>`;
+    if (mode === "custom") more.innerHTML = `<div class="afld-in"><input id="cnCmd" placeholder="my-agent --task {prompt}" value="${esc(ws.agent && !isClaude ? ws.agent.command.map(shq).join(" ") : "")}" aria-label="Command"></div><span class="u-note">{prompt} is the full brief, {request} the words typed, {dir} the folder, {file} its index.html. Without {prompt} the brief arrives on stdin.</span>`;
   };
   paint();
   md.querySelector('[data-a="x"]').onclick = closeModal;
@@ -1209,7 +1209,7 @@ function openImport() {
   const md = modal(`<div class="md-h"><div class="tt"><h2>Import a prototype</h2><p>An HTML file becomes a prototype with its own tab, branches and history.</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div>
   <div class="md-b">
     <div class="drop" id="imDrop" tabindex="0" role="button"><b>Drop an HTML file</b><span>or choose one from your computer</span><button type="button" class="dbtn" id="imPick">${IC.upload}Choose file</button></div>
-    <div class="fld"><span class="lr">Or paste HTML<span class="hint">A whole document, e.g. an HTML artifact</span></span><textarea class="afld-ta" id="imHtml" style="min-height:120px;font-family:var(--mono);font-size:12px" placeholder="<!doctype html>…"></textarea></div>
+    <div class="fld"><span class="lr">Or paste HTML<span class="hint">A whole document, e.g. an HTML artifact</span></span><textarea class="afld-ta u-code" id="imHtml" placeholder="<!doctype html>…"></textarea></div>
     <div class="fld"><span class="lr">Name<span class="hint">Optional — the page title is used otherwise</span></span><div class="afld-in"><input id="imName" maxlength="120"></div></div>
   </div>
   <div class="md-f"><button type="button" class="ghbtn" data-a="sample">Start with the sample</button><span class="sp"></span><button type="button" class="ghbtn" data-a="x2">Cancel</button><button type="button" class="createbtn" data-a="ok">Import</button></div>`);
@@ -1455,8 +1455,8 @@ async function openSpaces(start = null) {
   await loadSpaces();
   const md = modal(
     `<div class="md-h"><div class="tt"><h2>Connect a folder</h2><p>Open a project as a space. Its prototypes stay where they are: agents and merges edit the real files, saving a version first. Atelier keeps its own data in a hidden .atelier folder there.</p></div><button type="button" class="ib32" data-a="x" aria-label="Close">${IC.x}</button></div>
-    <div class="md-b" style="gap:16px">
-      ${spaceList.length > 1 ? `<div class="fld"><span class="lr">Your spaces</span><div class="pgs spl" id="spList" style="margin:0 -8px"></div></div>` : ""}
+    <div class="md-b u-gap16">
+      ${spaceList.length > 1 ? `<div class="fld"><span class="lr">Your spaces</span><div class="pgs spl u-bleed" id="spList"></div></div>` : ""}
       <div class="fld"><span class="lr">Folder<span class="hint">Paste a path, or pick one below</span></span><div class="afld-in"><input id="spPath" spellcheck="false" placeholder="/Users/you/Projects/app"></div></div>
       <div class="fbrowse" id="spBrowse" role="listbox" aria-label="Folders"></div>
     </div>
@@ -1496,7 +1496,7 @@ async function openSpaces(start = null) {
     inp.value = d.path;
     list.replaceChildren();
     if (d.parent) {
-      const up = h(`<div class="pg" role="option" tabindex="0">${IC.chev.replace("<svg", '<svg style="transform:rotate(90deg)"')}<span class="t">Up to ${esc(d.parent.split(/[\/]/).pop() || d.parent)}</span></div>`);
+      const up = h(`<div class="pg" role="option" tabindex="0">${IC.chev.replace("<svg", '<svg class="u-rot90"')}<span class="t">Up to ${esc(d.parent.split(/[\/]/).pop() || d.parent)}</span></div>`);
       up.onclick = () => browse(d.parent);
       up.onkeydown = (ev) => ev.key === "Enter" && up.click();
       list.append(up);
@@ -1507,7 +1507,7 @@ async function openSpaces(start = null) {
       r.onkeydown = (ev) => ev.key === "Enter" && r.click();
       list.append(r);
     }
-    if (!d.dirs.length) list.append(h(`<div class="lineage" style="padding:8px 12px">No folders inside.</div>`));
+    if (!d.dirs.length) list.append(h(`<div class="lineage u-p8-12">No folders inside.</div>`));
     const n = d.dirs.filter((f) => f.prototype).length + (d.hasIndex ? 1 : 0) + (d.hasIndex ? 0 : d.pages);
     hint.textContent = d.path === d.home ? "Pick a project folder inside your home folder" : n ? `${plural(n, "prototype")} here or one level down` : "Atelier looks two levels down for index.html files and .html pages";
   };
@@ -1737,7 +1737,7 @@ async function boot() {
     await loadWorkspace();
   } catch (e) {
     document.documentElement.removeAttribute("data-intro"); // index.html hid the app for the intro; show the error instead
-    $("frame").append(h(`<div class="winov open"><div class="md" style="width:480px"><div class="md-h"><div class="tt"><h2>The Workshop server isn't answering</h2><p>${esc(e.message)}. Start it with <span class="mono" style="font-size:12px;font-weight:400">npm start</span> in the workshop folder, then reload.</p></div></div></div></div>`));
+    $("frame").append(h(`<div class="winov open"><div class="md u-w480"><div class="md-h"><div class="tt"><h2>Atelier's server isn't answering</h2><p>${esc(e.message)}. Start it with <span class="mono u-sub">npm start</span> in the workshop folder, then reload.</p></div></div></div></div>`));
     return;
   }
   await Promise.all([loadComments(), loadTasks(), loadActivity()]); // loading the tasks loads the recipes too

@@ -1868,7 +1868,7 @@ function wirePin(p, id) {
 // one composer for a new comment and for replies: grows as you type, Enter posts, Shift+Enter
 // starts a new line, Esc cancels; "Agent fixes this" also sends it to an agent as a request
 function composer({ placeholder, agentToggle = false, onPost }) {
-  const el = h(`<div class="ccomp">${avatar("You")}<div class="cbox"><textarea rows="1" aria-label="${esc(placeholder)}" placeholder="${esc(placeholder)}"></textarea><div class="cbar">${agentToggle ? `<button type="button" class="cagent" aria-pressed="false" data-tip="Also send it to an agent, pinned to this spot">${IC.spark}Agent fixes this</button>` : ""}<span class="sp"></span><button type="button" class="csend" aria-label="Post" disabled>${IC.send}</button></div></div></div>`);
+  const el = h(`<div class="ccomp">${avatar("You")}<div class="cbox"><textarea rows="1" aria-label="${esc(placeholder)}" placeholder="${esc(placeholder)}"></textarea><div class="cbar">${agentToggle ? `<button type="button" class="cagent" aria-pressed="false" data-tip="Also send it to an agent, pinned to this spot">${IC.agent}Agent fixes this</button>` : ""}<span class="sp"></span><button type="button" class="csend" aria-label="Post" disabled>${IC.send}</button></div></div></div>`);
   const ta = el.querySelector("textarea"),
     send = el.querySelector(".csend"),
     ag = el.querySelector(".cagent");
@@ -1901,7 +1901,7 @@ async function sendToAgent(c, text, b) {
     const onMain = env && !isBranch(env);
     const sel = c.selector ? { selector: c.selector, label: c.selector.split(" ").pop() } : null;
     const t = await api("tasks", { method: "POST", body: { env: b.env, prompt: text.replace(/(^|\s)@agent\b/gi, " ").trim(), selection: sel, branch: onMain } });
-    toast("Sent to an agent", onMain ? "It works on a new branch; main stays as it is" : "Its changes show up on this branch", { label: "Show", fn: () => fire("ask-agent", {}) });
+    toast("Sent to an agent", onMain ? "It works on a new branch; Main stays as it is" : "Its changes show up on this branch", { label: "Show", fn: () => fire("ask-agent", {}) });
     return t;
   } catch (e) {
     toast("Couldn't send it to an agent", e.message);
@@ -1950,7 +1950,7 @@ export function openThread(id) {
   const msg = (x, first) => `<div class="cm" data-id="${esc(x.id)}">${avatar(x.author)}<div class="tx"><div class="mh"><b>${esc(x.author || "Someone")}</b><i>${esc(timeAgo(x.createdAt))}</i>${!first ? `<button type="button" class="ib24 mdel" aria-label="Delete this reply" data-tip="Delete reply">${IC.trash}</button>` : ""}</div><p>${esc(x.text)}</p></div></div>`;
   const el = h(`<div class="pop cpop" role="dialog" aria-label="Comment thread">
     <div class="phd"><span class="pt">${c.resolved ? `<span class="tagro ok">Resolved</span>` : "Comment"}${all.length > 1 ? `<span class="pc">${at + 1} of ${all.length}</span>` : ""}</span>
-      <button type="button" class="ib24" data-a="prev" aria-label="Previous comment" data-tip="Previous · ←" ${all.length < 2 ? "disabled" : ""}>${IC.chev.replace("<svg", '<svg style="transform:rotate(90deg)"')}</button>
+      <button type="button" class="ib24" data-a="prev" aria-label="Previous comment" data-tip="Previous · ←" ${all.length < 2 ? "disabled" : ""}>${IC.chev.replace("<svg", '<svg class="u-rot90"')}</button>
       <button type="button" class="ib24" data-a="next" aria-label="Next comment" data-tip="Next · →" ${all.length < 2 ? "disabled" : ""}>${IC.chevr}</button>
       <button type="button" class="ib24${c.resolved ? " on" : ""}" data-a="res" aria-pressed="${!!c.resolved}" aria-label="${c.resolved ? "Reopen" : "Resolve"}" data-tip="${c.resolved ? "Reopen" : "Resolve"}">${IC.check}</button>
       <button type="button" class="ib24" data-a="more" aria-label="More" aria-haspopup="menu">${IC.more}</button>
@@ -1991,7 +1991,7 @@ export function openThread(id) {
   };
   el.querySelector('[data-a="more"]').onclick = (e) =>
     menu(e.currentTarget, [
-      { label: "Send to an agent", icon: IC.spark, onClick: () => sendToAgent(c, [c.text, ...replies.map((r) => r.text)].join("\n\n"), b) },
+      { label: "Send to an agent", icon: IC.agent, onClick: () => sendToAgent(c, [c.text, ...replies.map((r) => r.text)].join("\n\n"), b) },
       { label: "Copy text", icon: IC.copy, onClick: () => navigator.clipboard?.writeText([c, ...replies].map((m) => `${m.author}: ${m.text}`).join("\n")).then(() => toast("Copied the thread")) },
       { label: "Show the element", icon: IC.sel, onClick: () => {
         const target = c.selector ? safeQuery(docOf(b.id), c.selector) : null;
@@ -2287,7 +2287,7 @@ export async function removeItems(ids) {
   };
   const what = gone.length > 1 ? `${gone.length} items` : gone[0].type === "board" ? `${screenName(gone[0])} board` : kindName(gone[0]);
   record({ label: `removal of ${what}`, undo: putBack, redo: async () => (await removeQuiet(gone.map((g) => g.id)), refresh()) });
-  toast(`Removed ${what}`, gone.some((g) => g.type === "board") ? "The page keeps its files; only the board left the canvas" : "", { label: "Undo", fn: () => undoAll() });
+  toast(`Removed ${what}`, gone.some((g) => g.type === "board") ? "The page keeps its files; only the frame left the canvas" : "", { label: "Undo", fn: () => undoAll() });
 }
 async function removeQuiet(ids) {
   for (const id of ids) if (S.items.has(rid(id))) await deleteRaw(rid(id)).catch(() => {});
@@ -2365,12 +2365,12 @@ export async function pasteClip() {
       if (j?.workshop && Array.isArray(j.items)) CLIP = j.items;
     } catch {}
   }
-  if (!CLIP) return toast("Nothing to paste", "Copy boards, notes or highlights first (⌘C)");
+  if (!CLIP) return toast("Nothing to paste", "Copy frames, notes or highlights first (⌘C)");
   pasteN++;
   await pasteList(CLIP, { offset: 40 * pasteN });
 }
 export async function duplicateSel() {
-  if (S.sel?.kind === "el") return toast("Duplicating an element changes the page's HTML", "Ask an agent to do it, or duplicate the whole board");
+  if (S.sel?.kind === "el") return toast("Duplicating an element changes the page's HTML", "Ask an agent to do it, or duplicate the whole frame");
   const ids = selIds();
   if (!ids.length) return;
   await pasteList(collect(ids), { offset: 40, label: "duplicate" });
@@ -2412,7 +2412,7 @@ export function alignSel(how) {
 }
 export function distributeSel(axis) {
   const its = selIds().map((id) => S.items.get(id)).filter((i) => i && i.type !== "arrow");
-  if (its.length < 3) return toast("Distribute needs three or more", "Select at least three boards or annotations");
+  if (its.length < 3) return toast("Distribute needs three or more", "Select at least three frames or annotations");
   const k = axis === "h" ? "x" : "y",
     d = axis === "h" ? "w" : "h";
   const rs = its.map((i) => ({ i, r: rectOf(i) })).sort((a, b) => a.r[k] - b.r[k]);
@@ -2489,7 +2489,7 @@ function applyOutlines(b) {
 export function toggleOutlines() {
   S.outlines = !S.outlines;
   for (const b of B.values()) applyOutlines(b);
-  toast(S.outlines ? "Outlines on" : "Outlines off", S.outlines ? "Every element's box shows on the live boards · ⌘Y" : "");
+  toast(S.outlines ? "Outlines on" : "Outlines off", S.outlines ? "Every layer's box shows on the live frames · ⌘Y" : "");
 }
 export function toggleRulers() {
   S.rulers = !S.rulers;
@@ -2572,7 +2572,7 @@ function onDown(e) {
       return toast(`That's ${of ? pageName(of) : "another page"}'s screen`, "Open that page to comment on it");
     }
     const b = onBoard ? item(onBoard.dataset.item) : boardAtPoint(p);
-    if (!b) return toast("Comments go on a board", "Click a screen to pin a comment to it");
+    if (!b) return toast("Comments go on a frame", "Click a frame to pin a comment to it");
     const el = elAt(b.id, p);
     composeComment(b.id, Math.round(w.x - b.x), Math.round(w.y - b.y), el ? rt(b.id)?.selectorFor(el, true) || null : null);
     e.preventDefault();
@@ -2833,7 +2833,7 @@ async function onUp(e) {
     wires.querySelector("g.draft")?.remove();
     setTool("move");
     const end = d.w1 || d.w0;
-    if (Math.hypot(end.x - d.w0.x, end.y - d.w0.y) * S.cam.z < 12) return toast("Drag to draw an arrow", "From a note, a box or a board to what it's about");
+    if (Math.hypot(end.x - d.w0.x, end.y - d.w0.y) * S.cam.z < 12) return toast("Drag to draw an arrow", "From a note, a highlight or a frame to what it's about");
     const t = document.elementFromPoint(e.clientX, e.clientY);
     const under = t && (itemUnder(t) || t.closest?.(".bd:not(.ghost)")?.dataset.item);
     const to = under && under !== d.from.item && item(under)?.type !== "arrow" ? { item: under } : { x: Math.round(end.x), y: Math.round(end.y) };
@@ -3200,7 +3200,7 @@ function initDrop() {
       return;
     }
     const files = [...e.dataTransfer.files].filter((f) => /\.html?$/i.test(f.name) || f.type === "text/html");
-    if (!files.length) return toast("Drop an HTML file", "Prototypes are .html files — a folder's index.html works too");
+    if (!files.length) return toast("Drop an HTML file", "Prototypes are .html files. A folder's index.html works too");
     let last = null;
     for (const f of files) {
       try {

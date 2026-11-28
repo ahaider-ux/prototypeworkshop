@@ -187,6 +187,17 @@ root `AGENTS.md` cover the native app; this folder follows the rules below. The 
   newcomer has made one. Every step's button does the thing on their own work; with nothing in the
   space it starts with the sample (`ui/sample.html`: original, synthetic, no images, fonts or
   network). Don't add a tour of tooltips or a second checklist: one path, real actions.
+- **The slop gate** (`test/slop.test.js`). The marks of hurried or layered work are counted, and
+  each count is zero. Copy: no dash used as a pause, no `...`, no filler or sales words, no
+  exclamation marks or emoji, no button that doesn't say what it does, no error that says nothing,
+  and one name for each thing (Main, frame, Run, Atelier). Styles: colours only in tokens, every
+  token read, font sizes 12/14/16/20/24/28/32, radii and spacing on the scale, no class styled
+  that nothing uses. Scripts: no function that does nothing, no unused import, no TODO or
+  `console.log`, and no fixed inline style (an inline style is for a computed value; fixed ones are
+  the `u-` helper classes at the end of `app.css`, scoped by id so they hold as inline did). The
+  agent's icon is `IC.agent`; there is no sparkle. A class name must not be reused for a second
+  thing: a guide card once took `.guide`, the canvas's alignment line, and the Guides page piled
+  up unclickable. When the gate fails, fix the app, not the list.
 - **No dead ends.** Every guide step, empty state and dialog ends in something real to do on the
   person's own work (the Learn steps' `try` actions in `ui/app.js`). Connecting an AI tool shows the
   setup for each tool and a live status that turns on as soon as it connects (`openConnect`).

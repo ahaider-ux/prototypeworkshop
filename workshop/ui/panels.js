@@ -343,7 +343,7 @@ function renderFile(head, body) {
   for (const { env: e, depth } of open) {
     const m = pageMeta(e);
     const main = !isBranch(e);
-    const r = h(`<div class="pg${e.id === S.page ? " on" : ""}${e.archived ? " archived" : ""}" role="option" aria-selected="${e.id === S.page}" tabindex="0" style="padding-left:${8 + Math.max(0, depth - 1) * 16}px">${main ? IC.board : IC.fork}<span class="t" title="${esc(e.name)}">${main ? "Main" : esc(e.name)}</span><span class="m ${m.cls}" title="${esc(m.title || "")}">${esc(m.t)}</span><button type="button" class="ib24" aria-label="More for ${esc(main ? "main" : e.name)}" aria-haspopup="menu">${IC.more}</button></div>`);
+    const r = h(`<div class="pg${e.id === S.page ? " on" : ""}${e.archived ? " archived" : ""}" role="option" aria-selected="${e.id === S.page}" tabindex="0" style="padding-left:${8 + Math.max(0, depth - 1) * 16}px">${main ? IC.board : IC.fork}<span class="t" title="${esc(e.name)}">${main ? "Main" : esc(e.name)}</span><span class="m ${m.cls}" title="${esc(m.title || "")}">${esc(m.t)}</span><button type="button" class="ib24" aria-label="More for ${esc(main ? "Main" : e.name)}" aria-haspopup="menu">${IC.more}</button></div>`);
     r.onclick = (ev) => !ev.target.closest(".ib24") && fire("go", e.id);
     r.onkeydown = (ev) => ev.key === "Enter" && fire("go", e.id);
     r.querySelector(".ib24").onclick = (ev) => (ev.stopPropagation(), fire("env-menu", { anchor: ev.currentTarget, env: e.id }));
@@ -352,7 +352,7 @@ function renderFile(head, body) {
   body.append(list);
   const archived = fam.filter((x) => x.env.archived).length;
   if (archived) {
-    const tg = h(`<button type="button" class="ghbtn sm" style="margin:0 8px 4px;color:var(--text-secondary)">${S.showArchived ? "Hide merged" : `Show merged · ${archived}`}</button>`);
+    const tg = h(`<button type="button" class="ghbtn sm u-more">${S.showArchived ? "Hide merged" : `Show merged · ${archived}`}</button>`);
     tg.onclick = () => ((S.showArchived = !S.showArchived), renderLeft());
     body.append(tg);
   }
@@ -368,7 +368,7 @@ function renderFile(head, body) {
     const d = docOf(b.id);
     const canOpen = true;
     const open = !!d?.body && EXP.has(b.id);
-    const r = h(`<div class="lrow frame${selIds().includes(b.id) ? " on" : ""}" role="treeitem" aria-expanded="${open}" tabindex="0" style="padding-left:4px"><span class="tw${canOpen ? (open ? " open" : "") : " none"}">${IC.chevr}</span>${IC.frame}<span class="t">${esc(screenName(b))}${b.state && b.state !== "Default" ? ` · ${esc(b.state)}` : ""}</span></div>`);
+    const r = h(`<div class="lrow frame u-pl4${selIds().includes(b.id) ? " on" : ""}" role="treeitem" aria-expanded="${open}" tabindex="0"><span class="tw${canOpen ? (open ? " open" : "") : " none"}">${IC.chevr}</span>${IC.frame}<span class="t">${esc(screenName(b))}${b.state && b.state !== "Default" ? ` · ${esc(b.state)}` : ""}</span></div>`);
     r.querySelector(".tw").onclick = (e) => {
       e.stopPropagation();
       EXP.has(b.id) ? EXP.delete(b.id) : EXP.add(b.id);
@@ -386,7 +386,7 @@ function renderFile(head, body) {
     for (const a of anns) {
       const [k, ic] = kind[a.type];
       const label = a.type === "web" || a.type === "image" ? embedLabel(a) : a.type === "ink" ? `${PENS[a.pen]?.label || "Drawing"}${a.board && S.items.get(a.board) ? ` on ${screenName(S.items.get(a.board))}` : ""}` : a.text || a.label || k;
-      const r = h(`<div class="lrow${selIds().includes(a.id) ? " on" : ""}" role="treeitem" tabindex="0" style="padding-left:4px"><span class="tw none"></span>${ic}<span class="t">${esc(label)}</span>${a.type === "ink" ? `<span class="inkchip" style="--ink:${esc(a.color)}"></span>` : ""}</div>`);
+      const r = h(`<div class="lrow u-pl4${selIds().includes(a.id) ? " on" : ""}" role="treeitem" tabindex="0"><span class="tw none"></span>${ic}<span class="t">${esc(label)}</span>${a.type === "ink" ? `<span class="inkchip" style="--ink:${esc(a.color)}"></span>` : ""}</div>`);
       r.onclick = (e) => (e.shiftKey ? toggleSel(a.id) : (selectItem(a.id), a.type !== "arrow" && !isVisible(a.id) && focusItem(a.id, { maxZ: 0.8 })));
       r.onkeydown = (e) => e.key === "Enter" && r.click();
       tree.append(r);
@@ -454,7 +454,7 @@ function landmarkRows(box, bid, d) {
   };
   const tree = landmarks(d.body, 0, { n: 300 });
   for (const n of tree) add(n, 1);
-  if (!tree.length) box.append(h(`<div class="hint2">No landmarks to list. Click into the board to select elements directly.</div>`));
+  if (!tree.length) box.append(h(`<div class="hint2">No landmarks to list. Click into the frame to select layers directly.</div>`));
 }
 
 // ----- screens: everything the prototype offers, ready to place on this page -----
@@ -463,7 +463,7 @@ function renderScreens(body, foot, env) {
   const states = cat?.states?.length ? ["Default", ...cat.states.filter((x) => x !== "Default")] : [];
   if (states.length) {
     const st = h(`<div class="sstate"><span>Show as</span></div>`);
-    st.append(dropdown({ value: S.placeState, options: states, full: true, label: "State for new boards", onChange: (v) => ((S.placeState = v), renderLeft()) }));
+    st.append(dropdown({ value: S.placeState, options: states, full: true, label: "State for new frames", onChange: (v) => ((S.placeState = v), renderLeft()) }));
     body.append(st);
   }
   if (!cat?.screens?.length && !cat && boardsOf(env.id).length) {
@@ -472,7 +472,7 @@ function renderScreens(body, foot, env) {
     return;
   }
   if (!cat?.screens?.length) {
-    body.append(h(`<div class="pempty"><b>${cat ? "This prototype doesn't list its screens" : "Its screens show once a board has loaded"}</b>${cat ? "Pick a board's screen in Design, or describe the screens with window.workshopEnv (see the README)." : "Open a page with a board of it; the Workshop reads the screens, states and flows the prototype offers."}</div>`));
+    body.append(h(`<div class="pempty"><b>${cat ? "This prototype doesn't list its screens" : "Its screens show once a frame has loaded"}</b>${cat ? "Pick a frame's screen in Design, or describe the screens with window.workshopEnv (see the README)." : "Open a page with a frame of it. Atelier reads the screens, states and flows the prototype offers."}</div>`));
     return;
   }
   const groups = new Map();
@@ -511,7 +511,7 @@ function renderScreens(body, foot, env) {
     }
     body.append(grp);
   }
-  foot.append(h(`<div class="hint2" style="border-top:1px solid var(--border-subtle)">Click a screen to place it, or drag it onto the canvas.</div>`));
+  foot.append(h(`<div class="hint2 u-bt">Click a screen to place it, or drag it onto the canvas.</div>`));
 }
 
 // ----- notes: every annotation and comment on this page -----
@@ -525,7 +525,7 @@ function renderNotes(head, body, env) {
   for (const n of itemsOf("note").filter((n) => where(pageOf(n)))) list.push({ kind: "note", at: n.createdAt, page: pageOf(n), text: n.text || "Empty note", who: n.author, go: () => fire("go-item", n.id) });
   for (const x of itemsOf("box").filter((x) => where(pageOf(x)))) list.push({ kind: "box", at: x.createdAt, page: pageOf(x), text: x.label || "Highlight", who: x.author, go: () => fire("go-item", x.id) });
   list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
-  if (!list.length) body.append(h(`<div class="pempty"><b>No notes ${S.notesAll ? "yet" : "on this page"}</b>Pin a note (N), draw a highlight around something (B), connect things with an arrow (A) or comment on a board (C). Agents read all of them.</div>`));
+  if (!list.length) body.append(h(`<div class="pempty"><b>No notes ${S.notesAll ? "yet" : "on this page"}</b>Pin a note (N), draw a highlight around something (B), connect things with an arrow (A) or comment on a frame (C). Agents read all of them.</div>`));
   else {
     const feed = h(`<div class="feed"></div>`);
     for (const x of list) {
@@ -539,7 +539,7 @@ function renderNotes(head, body, env) {
   }
   const rs = S.comments.filter((c) => !c.parent && c.resolved && where(c.env)).length;
   if (rs || S.showResolved) {
-    const b = h(`<button type="button" class="ghbtn sm" style="margin:8px">${S.showResolved ? "Hide resolved" : `Show resolved · ${rs}`}</button>`);
+    const b = h(`<button type="button" class="ghbtn sm u-m8">${S.showResolved ? "Hide resolved" : `Show resolved · ${rs}`}</button>`);
     b.onclick = () => ((S.showResolved = !S.showResolved), markDirty(), renderLeft());
     body.append(b);
   }
@@ -555,7 +555,7 @@ function briefSec(env) {
     return L;
   }
   L.append(h(`<span class="lineage">What every agent reads first: what this is for, the design rules, and what to keep.</span>`));
-  const ta = h(`<textarea class="afld-ta" aria-label="Brief" maxlength="20000" style="min-height:88px" placeholder="What it's for and who uses it. Which design system to keep to. What must not change.">${esc(root.brief || "")}</textarea>`);
+  const ta = h(`<textarea class="afld-ta u-h88" aria-label="Brief" maxlength="20000" placeholder="What it's for and who uses it. Which design system to keep to. What must not change.">${esc(root.brief || "")}</textarea>`);
   ta.addEventListener("blur", async () => {
     if (ta.value !== (root.brief || "")) (await patchEnv(root.id, { brief: ta.value })) && toast("Saved the brief", "Agents read it before every request");
   });
@@ -581,9 +581,9 @@ function renderHistory(head, body, env) {
   head.append(sv);
   const vs = S.versions.get(env.id);
   if (!vs) loadVersions(env.id);
-  const v = h(`<div class="isec" style="border-bottom:0"></div>`);
+  const v = h(`<div class="isec u-nob"></div>`);
   if (!vs) v.append(skeleton("Loading versions", 3));
-  if (vs && !vs.length) v.append(h(`<div class="pempty" style="padding:0"><b>No versions yet</b>Merges and agents save one before they change anything, and you can save one any time.</div>`));
+  if (vs && !vs.length) v.append(h(`<div class="pempty u-p0"><b>No versions yet</b>Merges and agents save one before they change anything, and you can save one any time.</div>`));
   for (const x of vs || []) {
     const vr = h(`<div class="vrow"><span class="n">V${x.n}</span><span class="tx"><b title="${esc(x.label)}">${esc(x.label)}</b><span>${esc(x.author || "You")} · ${esc(timeAgo(x.at))}</span></span><span class="va"><button type="button" class="ib24" aria-label="Restore version ${x.n}" data-tip="Restore">${IC.restore}</button><button type="button" class="ib24" aria-label="Copy version ${x.n}" data-tip="Copy as a new prototype">${IC.copy}</button></span></div>`);
     const [rb, fb] = vr.querySelectorAll(".ib24");
@@ -738,7 +738,7 @@ function designPage(body, env) {
     L.append(h(`<div class="lineage"><span>Branch of <b>${esc(pageName(parent))}</b>, made ${esc(timeAgo(env.branch?.at || env.created))}${env.author ? ` by ${esc(env.author)}` : ""}. It reads ${esc(pageName(parent))}'s files until it changes them.</span></div>`));
     if (env.archived) {
       L.append(h(`<div class="shnote">${IC.info}<div><b>${env.mergedAt ? `Merged into ${esc(pageName(S.envs.get(env.mergedInto)) || "its parent")}` : "Archived"}</b><br><span>${env.mergedAt ? esc(timeAgo(env.mergedAt)) : "Hidden from the branch list."}</span></div></div>`));
-      const un = h(`<button type="button" class="dbtn sm" style="align-self:flex-start">Unarchive</button>`);
+      const un = h(`<button type="button" class="dbtn sm u-start">Unarchive</button>`);
       un.onclick = () => fire("unarchive", id);
       L.append(un);
     } else {
@@ -755,7 +755,7 @@ function designPage(body, env) {
     body.append(L);
   }
   // branches are listed once, in the Layers tab; what's on the page is its layers
-  const del = h(`<div class="isec" style="display:flex;flex-direction:row;flex-wrap:wrap;gap:8px">${branch && !env.archived ? `<button type="button" class="dbtn sm" data-a="arch">Archive</button>` : ""}<button type="button" class="dbtn sm err" data-a="del">${IC.trash}${env.linked ? "Remove from Atelier" : `Delete ${branch ? "branch" : "prototype"}`}</button></div>`);
+  const del = h(`<div class="isec u-wrap">${branch && !env.archived ? `<button type="button" class="dbtn sm" data-a="arch">Archive</button>` : ""}<button type="button" class="dbtn sm err" data-a="del">${IC.trash}${env.linked ? "Remove from Atelier" : `Delete ${branch ? "branch" : "prototype"}`}</button></div>`);
   del.querySelector('[data-a="del"]').onclick = () => fire("delete", id);
   const ar = del.querySelector('[data-a="arch"]');
   if (ar) ar.onclick = () => fire("archive", id);
@@ -786,12 +786,12 @@ function designMulti(body, ids) {
     bar.append(b);
   }
   A.append(bar);
-  const dist = h(`<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="h" ${its.length < 3 ? "disabled" : ""}>Distribute horizontally</button><button type="button" class="dbtn sm" data-a="v" ${its.length < 3 ? "disabled" : ""}>Distribute vertically</button></div>`);
+  const dist = h(`<div class="u-wrap"><button type="button" class="dbtn sm" data-a="h" ${its.length < 3 ? "disabled" : ""}>Distribute horizontally</button><button type="button" class="dbtn sm" data-a="v" ${its.length < 3 ? "disabled" : ""}>Distribute vertically</button></div>`);
   dist.querySelector('[data-a="h"]').onclick = () => distributeSel("h");
   dist.querySelector('[data-a="v"]').onclick = () => distributeSel("v");
   A.append(dist);
   body.append(A);
-  const acts = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="dup">${IC.copy}Duplicate</button><button type="button" class="dbtn sm err" data-a="del">${IC.trash}Delete</button></div><span class="lineage">Drag any of them to move them all; arrow keys nudge. Shift-click adds or removes one.</span></div>`);
+  const acts = h(`<div class="isec"><div class="u-wrap"><button type="button" class="dbtn sm" data-a="dup">${IC.copy}Duplicate</button><button type="button" class="dbtn sm err" data-a="del">${IC.trash}Delete</button></div><span class="lineage">Drag any of them to move them all; arrow keys nudge. Shift-click adds or removes one.</span></div>`);
   acts.querySelector('[data-a="dup"]').onclick = () => duplicateSel();
   acts.querySelector('[data-a="del"]').onclick = () => removeItems(ids);
   body.append(acts);
@@ -838,7 +838,7 @@ function designFrame(body, b, env) {
   body.append(t);
   const A = sec("Design it");
   A.append(h(`<span class="lineage">An agent designs this page in ${esc((rootOf(env.id) || env).name)}'s own style, at ${b.w} × ${b.h}. Notes and drawings on the frame tell it more.</span>`));
-  const ask = h(`<button type="button" class="createbtn sm" style="align-self:flex-start">${IC.spark}Design with an agent</button>`);
+  const ask = h(`<button type="button" class="createbtn sm u-start">${IC.agent}Design with an agent</button>`);
   ask.onclick = () =>
     fire("ask-agent", {
       prompt: `Design the frame "${b.name || "Frame"}" (${b.w} × ${b.h}): write its page ${b.file} in this prototype. Keep to the design system in index.html: its CSS variables, type, spacing and components. Read the notes and drawings on the frame first.`,
@@ -898,7 +898,7 @@ function designBoard(body, bid) {
   L.append(h(`<div class="xyrow"><span class="xy"><i>X</i>${b.x}</span><span class="xy"><i>Y</i>${b.y}</span><span class="xy"><i>W</i>${b.w}</span><span class="xy"><i>H</i>${b.h}</span></div>`));
   body.append(L);
   if (ad?.screen) body.append(h(`<div class="isec"><span class="lineage">Showing ${esc(ad.screen)} now. Open it in Prototype (P) to click through it.</span></div>`));
-  const acts = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="pr">${IC.play}Run</button><button type="button" class="dbtn sm" data-a="dup">${IC.copy}Duplicate</button><button type="button" class="dbtn sm" data-a="agent">${IC.spark}Ask</button></div></div>`);
+  const acts = h(`<div class="isec"><div class="u-wrap"><button type="button" class="dbtn sm" data-a="pr">${IC.play}Run</button><button type="button" class="dbtn sm" data-a="dup">${IC.copy}Duplicate</button><button type="button" class="dbtn sm" data-a="agent">${IC.agent}Ask</button></div></div>`);
   acts.querySelector('[data-a="dup"]').onclick = () => placeScreen(b.env, b.screen, b.state).then((it) => it && selectBoard(it.id));
   acts.querySelector('[data-a="pr"]').onclick = () => fire("present", bid);
   acts.querySelector('[data-a="agent"]').onclick = () => fire("ask-agent", {});
@@ -914,7 +914,7 @@ function renderProto(body) {
   if (flows.length) {
     const F = sec("Flows", `<span class="tct">${flows.length}</span>`);
     for (const f of flows) {
-      const r = h(`<div class="vrow"><span class="tx"><b>${esc(f.name)}</b><span>Starts the flow from its first step</span></span><span class="va" style="opacity:1;pointer-events:auto"><button type="button" class="ib24" aria-label="Place ${esc(f.name)}" data-tip="Place on the canvas">${IC.plus}</button><button type="button" class="ib24" aria-label="Play ${esc(f.name)}" data-tip="Play in a new tab">${IC.play}</button></span></div>`);
+      const r = h(`<div class="vrow"><span class="tx"><b>${esc(f.name)}</b><span>Starts the flow from its first step</span></span><span class="va u-shown"><button type="button" class="ib24" aria-label="Place ${esc(f.name)}" data-tip="Place on the canvas">${IC.plus}</button><button type="button" class="ib24" aria-label="Play ${esc(f.name)}" data-tip="Play in a new tab">${IC.play}</button></span></div>`);
       const [pl, play] = r.querySelectorAll(".ib24");
       pl.onclick = () => placeScreen(env.id, f.name).then((it) => it && (selectBoard(it.id), focusItem(it.id, { maxZ: 0.6 })));
       play.onclick = () => window.open(`/present/${env.id}/?screen=${encodeURIComponent(f.name)}`, "_blank", "noopener");
@@ -924,12 +924,12 @@ function renderProto(body) {
   }
   const I = sec("Prototype");
   I.append(h(`<span class="lineage">Prototype shows one screen as large as the window allows, running as the app, so you can click through it. Switch with Design and Prototype at the top, Run in a frame's title, or P.</span>`));
-  const pl = h(`<button type="button" class="createbtn sm" style="align-self:flex-start">${IC.play}Open in Prototype</button>`);
+  const pl = h(`<button type="button" class="createbtn sm u-start">${IC.play}Open in Prototype</button>`);
   pl.onclick = () => $("interactBtn").click();
   I.append(pl);
   body.append(I);
   const P = sec("Run and share");
-  const acts = h(`<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="pr">${IC.play}Run</button><button type="button" class="dbtn sm" data-a="sh">${IC.share}Share</button><button type="button" class="dbtn sm" data-a="tab">${IC.ext}New tab</button></div>`);
+  const acts = h(`<div class="u-wrap"><button type="button" class="dbtn sm" data-a="pr">${IC.play}Run</button><button type="button" class="dbtn sm" data-a="sh">${IC.share}Share</button><button type="button" class="dbtn sm" data-a="tab">${IC.ext}New tab</button></div>`);
   acts.querySelector('[data-a="pr"]').onclick = () => fire("present", S.sel?.kind === "board" ? S.sel.item : pageItems("board")[0]?.id);
   acts.querySelector('[data-a="sh"]').onclick = () => fire("share", env.id);
   acts.querySelector('[data-a="tab"]').onclick = () => window.open(`/present/${env.id}/`, "_blank", "noopener");
@@ -940,7 +940,7 @@ function renderProto(body) {
 function envSettings(body, env) {
   const cat = env.catalog?.variants?.length ? env.catalog : rootOf(env.id)?.catalog || env.catalog;
   const e1 = sec("Theme and variants");
-  e1.append(h(`<span class="lineage" style="margin-top:-4px">Every screen on ${esc(pageName(env))} shows these.${!isBranch(env) ? " To compare one, create a branch and change it there." : ""}</span>`));
+  e1.append(h(`<span class="lineage u-up4">Every screen on ${esc(pageName(env))} shows these.${!isBranch(env) ? " To compare one, create a branch and change it there." : ""}</span>`));
   e1.append(row("Theme", segmented([{ label: "Light", value: "light" }, { label: "Dark", value: "dark" }, { label: "System", value: "system" }], env.theme, async (v) => {
     for (const r of boardsLive(env.id)) r.setTheme(v);
     await patchEnv(env.id, { theme: v });
@@ -1097,7 +1097,7 @@ const g2 = (...kids) => {
   return g;
 };
 function switchRow(text, on, onChange) {
-  const r = h(`<div class="setrow"><div class="tx"><span style="font-size:12px;color:var(--text-primary)">${esc(text)}</span></div><button type="button" class="sw" role="switch" aria-checked="${on}" aria-label="${esc(text)}"><i></i></button></div>`);
+  const r = h(`<div class="setrow"><div class="tx"><span class="u-12">${esc(text)}</span></div><button type="button" class="sw" role="switch" aria-checked="${on}" aria-label="${esc(text)}"><i></i></button></div>`);
   r.querySelector(".sw").onclick = () => onChange(!on);
   return r;
 }
@@ -1149,7 +1149,7 @@ function designEl(body, s) {
   if (env && !isBranch(env)) {
     // on Main, an edit changes the agreed version: the way to try something first is one press away
     const note = h(`<span class="lineage">You're editing Main, the version everyone sees. To try an idea first, work on a branch.</span>`);
-    const br = h(`<button type="button" class="dbtn sm" style="align-self:flex-start">${IC.fork}Create a branch</button>`);
+    const br = h(`<button type="button" class="dbtn sm u-start">${IC.fork}Create a branch</button>`);
     br.onclick = () => fire("branch", env.id);
     t.append(note, br);
   }
@@ -1174,7 +1174,7 @@ function designEl(body, s) {
   const rot = parseFloat(st.rotate) || 0;
   P.append(g2(field("", rot, (n) => ({ rotate: n ? `${n}deg` : null }), "rotation", { exactOnly: true, suffix: "°", range: [-180, 180], title: "Rotation", k: "rotation", icon: '<svg class="ic" viewBox="0 0 16 16"><path d="M3 12.5h10M3 12.5 10 4.5M7.5 12.5a4.5 4.5 0 0 0-1.4-3.3"/></svg>' }), h(`<span></span>`)));
   if (tr.x || tr.y) {
-    const rb = h(`<button type="button" class="ghbtn sm" style="align-self:flex-start">${IC.restore}Back to its place</button>`);
+    const rb = h(`<button type="button" class="ghbtn sm u-start">${IC.restore}Back to its place</button>`);
     rb.onclick = () => set({ translate: null }, "position", true);
     P.append(rb);
   }
@@ -1234,7 +1234,7 @@ function designEl(body, s) {
     const gapV = px(st.gap);
     const spread = /space-between/.test(st["justify-content"]);
     const gapDD = dropdown({ value: spread ? "auto" : SPACE.includes(gapV) ? gapV : "off", options: [{ label: "Auto · space between", value: "auto" }, ...(SPACE.includes(gapV) || spread ? [] : [{ label: `${gapV} · off system`, value: "off" }]), ...SPACE.map((n) => ({ label: `${n}`, value: n }))], full: true, label: "Gap between items", onChange: (n) => n !== "off" && set(n === "auto" ? { "justify-content": "space-between" } : { gap: `${n}px`, ...(spread ? { "justify-content": "flex-start" } : {}) }, "gap") });
-    const side = h(`<div style="display:flex;flex-direction:column;gap:8px;min-width:0"></div>`);
+    const side = h(`<div class="u-col u-min0"></div>`);
     side.append(row("Gap", gapDD, true));
     const lay = h(`<div class="lay"></div>`);
     lay.append(grid, side);
@@ -1334,7 +1334,7 @@ function designEl(body, s) {
     const inkTok = tokenOf(INKS_, st.color);
     T.append(h(`<div class="ih"><span class="tokname${inkTok ? "" : " off"}">${esc(inkTok ? inkTok.name : hexOf(st.color))}</span></div>`), swatches(INKS_, inkTok, (tk) => set({ color: tk.css }, "text colour")));
     if (i.editableText) {
-      const tx = h(`<textarea class="afld-ta" aria-label="Text" style="min-height:44px">${esc(i.text)}</textarea>`);
+      const tx = h(`<textarea class="afld-ta u-h44" aria-label="Text">${esc(i.text)}</textarea>`);
       tx.addEventListener("change", async () => {
         try {
           await api(`envs/${s.env}/text`, { method: "PUT", body: { selector: exact, text: tx.value } });
@@ -1394,7 +1394,7 @@ function designEl(body, s) {
     for (const x of mine) for (const [k, v] of x.decls) ch.append(h(`<div class="r"><b>${esc(k)}</b><span>${esc(v)}</span></div>`));
     C.append(ch);
   }
-  const acts = h(`<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="agent">${IC.spark}Ask an agent</button>${mine.length ? `<button type="button" class="dbtn sm" data-a="reset">${IC.restore}Reset</button>` : ""}<button type="button" class="dbtn sm err" data-a="rm">${IC.trash}Remove</button></div>`);
+  const acts = h(`<div class="u-wrap"><button type="button" class="dbtn sm" data-a="agent">${IC.agent}Ask an agent</button>${mine.length ? `<button type="button" class="dbtn sm" data-a="reset">${IC.restore}Reset</button>` : ""}<button type="button" class="dbtn sm err" data-a="rm">${IC.trash}Remove</button></div>`);
   acts.querySelector('[data-a="agent"]').onclick = () => fire("ask-agent", {});
   acts.querySelector('[data-a="rm"]').onclick = () => removeEl();
   const rs = acts.querySelector('[data-a="reset"]');
@@ -1431,7 +1431,7 @@ function designInk(body, it) {
   const cur = INK_SIZES.reduce((a, x) => (Math.abs(x.k * base - it.size) < Math.abs(a.k * base - it.size) ? x : a), INK_SIZES[1]);
   t.append(row("Weight", segmented(INK_SIZES.map((x) => ({ label: x.label, value: x.k })), cur.k, (k) => save({ size: Math.round(base * k * 10) / 10 }, "weight"), { full: true, label: "Weight" })));
   body.append(t);
-  const a = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="agent">${IC.spark}Ask an agent about this</button><button type="button" class="dbtn sm err" data-a="del">${IC.trash}Remove</button></div></div>`);
+  const a = h(`<div class="isec"><div class="u-wrap"><button type="button" class="dbtn sm" data-a="agent">${IC.agent}Ask an agent about this</button><button type="button" class="dbtn sm err" data-a="del">${IC.trash}Remove</button></div></div>`);
   a.querySelector('[data-a="agent"]').onclick = () => {
     if (on) selectBoard(on.id);
     fire("ask-agent", { prompt: `Look at the ${PENS[it.pen]?.label.toLowerCase() || "drawing"} mark I made${on ? ` on ${screenName(on)}` : ""} and fix what it points at.` });
@@ -1458,7 +1458,7 @@ function designEmbed(body, it) {
   body.append(t);
   const A = sec("Bring it into the prototype");
   A.append(h(`<span class="lineage">${web ? (fig ? "An agent reads the Figma design (with Figma's MCP server, if it has one) and builds it" : "An agent studies this app and builds what you point at") : "An agent looks at this picture and builds it"} as a new frame here, in ${esc((rootOf(S.page) || pageEnv() || {}).name || "this prototype")}'s own style.${web ? " Press Play (P) to click around in it." : ""}</span>`));
-  const go = h(`<button type="button" class="createbtn sm" style="align-self:flex-start">${IC.spark}Build it as a frame</button>`);
+  const go = h(`<button type="button" class="createbtn sm u-start">${IC.agent}Build it as a frame</button>`);
   go.onclick = async () => {
     const f = await addFrame({ x: it.x + it.w + 120, y: it.y, w: web ? 1440 : Math.max(120, Math.round(it.w)), h: web ? 900 : Math.max(120, Math.round(it.h)) });
     if (!f) return;
@@ -1486,11 +1486,11 @@ function designAnnotation(body, id) {
     }
   };
   if (it.type === "note") {
-    const ta = h(`<textarea class="afld-ta" aria-label="Note" style="min-height:96px">${esc(it.text)}</textarea>`);
+    const ta = h(`<textarea class="afld-ta u-h96" aria-label="Note">${esc(it.text)}</textarea>`);
     ta.addEventListener("change", () => save({ text: ta.value }));
     t.append(ta);
     t.append(row("Colour", segmented([{ label: "Warm", value: "warm" }, { label: "Info", value: "info" }, { label: "Plain", value: "plain" }], it.tone || "warm", (v) => save({ tone: v }), { full: true, label: "Colour" })));
-    const ed = h(`<button type="button" class="ghbtn sm" style="align-self:flex-start">Edit on the canvas</button>`);
+    const ed = h(`<button type="button" class="ghbtn sm u-start">Edit on the canvas</button>`);
     ed.onclick = () => editNote(id);
     t.append(ed);
   } else {
@@ -1505,7 +1505,7 @@ function designAnnotation(body, id) {
     }
   }
   body.append(t);
-  const a = h(`<div class="isec"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="dbtn sm" data-a="agent">${IC.spark}Send to an agent</button><button type="button" class="dbtn sm err" data-a="del">${IC.trash}Remove</button></div></div>`);
+  const a = h(`<div class="isec"><div class="u-wrap"><button type="button" class="dbtn sm" data-a="agent">${IC.agent}Send to an agent</button><button type="button" class="dbtn sm err" data-a="del">${IC.trash}Remove</button></div></div>`);
   a.querySelector('[data-a="agent"]').onclick = () => {
     const near = nearestBoard(it, S.page);
     if (near) selectBoard(near.id);
@@ -1518,14 +1518,14 @@ function designAnnotation(body, id) {
 // ----- agents: Claude-style turns; from main, a request opens a branch for the agent -----
 let draft = "";
 let versions = 1; // how many versions the next request asks for (from Main): one branch each
-const STATUS = { queued: ["Queued", ""], working: ["Working", "info"], done: ["Done", "ok"], failed: ["Failed", "err"], cancelled: ["Stopped", ""] };
+const STATUS = { queued: ["Queued", ""], working: ["Working", "info"], done: ["Done", "ok"], failed: ["Couldn't finish", "err"], cancelled: ["Stopped", ""] };
 const openLogs = new Set();
 function renderChat(body, foot, env) {
   const ws = S.ws;
   const hs = ws.harnesses || [];
   const agentName = ws.agent?.name || hs[0]?.client || "Agent";
   const thread = h(`<div class="athread" aria-live="polite"></div>`);
-  thread.append(h(`<div class="ahar"><span class="hdot${hs.length || ws.agent ? " on" : ""}"></span><span>${ws.agent ? `Requests run with <b>${esc(ws.agent.name)}</b>` : hs.length ? `<b>${esc(hs[0].client)}</b> is connected` : "No agent yet — requests wait"}</span><span class="sp"></span><button type="button">${ws.agent || hs.length ? "Settings" : "Connect"}</button></div>`));
+  thread.append(h(`<div class="ahar"><span class="hdot${hs.length || ws.agent ? " on" : ""}"></span><span>${ws.agent ? `Requests run with <b>${esc(ws.agent.name)}</b>` : hs.length ? `<b>${esc(hs[0].client)}</b> is connected` : "No agent yet. Requests wait"}</span><span class="sp"></span><button type="button">${ws.agent || hs.length ? "Settings" : "Connect"}</button></div>`));
   thread.querySelector(".ahar button").onclick = () => fire("connect");
   const fam = new Set(familyOf(rootOf(env.id)?.id).map((x) => x.env.id));
   const tasks = S.tasks.filter((t) => fam.has(t.env)).slice(-30);
@@ -1610,25 +1610,25 @@ function renderChat(body, foot, env) {
 function turnView(t, agentName) {
   const env = S.envs.get(t.env);
   const ws = S.ws;
-  const w = h(`<div style="display:flex;flex-direction:column;gap:8px"></div>`);
+  const w = h(`<div class="u-col"></div>`);
   w.append(h(`<div class="amsg">${esc(t.prompt)}</div>`));
   if (t.selection?.label) w.append(h(`<div class="actx" title="${esc(t.selection.selector || "")}">${esc(t.selection.label)}</div>`));
   const [lab, cls] = STATUS[t.status] || [t.status.toUpperCase(), ""];
   const who = t.claimedBy || (t.runner === "auto" ? ws.agent?.name : null) || agentName;
   const waiting = t.status === "queued" && !ws.agent && !(ws.harnesses || []).length;
-  const turn = h(`<div class="turn"><span class="av agent" style="background:var(--bg-primary);color:var(--bg-layer)">${esc(who[0] || "A")}</span><div class="body"></div></div>`);
+  const turn = h(`<div class="turn"><span class="av agent u-inv">${esc(who[0] || "A")}</span><div class="body"></div></div>`);
   const b = turn.querySelector(".body");
-  b.append(h(`<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary)"><b style="color:var(--text-primary);font-weight:500">${esc(who)}</b><span class="tagro ${cls}"${t.status === "working" ? ' aria-busy="true"' : ""}>${t.status === "working" ? `<span class="shimmer">${lab}</span>` : lab}</span>${t.status === "working" ? '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>' : ""}<span class="sp"></span><span>${esc(timeAgo(t.updatedAt))}</span></div>`));
+  b.append(h(`<div class="u-mid u-note"><b class="u-strong">${esc(who)}</b><span class="tagro ${cls}"${t.status === "working" ? ' aria-busy="true"' : ""}>${t.status === "working" ? `<span class="shimmer">${lab}</span>` : lab}</span>${t.status === "working" ? '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>' : ""}<span class="sp"></span><span>${esc(timeAgo(t.updatedAt))}</span></div>`));
   if (env) {
     const d = isBranch(env) ? S.diffs.get(env.id) : null;
     const tag = h(`<span class="brtag">${isBranch(env) ? IC.fork : IC.board}${esc(pageName(env))}${d?.changes.length ? ` <span class="n">${d.changes.length}</span>` : ""}</span>`);
     tag.onclick = () => fire("go", env.id);
     b.append(tag);
   }
-  if (t.reply) b.append(h(`<div class="rep" style="font-size:12px;line-height:1.5;white-space:pre-wrap">${esc(t.reply)}</div>`));
-  else if (t.status === "queued") b.append(h(`<div style="font-size:12px;line-height:1.5;color:var(--text-secondary)">${waiting ? "Waiting for an agent. Connect one, or ask Claude Code to take the next Workshop task." : '<span class="shimmer">Waiting for the agent to pick this up…</span>'}</div>`));
-  if (t.changed?.length) b.append(h(`<div style="display:flex;flex-wrap:wrap;gap:4px">${t.changed.slice(0, 6).map((f) => `<span class="tagro">${esc(f)}</span>`).join("")}</div>`));
-  const acts = h(`<div style="display:flex;gap:8px;flex-wrap:wrap"></div>`);
+  if (t.reply) b.append(h(`<div class="rep u-body u-pre">${esc(t.reply)}</div>`));
+  else if (t.status === "queued") b.append(h(`<div class="u-body u-quiet">${waiting ? "Waiting for an agent. Connect one, or ask Claude Code to take the next Atelier request." : '<span class="shimmer">Waiting for the agent to pick this up…</span>'}</div>`));
+  if (t.changed?.length) b.append(h(`<div class="u-wrap4">${t.changed.slice(0, 6).map((f) => `<span class="tagro">${esc(f)}</span>`).join("")}</div>`));
+  const acts = h(`<div class="u-wrap"></div>`);
   if (waiting) {
     const c = h(`<button type="button" class="dbtn sm">Connect your AI tool</button>`);
     c.onclick = () => fire("connect");

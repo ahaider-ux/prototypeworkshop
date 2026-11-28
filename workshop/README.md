@@ -407,6 +407,10 @@ node bin/workshop.js help
 
 ## Tests
 
+`test/slop.test.js` is a gate against sloppy work: it counts things like filler words, dashes used
+as pauses, colours written outside the tokens, sizes off the scale, unused classes and imports,
+and fixed inline styles, and fails if any count is above zero.
+
 ```bash
 npm test
 ```

@@ -45,7 +45,7 @@ export function renderRecipes(head, body, env) {
     loadRecipes();
     return;
   }
-  body.append(h(`<div class="isec" style="border-bottom:0;padding-bottom:0"><span class="lineage">Standing instructions an agent follows. From Main, a run works on a new branch you review and merge; on a branch, it works there.</span></div>`));
+  body.append(h(`<div class="isec u-nob u-pb0"><span class="lineage">Standing instructions an agent follows. From Main, a run works on a new branch you review and merge; on a branch, it works there.</span></div>`));
   if (!S.recipes.length) body.append(h(`<div class="pempty"><b>No recipes yet</b>Write down a job you ask for often, so anyone can run it the same way.</div>`));
   for (const r of S.recipes) {
     const v = prod(r);
@@ -99,9 +99,9 @@ export function openRecipe(id) {
     <form class="md-b" id="rcF">
       <div class="fld"><span class="lr">Name</span><div class="afld-in"><input id="rcName" maxlength="80" value="${esc(r?.name || "")}" placeholder="Copy pass"></div></div>
       <div class="fld"><span class="lr">What it's for</span><div class="afld-in"><input id="rcDesc" maxlength="400" value="${esc(r?.description || "")}" placeholder="One line people read before running it"></div></div>
-      <div class="fld"><span class="lr">Instructions${r ? ` <span style="color:var(--text-secondary);font-weight:400">· from v${latest.n}</span>` : ""}</span><textarea class="afld-ta" id="rcText" style="min-height:160px" maxlength="20000" placeholder="What the agent should do, step by step, and what it must not touch">${esc(latest?.prompt || "")}</textarea></div>
+      <div class="fld"><span class="lr">Instructions${r ? ` <span class="u-quiet u-400">· from v${latest.n}</span>` : ""}</span><textarea class="afld-ta u-h160" id="rcText" maxlength="20000" placeholder="What the agent should do, step by step, and what it must not touch">${esc(latest?.prompt || "")}</textarea></div>
       ${r ? `<div class="fld"><span class="lr">What changed in this version</span><div class="afld-in"><input id="rcNote" maxlength="200" placeholder="Shorter steps, stricter about tokens"></div></div>` : ""}
-      <div class="setrow"><div class="tx"><span style="font-size:12px;line-height:1.5">Run on its own when notes or drawings are added to a branch (after a 15 second pause). Uses your agent each time.</span></div><button type="button" class="sw" id="rcAuto" role="switch" aria-checked="${r?.trigger === "on-notes"}" aria-label="Run when notes are added"><i></i></button></div>
+      <div class="setrow"><div class="tx"><span class="u-body">Run on its own when notes or drawings are added to a branch (after a 15 second pause). Uses your agent each time.</span></div><button type="button" class="sw" id="rcAuto" role="switch" aria-checked="${r?.trigger === "on-notes"}" aria-label="Run when notes are added"><i></i></button></div>
       ${r ? `<div class="rvg"><div class="rvh">Versions</div><div id="rcVers"></div></div>` : ""}
     </form>
     <div class="md-f">${r ? `<button type="button" class="dbtn sm err" data-a="del">${IC.trash}Delete</button>` : ""}<span class="sp"></span><button type="button" class="ghbtn" data-a="x2">Cancel</button><button type="button" class="createbtn" data-a="ok">${r ? "Save" : "Create recipe"}</button></div>`,
@@ -115,7 +115,7 @@ export function openRecipe(id) {
     for (const x of [...r.versions].reverse()) {
       const s = bv[x.n];
       const tag = x.status === "production" ? `<span class="tagro ok">Production</span>` : x.status === "testing" ? `<span class="tagro info">Testing</span>` : `<span class="tagro">Retired</span>`;
-      const row = h(`<div class="rvr"><div style="display:flex;flex-direction:column;gap:4px;min-width:0"><span class="k">v${x.n} · ${esc(x.note || "No note")}</span><span class="v">${esc(x.author || "")} · ${s ? `${plural(s.runs, "run")}, ${s.merged} merged` : "not run yet"}</span></div><span class="ch" style="display:flex;gap:8px;align-items:center">${tag}${x.status !== "production" ? `<button type="button" class="dbtn sm" data-a="try">Try</button><button type="button" class="dbtn sm" data-a="pro">Promote</button>` : ""}</span></div>`);
+      const row = h(`<div class="rvr"><div class="u-col4 u-min0"><span class="k">v${x.n} · ${esc(x.note || "No note")}</span><span class="v">${esc(x.author || "")} · ${s ? `${plural(s.runs, "run")}, ${s.merged} merged` : "not run yet"}</span></div><span class="ch u-mid">${tag}${x.status !== "production" ? `<button type="button" class="dbtn sm" data-a="try">Try</button><button type="button" class="dbtn sm" data-a="pro">Promote</button>` : ""}</span></div>`);
       const tr = row.querySelector('[data-a="try"]');
       if (tr)
         tr.onclick = () => {
