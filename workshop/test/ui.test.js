@@ -697,3 +697,19 @@ test("ui: first steps take a new person from first open to merged", () => {
   assert.match(sample, /window\.workshopEnv = \{\s*screens: \[\{ group: "App", name: "Library" \}, \{ group: "App", name: "Book" \}, \{ group: "App", name: "Add a book" \}\]/);
   assert.match(app, /for \(const name of \["Book", "Add a book"\]\) await placeScreen\(env\.id, name\);/);
 });
+
+// A card on Home must not carry a class that means something else: `.guide` is the canvas's
+// alignment line (absolute, takes no pointer), and guide cards that picked it up piled onto each
+// other and could not be clicked. Any class a Home card is given is checked against bare rules.
+test("ui: Home's cards don't pick up another thing's class", () => {
+  const css = read("app.css").replace(/\/\*[\s\S]*?\*\//g, "");
+  const browse = read("browse.js");
+  assert.match(browse, /class="bcard \$\{a\.art \? "bguide" : "new"\}">/);
+  assert.match(browse, /class="bcard\$\{it\.cls === "hproj" \? " main" : ""\}">/);
+  const given = ["bguide", "new", "main"];
+  for (const c of given) {
+    // a rule for the bare class (not .bcard.x, not .card.x): it would style the card too
+    const bare = [...css.matchAll(/(^|[},])\s*\.([\w-]+)(?=[\s{,:])/gm)].some((m) => m[2] === c);
+    assert.ok(!bare, `.${c} has a rule of its own, which a Home card would pick up`);
+  }
+});

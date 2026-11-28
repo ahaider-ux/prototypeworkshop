@@ -110,14 +110,6 @@ export function artEl(id) {
   return el;
 }
 
-// a card: the picture, its title and one line; opens the Learn dialog on that step
-export function featureCard(i, onOpen) {
-  const f = FEATURES[i];
-  const c = h(`<button type="button" class="lcard"><span class="lart"></span><span class="lcap"><b>${esc(f.title)}</b><span>${esc(f.text)}</span></span></button>`);
-  c.querySelector(".lart").replaceWith(Object.assign(artEl(f.id), { className: "pv lart" }));
-  c.onclick = () => onOpen(i);
-  return c;
-}
 
 // The Learn dialog: copy on the left, the picture on the right, one step at a time. The intro step
 // offers "Learn more" (the Learn page) and "See what's new" (the next step); the last step's main

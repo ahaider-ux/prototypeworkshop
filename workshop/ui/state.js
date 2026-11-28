@@ -99,7 +99,6 @@ export function factsOf(id) {
 }
 export const protoId = () => rootOf(S.page)?.id || null;
 export const selEnvId = () => S.sel?.env || (S.sel?.item && S.items.get(S.sel.item)?.env) || S.page || null;
-export const selEnv = () => S.envs.get(selEnvId()) || null;
 // what a board is called: a frame by its name, a screen by the screen it shows
 export const screenName = (b) => (b?.name ? b.name : b?.screen ? b.screen.replace(/^Settings › /, "Settings · ") : "Start screen");
 export const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;

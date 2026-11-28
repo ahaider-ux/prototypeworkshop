@@ -15,6 +15,8 @@ const TONE = { ok: " ok", warn: " warn", busy: " info" };
 
 // items: [{ id, name, board, cue, cls, tag: { label, tone }, rows: [[label, value]] }]
 // actions: [{ title, desc, icon, art, run }] — placeholder cards (an icon) and guide cards (art).
+// A guide card's class is `bguide`, not `guide`: `.guide` is the canvas's alignment line (absolute,
+// no pointer), and a card that picked it up piled onto the others and could not be clicked.
 // open(item) opens one. head: an element shown above the cards (a greeting, or the level's title).
 export function renderGrid(host, { items, actions, open, head }) {
   const res = Math.min(2, window.devicePixelRatio || 1);
@@ -59,7 +61,7 @@ export function renderGrid(host, { items, actions, open, head }) {
     grid.append(c);
   }
   for (const a of actions) {
-    const c = h(`<button type="button" class="bcard ${a.art ? "guide" : "new"}"><span class="bth none"></span><span class="bhd"><b></b></span><span class="bdesc"></span></button>`);
+    const c = h(`<button type="button" class="bcard ${a.art ? "bguide" : "new"}"><span class="bth none"></span><span class="bhd"><b></b></span><span class="bdesc"></span></button>`);
     c.querySelector(".bth").append(a.art ? a.art() : h(`<span class="hplus">${a.icon || IC.plus}</span>`));
     c.querySelector(".bhd b").textContent = a.title; // not a <b> inside the picture
     c.querySelector(".bdesc").textContent = a.desc || "";

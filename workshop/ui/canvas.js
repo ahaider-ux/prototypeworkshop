@@ -215,7 +215,6 @@ const viewCenter = () => {
   const v = viewRect();
   return { x: (v.x0 + v.x1) / 2, y: (v.y0 + v.y1) / 2 };
 };
-export const viewCenterWorld = () => toWorld(viewCenter());
 export const zoomBy = (f) => zoomAt(viewCenter(), f);
 export function zoomTo(z) {
   const c = viewCenter();
@@ -803,7 +802,6 @@ export function setHover(itemId, el) {
 // arrow, comment, draw). The tool decides the mode, so a shortcut for a tool brings its mode with it.
 const MARK = new Set(["note", "box", "arrow", "comment", "draw"]);
 let lastMark = "comment";
-export const markTool = () => lastMark;
 export function setTool(t) {
   S.tool = t;
   if (MARK.has(t)) lastMark = t;
@@ -1077,19 +1075,6 @@ export function setMode(m) {
   fire("mode");
 }
 
-// ---------- play: run a frame's prototype, starting on its screen ----------
-export function playBoard(id) {
-  const it = item(id);
-  if (!it) return;
-  closePop();
-  S.playing = id;
-  setMode("prototype");
-  S.playing = id; // setMode clears it only when going back to design
-  selectBoard(id, { quiet: true });
-  planLive();
-  dirty = true;
-  fire("playing", id);
-}
 export function stopPlaying() {
   const id = S.playing;
   S.playing = null;

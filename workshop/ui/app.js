@@ -2,7 +2,7 @@
 
 import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, roots, familyOf, pageEnv, protoId, pageItems, pageOf, screenName, plural, pageName } from "./state.js";
 import { $, qa, h, esc, api, events, toast, IC, menu, modal, closeModal, copyText, timeAgo, segmented, dropdown, skeleton, loadingToast, pendingButton, initTips } from "./lib.js";
-import { setTool, addLink, addPicture, initCanvas, sync, fit, fitOpen, fitPair, fitStudies, camNow, flyTo, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, isTyping, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam, pageBounds } from "./canvas.js";
+import { setTool, addLink, addPicture, initCanvas, sync, fit, fitOpen, fitPair, fitStudies, camNow, flyTo, focusItem, fitRect, selectBoard, clearSel, reloadEnv, markDirty, setMode, importFile, boardOf, openThread, placeScreen, isDragging, selectItem, restoreCam } from "./canvas.js";
 import { initPanels, renderLeft, renderRight, renderBanner, loadVersions, loadDiff } from "./panels.js";
 import { rulesFor, loadOverrides } from "./styles.js";
 import { loadRecipes } from "./recipes.js";
@@ -244,7 +244,6 @@ function openPage(page) {
   if (changed) markStep("open"); // the first prototype opened: the first step, and what comes next
 }
 function renderTabs() {
-  renderMode();
   const t = $("tabs");
   t.replaceChildren();
   // One row of navigation, always here: the space's three places (Prototypes is the board), then
@@ -1012,7 +1011,6 @@ function present(bid) {
   presenting.bar = bar;
   presenting.cleanup = () => bar.remove();
   showIn(bid);
-  renderMode();
 }
 // put a screen in the window: the one being shown changes, the state stays
 function showIn(bid) {
@@ -1032,7 +1030,6 @@ function showIn(bid) {
   requestAnimationFrame(() => requestAnimationFrame(() => fitRect({ x0: it.x, y0: it.y, x1: it.x + it.w, y1: it.y + it.h }, { ms: 0, maxZ: 1, pad: 12 })));
 }
 // (Prototype is one of the canvas bar's modes; in it, the bar under the screen goes back to design)
-function renderMode() {}
 function stopPresent() {
   if (!presenting) return;
   const p = presenting;
@@ -1042,7 +1039,6 @@ function stopPresent() {
   boardOf(p.bid)?.el.classList.remove("presenting");
   $("frame").classList.remove("present");
   setMode(p.mode === "prototype" ? "design" : p.mode);
-  renderMode();
   Object.assign(S.cam, p.cam);
   requestAnimationFrame(() => focusItem(p.bid, { ms: 0, maxZ: 0.6 }));
 }

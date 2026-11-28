@@ -50,7 +50,5 @@ export async function undoEntry(entry) {
   return undo();
 }
 export const redo = () => step(FUTURE, PAST, "redo");
-export const canUndo = () => PAST.length > 0;
-export const canRedo = () => FUTURE.length > 0;
 // what undo and redo would do next, newest last (for the shortcuts and for checking)
 export const labels = () => ({ undo: PAST.map((e) => e.label), redo: FUTURE.map((e) => e.label) });

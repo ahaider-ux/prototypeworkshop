@@ -5,10 +5,10 @@
 // Right: Design (whatever is selected, or the page) and Prototype (how the page runs). The banner
 // across the canvas says which page this is and what to do with it.
 
-import { S, on, fire, envList, boardsOf, itemsOf, isBranch, rootOf, familyOf, pageEnv, protoId, pageItems, pageOf, nearestBoard, screenName, plural, pageName, folderLabel, branchesOf, factsOf } from "./state.js";
+import { S, on, fire, boardsOf, itemsOf, isBranch, rootOf, familyOf, pageEnv, protoId, pageItems, pageOf, nearestBoard, screenName, plural, pageName, folderLabel, branchesOf, factsOf } from "./state.js";
 import { branchStatus, branchesLine, versionRequests } from "./boardfacts.js";
 import { $, h, esc, api, toast, IC, dropdown, segmented, copyText, timeAgo, clamp, skeleton } from "./lib.js";
-import { isUnread, isFigma, embedLabel, addFrame, rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, setMode, docOf, winOf, flowOf, parseTranslate, exactSel, removeEl, selIds, toggleSel, alignSel, distributeSel, duplicateSel, removeItems } from "./canvas.js";
+import { isUnread, isFigma, embedLabel, addFrame, rt, selectBoard, selectEl, selectItem, setHover, focusItem, refreshSelInfo, markDirty, placeScreen, editNote, sync, reloadBoard, isVisible, fit, docOf, winOf, flowOf, parseTranslate, exactSel, removeEl, selIds, toggleSel, alignSel, distributeSel, duplicateSel, removeItems } from "./canvas.js";
 import { PENS, INKS, SIZES as INK_SIZES } from "./ink.js";
 import { record, rid } from "./history.js";
 import { renderRecipes } from "./recipes.js";

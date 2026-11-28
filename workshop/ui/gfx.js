@@ -9,7 +9,7 @@
 // screen, state and size. Opening a page again, or a branch nobody has changed, draws at once.
 
 import { pagesFree, apartUrl } from "./lib.js";
-import { drawingOf, settle, sleep } from "./snap.js";
+import { drawingOf, settle } from "./snap.js";
 import { LEVEL, drawKey } from "./drawkey.js";
 
 const POOL = 3; // background pages loading at once
